@@ -1,7 +1,8 @@
 import { Array as EffectArray, Console, Data, Effect, Match, Option } from "effect";
 
 import type { Git, GitFailed } from "../../../clients/git";
-import { GitHub, type GitHubFailed } from "../../../clients/github/client";
+import { GitHub } from "../../../clients/github/client";
+import type { GitHubFailed } from "../../../clients/github/failure";
 import type { PullRequest, PullRequestNumber, RemoteStack } from "../../../clients/github/types";
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";

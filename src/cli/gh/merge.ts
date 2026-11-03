@@ -1,8 +1,9 @@
-import { Console, Data, Effect, Option } from "effect";
-import { Command } from "effect/cli";
+import { Console, Data, Effect, Exit, Option } from "effect";
+import { Command, Flag } from "effect/cli";
 
 import type { Git } from "../../clients/git";
 import { GitHub } from "../../clients/github/client";
+import { GitHubFailed } from "../../clients/github/failure";
 import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { PullRequest, PullRequestNumber } from "../../clients/github/types";
 import type { Jj } from "../../clients/jj";
@@ -15,6 +16,7 @@ import {
   commitsAt,
   downstackChanges,
   pushedState,
+  type StackChange,
   upstackRevset,
 } from "./stack/changes";
 import { type PublishFailed, republish } from "./stack/publish";
@@ -64,13 +66,44 @@ const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
   });
 
 /**
+ * Cancels the workflow runs that haven't completed for the merged changes' commits, which are their
+ * pull requests' heads. Tries every run, and fails at the end if any cancel failed.
+ */
+const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
+  Effect.gen(function* () {
+    const github = yield* GitHub;
+    const runs = (yield* Effect.forEach(
+      changes,
+      ({ commitId }) => github.unfinishedRuns(commitId),
+      { concurrency: 4 },
+    )).flat();
+    const [outcomes, failures] = yield* Effect.partition(runs, (run) => github.cancelRun(run), {
+      concurrency: 4,
+    });
+    const cancelled = outcomes.filter((outcome) => outcome === "cancelled").length;
+    yield* Console.error(
+      `cancelled ${cancelled} workflow ${cancelled === 1 ? "run" : "runs"} of the merged pull requests`,
+    );
+    if (failures.length > 0) {
+      yield* new GitHubFailed({
+        message: [
+          `couldn't cancel ${failures.length} of the merged pull requests' workflow runs:`,
+          ...failures.map(({ message }) => message),
+        ].join("\n"),
+      });
+    }
+  });
+
+/**
  * Merges the pull requests of the revision's change and the ones below it in its stack. One in a
  * GitHub stack is merged through the stack API, together with everything below it, or nothing at
  * all. One outside a stack is merged normally. Then syncs, and republishes what is left of the
- * stack.
+ * stack. With `cancelPrRuns`, it cancels the merged pull requests' workflow runs that haven't
+ * completed, after the sync.
  */
 export const merge = (
   revision: string,
+  { cancelPrRuns }: { readonly cancelPrRuns: boolean },
 ): Effect.Effect<
   void,
   NotCombined | NotMergeable | PublishFailed,
@@ -96,11 +129,18 @@ export const merge = (
     const above = yield* bookmarksAt(upstackRevset(bookmarkRevset(top)));
 
     if ((yield* mergeOnGitHub(pullRequest, trunk)) === "enqueued") {
-      yield* Console.error("queued to merge; run `jj gh sync` once it has");
+      yield* Console.error(
+        `queued to merge; run \`jj gh sync\` once it has${cancelPrRuns ? ", and cancel the workflow runs yourself" : ""}`,
+      );
     } else {
       yield* Console.error(`merged up to #${pullRequest.number}`);
       // GitHub merged exactly what was pushed, as checked above.
       yield* sync(changes);
+      // Before the republish, which can fail, and failing only after it, so a token that can't
+      // cancel runs still leaves the rest of the stack pushed.
+      const cancelling = cancelPrRuns
+        ? yield* Effect.exit(cancelPullRequestRuns(changes))
+        : Exit.void;
       // Any bookmark left above the merged change names the rest of its stack.
       for (const bookmark of above) {
         if ((yield* commitsAt(bookmarkRevset(bookmark))).length > 0) {
@@ -108,19 +148,30 @@ export const merge = (
           break;
         }
       }
+      yield* cancelling;
     }
   });
 
 export const mergeCommand = Command.make(
   "merge",
-  { revision: revisionFlag("The top change to merge") },
-  ({ revision }) => asUserError(merge(revision).pipe(Effect.provide(GitHubFromOrigin))),
+  {
+    cancelPrRuns: Flag.Boolean("cancel-pr-runs").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "After merging, cancel the merged pull requests' workflow runs that haven't completed",
+      ),
+    ),
+    revision: revisionFlag("The top change to merge"),
+  },
+  ({ cancelPrRuns, revision }) =>
+    asUserError(merge(revision, { cancelPrRuns }).pipe(Effect.provide(GitHubFromOrigin))),
 ).pipe(
   withHelp(
     "Merge the pull requests of a change and the ones below it",
     "Squash-merges them, and prints which before it does. An empty working copy means the change below it. Fails before merging if any of the changes has edits that aren't pushed.",
     "A pull request in a GitHub stack is merged together with the pull requests below it. Either all of them merge or none does. A pull request outside a stack is merged alone, and only if its base is the trunk.",
     "Then syncs, as `jj gh sync` does: it abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk even where it conflicts, recording the conflict in the change. Then it pushes what is left of the change's stack again, up to the highest branch already on GitHub.",
-    "If GitHub queues the merge instead, nothing is synced. Run `jj gh sync` once it has merged.",
+    "With `--cancel-pr-runs`, it also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it still tries the rest and pushes the stack, then fails.",
+    "If GitHub queues the merge instead, nothing is synced or cancelled. Run `jj gh sync` once it has merged.",
   ),
 );

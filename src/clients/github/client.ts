@@ -1,7 +1,8 @@
-import { Context, Data, Effect, Layer, Option, Schedule, type Schema } from "effect";
+import { Context, Effect, Layer, Option, Schedule, type Schema, Stream } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { Connection } from "./connection";
+import { failWith, GitHubFailed } from "./failure";
 import { bodyOf } from "./openapi";
 import type { Repository } from "./repository";
 import {
@@ -15,19 +16,23 @@ import {
   RepositoryDetails,
   Stacks,
   StartedMerge,
+  WorkflowRuns,
 } from "./responses";
-import type {
-  PullRequest,
-  ListedPullRequest,
-  PullRequestNumber,
-  RemoteStack,
-  StackNumber,
+import {
+  type PullRequest,
+  type ListedPullRequest,
+  type PullRequestNumber,
+  type RemoteStack,
+  type StackNumber,
+  type WorkflowRunId,
+  WorkflowRunIdSchema,
 } from "./types";
-
-export class GitHubFailed extends Data.TaggedError("GitHubFailed")<{ readonly message: string }> {}
 
 /** How a stack merge ended: merged now, or queued to merge once the queue reaches it. */
 export type MergeOutcome = "enqueued" | "merged";
+
+/** How a cancel ended: the run is cancelling, or it had finished before the cancel reached it. */
+export type CancelOutcome = "cancelled" | "finished";
 
 export class GitHub extends Context.Service<
   GitHub,
@@ -36,6 +41,7 @@ export class GitHub extends Context.Service<
       stack: StackNumber,
       pullRequests: readonly PullRequestNumber[],
     ) => Effect.Effect<void, GitHubFailed>;
+    readonly cancelRun: (run: WorkflowRunId) => Effect.Effect<CancelOutcome, GitHubFailed>;
     readonly createPullRequest: (pullRequest: {
       readonly base: string;
       readonly body: string;
@@ -72,6 +78,10 @@ export class GitHub extends Context.Service<
     readonly stackOf: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<Option.Option<RemoteStack>, GitHubFailed>;
+    /** The workflow runs of the commit that haven't completed. */
+    readonly unfinishedRuns: (
+      commit: string,
+    ) => Effect.Effect<readonly WorkflowRunId[], GitHubFailed>;
     /** Dissolves the stack. Its pull requests stay open. */
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
   }
@@ -109,27 +119,14 @@ export const GitHubLive = (
         ),
       );
 
-      // An error response keeps GitHub's own words, since they say what to change: a 422 naming
-      // the field it rejected, or the proxy naming a route a cloud session can't use.
       const send = (request: HttpClientRequest.HttpClientRequest) =>
         client.execute(request).pipe(
           Effect.provideService(FetchHttpClient.RequestInit, requestInit),
-          Effect.flatMap((response) =>
-            response.status < 400
-              ? Effect.succeed(response)
-              : response.text.pipe(
-                  Effect.orElseSucceed(() => ""),
-                  Effect.flatMap((text) =>
-                    Effect.fail(
-                      new GitHubFailed({
-                        message: `${request.method} ${request.url} returned ${response.status}: ${text}`,
-                      }),
-                    ),
-                  ),
-                ),
-          ),
           Effect.catchTag("HttpClientError", (error) =>
             Effect.fail(new GitHubFailed({ message: error.message })),
+          ),
+          Effect.flatMap((response) =>
+            response.status < 400 ? Effect.succeed(response) : failWith(request, response),
           ),
         );
 
@@ -168,6 +165,15 @@ export const GitHubLive = (
               bodyOf<"pull-request-stacks/add">({ pull_requests: [...pullRequests] }),
             ),
           ).pipe(Effect.asVoid),
+        // GitHub answers 409 for a run that has completed, as one can between listing and cancel
+        cancelRun: (run) =>
+          send(HttpClientRequest.post(repo(`/actions/runs/${run}/cancel`))).pipe(
+            Effect.as<CancelOutcome>("cancelled"),
+            Effect.catchIf(
+              ({ status }) => status === 409,
+              () => Effect.succeed<CancelOutcome>("finished"),
+            ),
+          ),
         createPullRequest: ({ base, body, draft, head, title }) =>
           json(CreatedPullRequest)(
             HttpClientRequest.post(repo("/pulls")).pipe(
@@ -250,6 +256,27 @@ export const GitHubLive = (
             ),
           ).pipe(Effect.asVoid),
         stackOf,
+        // Pages of 100 runs, until one comes back short
+        unfinishedRuns: (commit) =>
+          Stream.paginate(1, (page) =>
+            json(WorkflowRuns)(
+              HttpClientRequest.get(
+                repo(`/actions/runs?head_sha=${commit}&per_page=100&page=${page}`),
+              ),
+            ).pipe(
+              Effect.map(
+                ({ workflow_runs }) =>
+                  [
+                    workflow_runs,
+                    workflow_runs.length < 100 ? Option.none() : Option.some(page + 1),
+                  ] as const,
+              ),
+            ),
+          ).pipe(
+            Stream.filter(({ status }) => status !== "completed"),
+            Stream.map(({ id }) => WorkflowRunIdSchema.make(String(id))),
+            Stream.runCollect,
+          ),
         unstack: (stack) =>
           send(HttpClientRequest.post(repo(`/stacks/${stack}/unstack`))).pipe(Effect.asVoid),
       };

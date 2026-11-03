@@ -43,7 +43,7 @@ All of them run from any directory of the checkout, and `jj help <command>` cove
 | `jj gh log` | Shows the stack's changes, their pull requests and whether each is pushed |
 | `jj gh links` | Prints a link to the GitHub stack of the open pull requests, where they are in one, then the stack's pull requests as Markdown links, top first, each marked as a draft, ready, merged or closed, and followed by the lines its change adds and removes, in inline code, as `` `+123/-45` ``. `--copy` also puts them on the clipboard as links that Slack pastes, or in a Claude Code cloud session says how to give them to the user |
 | `jj gh submit` | Pushes the working copy's change and the ones below it, and makes their pull requests one GitHub stack |
-| `jj gh merge -r <change>` | Merges the pull requests of that change and the ones below it, then syncs and republishes the rest of the stack |
+| `jj gh merge -r <change>` | Merges the pull requests of that change and the ones below it, then syncs and republishes the rest of the stack. `--cancel-pr-runs` also cancels their workflow runs that haven't completed |
 | `jj gh sync` | Rebases every stack onto the fetched trunk and drops what merged |
 
 ## Building and changing a stack
@@ -81,5 +81,7 @@ Merge separate stacks one at a time. Each merge rebases the other stacks onto th
 `merge` fails before merging if the change named, or one below it, has edits that aren't pushed. Run `submit` first.
 
 `merge` squash-merges everything up to and including the pull request of the change named, in one operation that merges all of it or none of it, and GitHub rebases the pull requests above onto the result itself. `merge` then runs `sync`, which fetches, forgets the merged changes' bookmarks whether or not GitHub has deleted their branches yet, abandons the merged changes, and rebases every local stack onto the new trunk. The rest of the merged changes' stack is rebased even where it conflicts with the trunk. `merge` then republishes what was already on GitHub of the changes left in that stack, and leaves unpublished changes local.
+
+A merge doesn't stop the workflow runs of the pull requests it merges. `merge --cancel-pr-runs` cancels those that haven't completed, after the sync. Where a cancel fails, it tries the rest and republishes the stack, then fails.
 
 Don't use the `gh stack` extension. Its local commands keep their own record of the stack in `.git/gh-stack` and move branches without jj knowing, and `jj gh` already does its GitHub work over REST.

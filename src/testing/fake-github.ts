@@ -2,6 +2,7 @@ import { Effect, Layer, Option } from "effect";
 
 import type { Git } from "../clients/git";
 import { GitHub } from "../clients/github/client";
+import { GitHubFailed } from "../clients/github/failure";
 import {
   type PullRequest,
   type ListedPullRequest,
@@ -9,24 +10,35 @@ import {
   PullRequestNumberSchema,
   type RemoteStack,
   StackNumberSchema,
+  WorkflowRunIdSchema,
 } from "../clients/github/types";
 import type { Jj } from "../clients/jj";
 import type { PrDescriptions } from "../clients/pr-descriptions";
 import { environment } from "./environment";
 import type { ScratchRepository } from "./scratch-repository";
 
+/** A workflow run, by its id and whether it has completed. */
+export interface FakeRun {
+  /** GitHub answers 403 to a cancel where the token can't write to Actions. */
+  readonly cancelForbidden?: boolean;
+  readonly completed: boolean;
+  readonly id: string;
+}
+
 interface FakeGitHubOptions {
   /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
   readonly onMerge?: (pullRequest: PullRequestNumber) => void;
   /** The pull requests from the branch in any state, newest first. None by default. */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
+  /** Each commit's workflow runs. None by default. */
+  readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
 
 // A GitHub with the given open pull requests and stack, recording every call that changes something.
 export const fakeGitHub = (
   open: Readonly<Record<string, PullRequest>>,
   stack: Option.Option<RemoteStack>,
-  { onMerge, pullRequestsFrom = () => [] }: FakeGitHubOptions = {},
+  { onMerge, pullRequestsFrom = () => [], runs = {} }: FakeGitHubOptions = {},
 ): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
   const calls: string[] = [];
   let registered = stack;
@@ -36,6 +48,22 @@ export const fakeGitHub = (
     });
   const layer = Layer.succeed(GitHub, {
     addToStack: (number, pullRequests) => record(`add ${pullRequests.join(",")} to #${number}`),
+    cancelRun: (run) => {
+      const found = Object.values(runs)
+        .flat()
+        .find(({ id }) => id === run);
+      const failed = (status: number) =>
+        Effect.fail(new GitHubFailed({ message: `cancel run ${run} returned ${status}`, status }));
+      if (found === undefined) {
+        return failed(404);
+      }
+      if (found.cancelForbidden === true) {
+        return failed(403);
+      }
+      return found.completed
+        ? Effect.succeed("finished" as const)
+        : record(`cancel run ${run}`).pipe(Effect.as("cancelled" as const));
+    },
     createPullRequest: ({ base, draft, head }) =>
       record(`open ${head} on ${base}${draft ? " as a draft" : ""}`).pipe(
         Effect.as(PullRequestNumberSchema.make(99)),
@@ -72,6 +100,12 @@ export const fakeGitHub = (
     setBase: (number, base) => record(`base #${number} → ${base}`),
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
     stackOf: () => Effect.sync(() => registered),
+    unfinishedRuns: (commit) =>
+      Effect.succeed(
+        (runs[commit] ?? [])
+          .filter((run) => !run.completed)
+          .map(({ id }) => WorkflowRunIdSchema.make(id)),
+      ),
     unstack: (number) =>
       record(`unstack #${number}`).pipe(
         Effect.tap(() =>

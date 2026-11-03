@@ -1,8 +1,9 @@
 import { Effect, Layer, Option } from "effect";
 
 import { Jj } from "../jj";
-import { GitHubFailed, GitHubLive } from "./client";
+import { GitHubLive } from "./client";
 import { connection } from "./connection";
+import { GitHubFailed } from "./failure";
 import { repositoryFromUrl } from "./repository";
 
 // The GitHub repository behind the `origin` remote, which jj reads whether or not the

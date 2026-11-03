@@ -1,7 +1,8 @@
 import { Console, Effect, Option } from "effect";
 import { Command } from "effect/cli";
 
-import { GitHub, type GitHubFailed } from "../../clients/github/client";
+import { GitHub } from "../../clients/github/client";
+import type { GitHubFailed } from "../../clients/github/failure";
 import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { PullRequest } from "../../clients/github/types";
 import type { Jj, JjFailed } from "../../clients/jj";
