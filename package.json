@@ -32,11 +32,11 @@
     "test": "bun run build && bun run compile && bun test ./src"
   },
   "devDependencies": {
-    "@effect/platform-bun": "4.1.0",
+    "@effect/platform-bun": "4.1.1",
     "@octokit/openapi-types": "29.0.1",
     "@tsconfig/strictest": "2.0.8",
     "@types/bun": "1.4.4",
-    "effect": "4.1.0",
+    "effect": "4.1.1",
     "oxfmt": "0.75.0",
     "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
