@@ -5,6 +5,7 @@ name: Branch cleanup
 # dry_run, it deletes nothing.
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - ".github/workflows/branch-cleanup.*"
   push:
@@ -28,6 +29,7 @@ permissions:
 jobs:
   cleanup:
     name: Cleanup
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
     # Each dry run has a group of its own, so a pending run never replaces another of a

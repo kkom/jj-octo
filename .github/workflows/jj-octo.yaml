@@ -2,6 +2,7 @@ name: jj-octo
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
   push:
     branches:
       - main
@@ -15,6 +16,9 @@ env:
 jobs:
   ci:
     name: CI
+    # A draft's result is one nobody reads yet. Publishing it sends `ready_for_review`, which
+    # runs this
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
     permissions:
