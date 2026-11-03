@@ -24,6 +24,17 @@ export interface InterceptedRequest {
   readonly path: string;
 }
 
+/** An answer with a status other than 200, which `respond` returns in place of the JSON alone. */
+export class Reply {
+  public readonly body: unknown;
+  public readonly status: number;
+
+  public constructor(status: number, body: unknown) {
+    this.body = body;
+    this.status = status;
+  }
+}
+
 // Each host's certificate and key, made once per run, since openssl takes a while.
 const certificates = new Map<string, { readonly cert: string; readonly key: string }>();
 
@@ -83,7 +94,7 @@ const closed = (server: Server) =>
 
 /**
  * Runs `run` against a proxy that answers each request to the host with the JSON `respond`
- * returns. Returns its result, and each CONNECT and request the proxy received, in order, as
+ * returns, or the `Reply`. Returns its result, and each CONNECT and request the proxy received, in order, as
  * `CONNECT host:port` or `GET host/path`.
  */
 export const throughProxy = async <A>(
@@ -100,8 +111,11 @@ export const throughProxy = async <A>(
     const method = request.method ?? "";
     const requestPath = request.url ?? "";
     log.push(`${method} ${request.headers.host ?? ""}${requestPath}`);
+    const answer = respond({ method, path: requestPath });
+    const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
+    response.statusCode = status;
     response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify(respond({ method, path: requestPath })));
+    response.end(JSON.stringify(body));
   });
   const port = await listen(origin);
 

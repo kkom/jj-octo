@@ -63,6 +63,17 @@ const MergeRequest = Schema.Struct({
 });
 export const StartedMerge = responseOf<"pulls/merge-async">()(MergeRequest);
 export const MergeResult = responseOf<"pulls/get-merge-async-result">()(MergeRequest);
+// GitHub describes a run's id, an int64, as `number | bigint`, though JSON parses only to a number.
+export const WorkflowRuns = responseOf<"actions/list-workflow-runs-for-repo">()(
+  Schema.Struct({
+    workflow_runs: Schema.Array(
+      Schema.Struct({
+        id: Schema.Union([Schema.Number, Schema.BigInt]),
+        status: Schema.NullOr(Schema.String),
+      }),
+    ),
+  }),
+);
 
 /** One pull request of an `AnyPullRequests` listing, with its state in one value. */
 export const listedPullRequest = ({

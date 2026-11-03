@@ -1,6 +1,7 @@
 import { Data, Effect } from "effect";
 
-import { GitHub, type GitHubFailed } from "../../../clients/github/client";
+import { GitHub } from "../../../clients/github/client";
+import type { GitHubFailed } from "../../../clients/github/failure";
 import type { Jj, JjFailed } from "../../../clients/jj";
 import { commitsAt } from "./changes";
 

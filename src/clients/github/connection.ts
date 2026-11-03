@@ -4,7 +4,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { GH_TOKEN, GITHUB_TOKEN, GITHUB_AUTH, readSetting } from "../../settings";
 import { type Git, gitConfig } from "../git";
 import type { Jj } from "../jj";
-import { GitHubFailed } from "./client";
+import { GitHubFailed } from "./failure";
 
 /** A proxy that requests to api.github.com go through, with the certificate authorities to trust. */
 export interface Proxy {

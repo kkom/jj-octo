@@ -6,6 +6,10 @@ export type PullRequestNumber = typeof PullRequestNumberSchema.Type;
 export const StackNumberSchema = Schema.Number.pipe(Schema.brand("StackNumber"));
 export type StackNumber = typeof StackNumberSchema.Type;
 
+/** A workflow run's id, as the URLs of the run's endpoints write it. */
+export const WorkflowRunIdSchema = Schema.String.pipe(Schema.brand("WorkflowRunId"));
+export type WorkflowRunId = typeof WorkflowRunIdSchema.Type;
+
 export interface PullRequest {
   readonly base: string;
   readonly body: string;

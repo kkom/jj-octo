@@ -1,7 +1,8 @@
 import { Console, Data, Effect } from "effect";
 
 import { Git, type GitFailed } from "../../../clients/git";
-import type { GitHub, GitHubFailed } from "../../../clients/github/client";
+import type { GitHub } from "../../../clients/github/client";
+import type { GitHubFailed } from "../../../clients/github/failure";
 import { Jj, type JjFailed } from "../../../clients/jj";
 import type { PrDescriptions } from "../../../clients/pr-descriptions";
 import { bookmarksAt, changeIdsAt, downstackRevset, lines, stackRevset } from "./changes";

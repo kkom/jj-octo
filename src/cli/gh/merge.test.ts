@@ -25,7 +25,30 @@ const mergeIn = (
   repository: ScratchRepository,
   github: ReturnType<typeof fakeGitHub>,
   revision: string,
-) => merge(revision).pipe(inRepository(repository, github));
+) => merge(revision, { cancelPrRuns: false }).pipe(inRepository(repository, github));
+
+// A stack of `a` and `b`, merged up to `b`, whose head commits have workflow runs: one running and
+// one completed for `a`, and one queued for `b`. Cancelling `a`'s running one is forbidden where
+// `forbidden` says.
+const mergedWithRuns = (forbidden = false) => {
+  const repository = pushedStack("a", "b");
+  const commitOf = (bookmark: string) =>
+    repository.jj("log", "--no-graph", "-r", bookmark, "-T", "commit_id");
+  const github = fakeGitHub(open, stackOf(1, 2), {
+    ...mergingIn(repository, () => {
+      squashMergeOnGitHub(repository, "a", { deleted: false });
+      squashMergeOnGitHub(repository, "b", { deleted: false });
+    }),
+    runs: {
+      [commitOf("a")]: [
+        { cancelForbidden: forbidden, completed: false, id: "11" },
+        { completed: true, id: "12" },
+      ],
+      [commitOf("b")]: [{ completed: false, id: "21" }],
+    },
+  });
+  return { github, repository };
+};
 
 describe("merge", () => {
   it("merges a stacked pull request through its stack, then syncs and republishes the rest", async () => {
@@ -139,6 +162,32 @@ describe("merge", () => {
     await Effect.runPromise(mergeIn(repository, github, "@"));
     expect(github.calls).toEqual(["merge the stack up to #2"]);
     expect(repository.log()).toEqual([]);
+  });
+
+  it("cancels every merged pull request's workflow runs that haven't completed, with --cancel-pr-runs", async () => {
+    const { github, repository } = mergedWithRuns();
+    await Effect.runPromise(
+      merge("b", { cancelPrRuns: true }).pipe(inRepository(repository, github)),
+    );
+    expect(github.calls).toEqual(["merge the stack up to #2", "cancel run 11", "cancel run 21"]);
+  });
+
+  it("still cancels the other runs where one cancel fails, then fails", async () => {
+    const { github, repository } = mergedWithRuns(true);
+    const failure = await Effect.runPromise(
+      Effect.flip(merge("b", { cancelPrRuns: true }).pipe(inRepository(repository, github))),
+    );
+    expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+      calls: ["merge the stack up to #2", "cancel run 21"],
+      message:
+        "couldn't cancel 1 of the merged pull requests' workflow runs:\ncancel run 11 returned 403",
+    });
+  });
+
+  it("leaves the merged pull requests' workflow runs alone without --cancel-pr-runs", async () => {
+    const { github, repository } = mergedWithRuns();
+    await Effect.runPromise(mergeIn(repository, github, "b"));
+    expect(github.calls).toEqual(["merge the stack up to #2"]);
   });
 
   it("merges nothing outside a GitHub stack when the base isn't the trunk", async () => {

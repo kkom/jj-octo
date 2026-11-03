@@ -2,7 +2,7 @@ import { Effect, Option } from "effect";
 
 import type { NotCombined } from "../cli/gh/stack/reconcile";
 import { sync } from "../cli/gh/sync";
-import type { GitHubFailed } from "../clients/github/client";
+import type { GitHubFailed } from "../clients/github/failure";
 import type { JjFailed } from "../clients/jj";
 import { fakeGitHub, inRepository } from "./fake-github";
 import type { ScratchRepository } from "./scratch-repository";
