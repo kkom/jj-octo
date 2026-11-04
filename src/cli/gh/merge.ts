@@ -19,7 +19,7 @@ import {
   type StackChange,
   upstackRevset,
 } from "./stack/changes";
-import { type PublishFailed, republish } from "./stack/publish";
+import { type PushFailed, pushAgain } from "./stack/push";
 import type { NotCombined } from "./stack/reconcile";
 import { checkedTrunk } from "./stack/trunk";
 import { sync } from "./sync";
@@ -97,7 +97,7 @@ const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
 /**
  * Merges the pull requests of the revision's change and the ones below it in its stack. One in a
  * GitHub stack is merged through the stack API, together with everything below it, or nothing at
- * all. One outside a stack is merged normally. Then syncs, and republishes what is left of the
+ * all. One outside a stack is merged normally. Then syncs, and pushes again what is left of the
  * stack. With `cancelPrRuns`, it cancels the merged pull requests' workflow runs that haven't
  * completed, after the sync.
  */
@@ -106,7 +106,7 @@ export const merge = (
   { cancelPrRuns }: { readonly cancelPrRuns: boolean },
 ): Effect.Effect<
   void,
-  NotCombined | NotMergeable | PublishFailed,
+  NotCombined | NotMergeable | PushFailed,
   Git | GitHub | Jj | PrDescriptions
 > =>
   Effect.gen(function* () {
@@ -136,7 +136,7 @@ export const merge = (
       yield* Console.error(`merged up to #${pullRequest.number}`);
       // GitHub merged exactly what was pushed, as checked above.
       yield* sync(changes);
-      // Before the republish, which can fail, and failing only after it, so a token that can't
+      // Before the push, which can fail, and failing only after it, so a token that can't
       // cancel runs still leaves the rest of the stack pushed.
       const cancelling = cancelPrRuns
         ? yield* Effect.exit(cancelPullRequestRuns(changes))
@@ -144,7 +144,7 @@ export const merge = (
       // Any bookmark left above the merged change names the rest of its stack.
       for (const bookmark of above) {
         if ((yield* commitsAt(bookmarkRevset(bookmark))).length > 0) {
-          yield* republish(bookmarkRevset(bookmark), trunk);
+          yield* pushAgain(bookmarkRevset(bookmark), trunk);
           break;
         }
       }

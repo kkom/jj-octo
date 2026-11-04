@@ -77,7 +77,7 @@ const register = (
     );
   });
 
-interface PublishOptions {
+interface PushOptions {
   /** GitHub's default branch, which the bottom pull request is based on. */
   readonly trunk: string;
   /**
@@ -95,7 +95,7 @@ interface OpenPullRequest {
   readonly synced: SyncedDescription;
 }
 
-export type PublishFailed =
+export type PushFailed =
   | DescriptionConflict
   | GitFailed
   | GitHubFailed
@@ -104,17 +104,17 @@ export type PublishFailed =
   | SeveralStacks
   | TrunkMismatch;
 
-export type SubmitFailed = BranchesDeleted | NotCombined | PublishFailed;
+export type SubmitFailed = BranchesDeleted | NotCombined | PushFailed;
 
 /**
  * Pushes the changes' bookmarks, opens the pull requests missing, sets their bases, and registers
  * them as one stack. Each pull request's title and body are kept the same as its change's
  * description.
  */
-const publish = (
+const push = (
   stack: readonly StackChange[],
-  { draft, overwriteDescriptions, trunk }: PublishOptions,
-): Effect.Effect<void, PublishFailed, Git | GitHub | Jj | PrDescriptions> =>
+  { draft, overwriteDescriptions, trunk }: PushOptions,
+): Effect.Effect<void, PushFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
     const github = yield* GitHub;
     const jj = yield* Jj;
@@ -247,20 +247,20 @@ const publish = (
   });
 
 /**
- * Publishes the revision's change and the ones below it in its stack. Syncs that stack first
- * where any of its pull requests merged or any of its branches changed on GitHub, since pushing
- * over either would drop what GitHub has.
+ * Pushes the revision's change and the ones below it in its stack, and opens their pull requests.
+ * Syncs that stack first where any of its pull requests merged or any of its branches changed on
+ * GitHub, since pushing over either would drop what GitHub has.
  */
 export const submit = (
   revision: string,
-  options: Omit<PublishOptions, "trunk">,
+  options: Omit<PushOptions, "trunk">,
 ): Effect.Effect<void, SubmitFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
     const trunk = yield* checkedTrunk;
     // Read first, so a stack that isn't one fails before the sync rewrites anything.
     const downstack = yield* downstackChanges(revision);
     if (!(yield* syncStack(revision, trunk))) {
-      yield* publish(downstack, { ...options, trunk });
+      yield* push(downstack, { ...options, trunk });
       return;
     }
     // The sync can drop merged changes and replace others with GitHub's, so the stack is found
@@ -275,18 +275,18 @@ export const submit = (
       );
       return;
     }
-    yield* publish(yield* downstackChanges(bookmarkRevset(top.bookmark)), { ...options, trunk });
+    yield* push(yield* downstackChanges(bookmarkRevset(top.bookmark)), { ...options, trunk });
   });
 
 /**
- * Publishes the stack containing the revision again, up to the highest bookmark already pushed, so
- * local work above it stays unpublished. Does nothing when the stack has no changes left or was
+ * Pushes the stack containing the revision again, up to the highest bookmark already pushed, so
+ * local work above it stays local. Does nothing when the stack has no changes left or was
  * never pushed.
  */
-export const republish = (
+export const pushAgain = (
   revision: string,
   trunk: string,
-): Effect.Effect<void, PublishFailed, Git | GitHub | Jj | PrDescriptions> =>
+): Effect.Effect<void, PushFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
     if ((yield* changesIn(stackRevset(revision))).length === 0) {
       return;
@@ -295,6 +295,6 @@ export const republish = (
     const targets = yield* bookmarkTargets;
     const top = stack.findLastIndex(({ bookmark }) => targets.get(bookmark)?.origin !== undefined);
     if (top !== -1) {
-      yield* publish(stack.slice(0, top + 1), { draft: true, overwriteDescriptions: false, trunk });
+      yield* push(stack.slice(0, top + 1), { draft: true, overwriteDescriptions: false, trunk });
     }
   });

@@ -1,6 +1,6 @@
 import type { Effect } from "effect";
 
-import { type SubmitFailed, submit } from "../cli/gh/stack/publish";
+import { type SubmitFailed, submit } from "../cli/gh/stack/push";
 import { fakeGitHub, inRepository, openPullRequest, stackOf } from "./fake-github";
 import { pushedStack, type ScratchRepository } from "./scratch-repository";
 
