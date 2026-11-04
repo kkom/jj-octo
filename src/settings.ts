@@ -24,7 +24,7 @@ export const GITHUB_TOKEN: EnvironmentVariable = {
 
 const CLAUDE_CODE_REMOTE: EnvironmentVariable = {
   description:
-    "`true` in a Claude Code cloud session. There, `links --copy` says how to give the links to the user instead of copying them, and `jj-octo.ignore-claude-code-footer` is `true` by default.",
+    "`true` in a Claude Code cloud session. There, `links --copy` says how to give the links to the user instead of copying them, `publish` marks drafts ready through the GitHub proxy's own route rather than GraphQL, which the proxy rejects, and `jj-octo.ignore-claude-code-footer` is `true` by default.",
   name: "CLAUDE_CODE_REMOTE",
 };
 

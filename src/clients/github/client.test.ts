@@ -3,15 +3,19 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Option, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 
+import { environment } from "../../testing/environment";
 import { type InterceptedRequest, Reply, throughProxy } from "../../testing/intercepting-proxy";
 import { GitHub, GitHubLive } from "./client";
-import { WorkflowRunIdSchema } from "./types";
+import { MarkReadyForReview } from "./documents";
+import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
 
-// Runs `use` with the real client, against a GitHub that answers as `respond` does. Returns what
-// it produced and the requests GitHub received, without the proxy's CONNECTs.
+// Runs `use` with the real client, against a GitHub that answers as `respond` does, with `env` as
+// the environment. Returns what it produced and the requests GitHub received, without the proxy's
+// CONNECTs.
 const withGitHub = async <A>(
   respond: (request: InterceptedRequest) => unknown,
   use: (github: GitHub["Service"]) => Effect.Effect<A, unknown>,
+  env: Readonly<Record<string, string>> = {},
 ) => {
   const { log, result } = await throughProxy("api.github.com", respond, ({ ca, url }) => {
     const live = GitHubLive(
@@ -19,7 +23,11 @@ const withGitHub = async <A>(
       { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
     );
     return Effect.runPromise(
-      GitHub.use(use).pipe(Effect.provide(live), Effect.provide(FetchHttpClient.layer)),
+      GitHub.use(use).pipe(
+        Effect.provide(live),
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provide(environment(env)),
+      ),
     );
   });
   return { requests: log.filter((line) => !line.startsWith("CONNECT ")), result };
@@ -93,6 +101,74 @@ describe("cancelRun", () => {
           status: 403,
         },
       },
+    });
+  });
+});
+
+// Marks #7 ready for review, against a GitHub whose GraphQL API answers with `graphql`, and returns
+// the outcome or how it failed, with the body of each GraphQL request.
+const markReady = async (graphql: unknown, env: Readonly<Record<string, string>> = {}) => {
+  const bodies: unknown[] = [];
+  const outcome = await withGitHub(
+    ({ body, path }) => {
+      if (path === "/graphql") {
+        bodies.push(JSON.parse(body));
+        return graphql;
+      }
+      return path === "/repos/owner/name/pulls/7" ? { node_id: "PR_seven" } : {};
+    },
+    (github) =>
+      github.markReadyForReview(PullRequestNumberSchema.make(7)).pipe(
+        Effect.as({ marked: true }),
+        Effect.catchTag("GitHubFailed", ({ message }) => Effect.succeed({ failed: message })),
+      ),
+    env,
+  );
+  return { ...outcome, bodies };
+};
+
+describe("markReadyForReview", () => {
+  const graphqlRequests = [
+    "GET api.github.com/repos/owner/name/pulls/7",
+    "POST api.github.com/graphql",
+  ];
+  const graphqlBody = {
+    query: MarkReadyForReview.toString(),
+    variables: { pullRequestId: "PR_seven" },
+  };
+
+  it("sends GraphQL's mutation for the pull request's node id", async () => {
+    expect(
+      await markReady({
+        data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } },
+      }),
+    ).toStrictEqual({
+      bodies: [graphqlBody],
+      requests: graphqlRequests,
+      result: { marked: true },
+    });
+  });
+
+  it("fails with the errors GitHub returns beside a 200", async () => {
+    expect(
+      await markReady({
+        data: { markPullRequestReadyForReview: null },
+        errors: [{ message: "Resource not accessible by integration" }],
+      }),
+    ).toStrictEqual({
+      bodies: [graphqlBody],
+      requests: graphqlRequests,
+      result: {
+        failed: "marking #7 ready for review failed: Resource not accessible by integration",
+      },
+    });
+  });
+
+  it("uses the GitHub proxy's own route in a Claude Code cloud session", async () => {
+    expect(await markReady({}, { CLAUDE_CODE_REMOTE: "true" })).toStrictEqual({
+      bodies: [],
+      requests: ["POST api.github.com/repos/owner/name/pulls/7/ccr/ready_for_review"],
+      result: { marked: true },
     });
   });
 });

@@ -20,6 +20,8 @@ export interface InterceptingProxy {
 
 /** A request the proxy received inside a tunnel. */
 export interface InterceptedRequest {
+  /** The request's body as text, empty where it has none. */
+  readonly body: string;
   readonly method: string;
   readonly path: string;
 }
@@ -111,11 +113,21 @@ export const throughProxy = async <A>(
     const method = request.method ?? "";
     const requestPath = request.url ?? "";
     log.push(`${method} ${request.headers.host ?? ""}${requestPath}`);
-    const answer = respond({ method, path: requestPath });
-    const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
-    response.statusCode = status;
-    response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify(body));
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      const answer = respond({
+        body: Buffer.concat(chunks).toString("utf8"),
+        method,
+        path: requestPath,
+      });
+      const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
+      response.statusCode = status;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(body));
+    });
   });
   const port = await listen(origin);
 

@@ -4,6 +4,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } fr
 import type { Connection } from "./connection";
 import { failWith, GitHubFailed } from "./failure";
 import { bodyOf } from "./openapi";
+import { markReadyForReview } from "./ready-for-review";
 import type { Repository } from "./repository";
 import {
   AnyPullRequests,
@@ -54,6 +55,10 @@ export class GitHub extends Context.Service<
     ) => Effect.Effect<StackNumber, GitHubFailed>;
     readonly defaultBranch: Effect.Effect<string, GitHubFailed>;
     /** Merges the pull request through its stack, together with everything below it. */
+    /** Marks a draft pull request ready for review, as `ready-for-review.ts` says. */
+    readonly markReadyForReview: (
+      pullRequest: PullRequestNumber,
+    ) => Effect.Effect<void, GitHubFailed>;
     readonly mergeStack: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<MergeOutcome, GitHubFailed>;
@@ -189,6 +194,8 @@ export const GitHubLive = (
         defaultBranch: json(RepositoryDetails)(HttpClientRequest.get(repo(""))).pipe(
           Effect.map(({ default_branch }) => default_branch),
         ),
+        markReadyForReview: (pullRequest) =>
+          markReadyForReview({ json, send }, repo(`/pulls/${pullRequest}`), pullRequest),
         mergePullRequest: (pullRequest) =>
           send(
             HttpClientRequest.put(repo(`/pulls/${pullRequest}/merge`)).pipe(
