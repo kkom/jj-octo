@@ -43,6 +43,7 @@ All of them run from any directory of the checkout, and `jj help <command>` cove
 | `jj gh log` | Shows the stack's changes, their pull requests and whether each is pushed |
 | `jj gh links` | Prints a link to the GitHub stack of the open pull requests, where they are in one, then the stack's pull requests as Markdown links, top first, each marked as a draft, ready, merged or closed, and followed by the lines its change adds and removes, in inline code, as `` `+123/-45` ``. `--copy` also puts them on the clipboard as links that Slack pastes, or in a Claude Code cloud session says how to give them to the user |
 | `jj gh submit` | Pushes the working copy's change and the ones below it, and makes their pull requests one GitHub stack |
+| `jj gh publish -r <change>` | Marks the draft pull requests of that change and the ones below it ready for review |
 | `jj gh merge -r <change>` | Merges the pull requests of that change and the ones below it, then syncs and republishes the rest of the stack. `--cancel-pr-runs` also cancels their workflow runs that haven't completed |
 | `jj gh sync` | Rebases every stack onto the fetched trunk and drops what merged |
 
@@ -60,7 +61,7 @@ jj records every file in the checkout that isn't ignored, so a scratch file writ
 
 Before pushing, `submit` asks GitHub which of the pull requests it submits merged, and which of their branches changed. A stack merge does both: it merges the bottom pull requests and rebases the branches above them. Where anything merged or changed, `submit` syncs that stack alone, as `sync` does, and prints what it did. So a push never undoes what GitHub did to a branch. A branch deleted on GitHub stops `submit` before it changes anything where its change doesn't count as merged: no pull request from it merged, another commit merged, or the change was edited since.
 
-`submit` pushes every branch of the stack, opens the missing pull requests as drafts titled and described by their changes, points each at the branch below it, and registers them as one GitHub stack. A stack of one is a single pull request, which GitHub has no stack for. Then publish the pull requests with `gh pr ready`, as `github.md` describes. `submit --publish` opens new pull requests ready for review instead of as drafts, and doesn't change one that already exists.
+`submit` pushes every branch of the stack, opens the missing pull requests as drafts titled and described by their changes, points each at the branch below it, and registers them as one GitHub stack. A stack of one is a single pull request, which GitHub has no stack for. Then publish the pull requests with `jj gh publish`, as `github.md` describes. It fails where a change has edits that aren't pushed. `submit --publish` opens new pull requests ready for review instead of as drafts, and marks existing drafts ready once the stack is registered.
 
 `submit` keeps each pull request's title and body the same as its change's description. So write the description the PR template asks for with `jj describe`, or edit it on GitHub, and run `submit` again. An edit made on GitHub is written into the change, one made locally is sent to the pull request, and edits on both sides are merged line by line. That holds for a local edit pushed with `jj git push` too. Edits to the same lines stop `submit` before it pushes, and it prints both versions.
 
