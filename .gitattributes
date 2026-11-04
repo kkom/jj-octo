@@ -1,0 +1,2 @@
+# GraphQL Code Generator writes these, from `codegen.ts`.
+src/clients/github/graphql/** linguist-generated
