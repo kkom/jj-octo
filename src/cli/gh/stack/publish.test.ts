@@ -30,6 +30,20 @@ describe("submit", () => {
     expect(github.calls).toEqual(["open a on main", "open b on a", "create stack 99,99"]);
   });
 
+  it("marks the existing drafts ready when not drafts, and opens the missing ones ready", async () => {
+    const repository = scratchRepository();
+    repository.stack("a", "b", "c");
+    const github = fakeGitHub(
+      {
+        a: openPullRequest("main", 1, "a"),
+        b: { ...openPullRequest("a", 2, "b"), draft: false },
+      },
+      stackOf(1, 2),
+    );
+    await Effect.runPromise(submitIn(repository, github, { draft: false }));
+    expect(github.calls).toStrictEqual(["open c on b", "add 99 to #7", "publish #1"]);
+  });
+
   it("changes nothing on GitHub for a stack already in order", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b");

@@ -51,6 +51,9 @@ export const Stacks = responseOf<"pull-request-stacks/list">()(
     Schema.Struct({ number: StackNumberSchema, pull_requests: Schema.Array(StackedPullRequest) }),
   ),
 );
+export const PullRequestNodeId = responseOf<"pulls/get">()(
+  Schema.Struct({ node_id: Schema.String }),
+);
 export const RepositoryDetails = responseOf<"repos/get">()(
   Schema.Struct({ default_branch: Schema.String }),
 );
@@ -74,6 +77,31 @@ export const WorkflowRuns = responseOf<"actions/list-workflow-runs-for-repo">()(
     ),
   }),
 );
+
+const GraphqlErrors = Schema.Array(Schema.Struct({ message: Schema.String }));
+
+/** A GraphQL response: the fields read from its `data`, and the `errors` sent beside or in place of it. */
+export type GraphqlResponse<S extends Schema.Top> = Schema.Struct<{
+  readonly data: Schema.optionalKey<Schema.NullOr<S>>;
+  readonly errors: Schema.optionalKey<typeof GraphqlErrors>;
+}>;
+
+/** A schema for `data`, provided the type GraphQL Code Generator wrote for the document decodes with it. */
+type GraphqlDataSchema<Data, S extends Schema.Top> = S &
+  ([Data] extends [S["Encoded"]] ? unknown : { readonly mismatch: "the generated type" });
+
+/**
+ * A schema for a GraphQL response: the fields read from its `data`, which doesn't compile unless
+ * `Data`, the type GraphQL Code Generator wrote for the document, decodes with it, and the `errors`
+ * GitHub sends beside or in place of `data`.
+ */
+export const graphqlResponseOf =
+  <Data>() =>
+  <S extends Schema.Top>(data: GraphqlDataSchema<Data, S>): GraphqlResponse<S> =>
+    Schema.Struct({
+      data: Schema.optionalKey(Schema.NullOr(data)),
+      errors: Schema.optionalKey(GraphqlErrors),
+    });
 
 /** One pull request of an `AnyPullRequests` listing, with its state in one value. */
 export const listedPullRequest = ({

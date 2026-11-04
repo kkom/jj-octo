@@ -16,7 +16,9 @@ export const submitCommand = Command.make(
     ),
     publish: Flag.Boolean("publish").pipe(
       Flag.withDefault(false),
-      Flag.withDescription("Open new pull requests ready for review, instead of as drafts"),
+      Flag.withDescription(
+        "Open new pull requests ready for review, and mark existing drafts ready, as `jj gh publish` does",
+      ),
     ),
     revision: revisionFlag("The top change to submit"),
   },
@@ -30,7 +32,7 @@ export const submitCommand = Command.make(
   withHelp(
     "Push a change and the ones below it, and open their pull requests",
     "Pushes the bookmark of each of those changes. An empty working copy means the change below it, so from the top of a stack this submits all of it. Opens a pull request for each branch that has none, with the title and body from the change's description. Points each pull request at the branch below it, and the bottom one at the default branch.",
-    "New pull requests are opened as drafts, or ready for review with `--publish`. The flag doesn't change a pull request that already exists.",
+    "New pull requests are opened as drafts. With `--publish`, they're opened ready for review, and existing drafts are marked ready after the push, as `jj gh publish` does.",
     "Keeps each pull request's title and body the same as its change's description. A description edited on GitHub is written into the change, one edited locally is sent to the pull request, and edits on both sides are merged line by line. That holds for a local edit pushed with `jj git push` too, since submit records the description that both sides last agreed on in `jj-octo/pr-descriptions` under the repository's `.jj/repo`, in the main workspace. Edits to the same lines stop the submit before anything is pushed.",
     "First, where any of those changes' pull requests merged or any of their branches changed on GitHub, syncs their stack as `jj gh sync` does, and leaves other stacks alone. That drops the merged changes, takes what GitHub added to the branches, and rebases the rest onto the trunk, so the push doesn't undo GitHub's work.",
     "Stops before changing anything where one of their branches was deleted on GitHub and their change doesn't count as merged: no pull request from it merged, another commit merged, or the change was edited since. It says how to push the change again, or drop it.",

@@ -41,6 +41,8 @@ export const fakeGitHub = (
   { onMerge, pullRequestsFrom = () => [], runs = {} }: FakeGitHubOptions = {},
 ): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
   const calls: string[] = [];
+  // Marking a pull request ready changes what `openPullRequest` returns afterwards.
+  const opened = new Map(Object.entries(open));
   let registered = stack;
   const record = (call: string) =>
     Effect.sync(() => {
@@ -78,6 +80,22 @@ export const fakeGitHub = (
         Effect.as(StackNumberSchema.make(8)),
       ),
     defaultBranch: Effect.succeed("main"),
+    markReadyForReview: (number) => {
+      const found = [...opened.entries()].find(([, pullRequest]) => pullRequest.number === number);
+      if (found === undefined) {
+        return Effect.fail(
+          new GitHubFailed({ message: `GET /pulls/${number} returned 404`, status: 404 }),
+        );
+      }
+      const [branch, pullRequest] = found;
+      return record(`publish #${number}`).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            opened.set(branch, { ...pullRequest, draft: false });
+          }),
+        ),
+      );
+    },
     mergePullRequest: (number) =>
       record(`merge #${number}`).pipe(
         Effect.tap(() =>
@@ -95,7 +113,7 @@ export const fakeGitHub = (
         ),
         Effect.as("merged"),
       ),
-    openPullRequest: (branch) => Effect.succeed(Option.fromNullishOr(open[branch])),
+    openPullRequest: (branch) => Effect.sync(() => Option.fromNullishOr(opened.get(branch))),
     pullRequestsFrom: (branch) => Effect.sync(() => pullRequestsFrom(branch)),
     setBase: (number, base) => record(`base #${number} → ${base}`),
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),

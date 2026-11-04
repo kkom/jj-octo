@@ -80,7 +80,10 @@ const register = (
 interface PublishOptions {
   /** GitHub's default branch, which the bottom pull request is based on. */
   readonly trunk: string;
-  /** How a missing pull request is opened. It changes no existing one. */
+  /**
+   * Whether a missing pull request is opened as a draft. Where false, existing drafts are marked
+   * ready too, once the stack is registered.
+   */
   readonly draft: boolean;
   /** Sends the local description where it and the pull request's both changed, without merging. */
   readonly overwriteDescriptions: boolean;
@@ -201,6 +204,7 @@ const publish = (
       });
 
     const numbers = [];
+    const drafts = [];
     for (const { base, change, open } of changes) {
       if (Option.isNone(open)) {
         const created = yield* github.createPullRequest({
@@ -226,10 +230,20 @@ const publish = (
         }
         yield* record(change.bookmark, text, number);
         numbers.push(number);
+        if (open.value.pullRequest.draft) {
+          drafts.push(number);
+        }
       }
     }
 
     yield* register(dissolve ? Option.none() : existing, numbers);
+    // Last, so a failure here leaves every pull request open and the stack registered.
+    if (!draft) {
+      for (const number of drafts) {
+        yield* github.markReadyForReview(number);
+        yield* Console.error(`published #${number}`);
+      }
+    }
   });
 
 /**
