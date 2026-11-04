@@ -51,8 +51,10 @@ jj config set --repo jj-octo.github-auth git-proxy
 ```
 bun install
 bun run check    # format, lint, types, tests and build
-bun run fix      # format and lint fixes
+bun run fix      # regenerated GraphQL types, then format and lint fixes
 ```
+
+`codegen.ts` types the GraphQL documents in `src` against GitHub's published schema, into `src/clients/github/graphql/`. The generated code is checked in, `bun run check` fails where it is out of date, and the bundle holds only each document's text.
 
 To release, run `bun run release:patch`, `release:minor` or `release:major` in a pull request, which raises `version` in `package.json`. Once it is merged and the checks pass on `main`, the same workflow publishes that version to npm, and as a GitHub release with the executables.
 

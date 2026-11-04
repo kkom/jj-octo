@@ -1,5 +1,6 @@
 {
-  // The rules and skills are Markdown this formatter would realign.
-  "ignorePatterns": [".claude/"],
+  // The rules and skills are Markdown this formatter would realign. GraphQL Code Generator writes
+  // `src/clients/github/graphql/`, and `check:codegen` compares it byte for byte.
+  "ignorePatterns": [".claude/", "src/clients/github/graphql/"],
   "sortImports": {},
 }
