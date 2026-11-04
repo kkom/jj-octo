@@ -14,7 +14,7 @@ import {
   removeScratchRepositories,
   type ScratchRepository,
 } from "../../../testing/scratch-repository";
-import { submit } from "./publish";
+import { submit } from "./push";
 
 afterAll(removeScratchRepositories);
 

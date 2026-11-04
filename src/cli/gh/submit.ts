@@ -3,7 +3,7 @@ import { Command, Flag } from "effect/cli";
 
 import { GitHubFromOrigin } from "../../clients/github/origin";
 import { asUserError, revisionFlag, withHelp } from "../command";
-import { submit } from "./stack/publish";
+import { submit } from "./stack/push";
 
 export const submitCommand = Command.make(
   "submit",
