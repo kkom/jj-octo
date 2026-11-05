@@ -8,6 +8,7 @@ import {
   type ListedPullRequest,
   type PullRequestNumber,
   PullRequestNumberSchema,
+  type PullRequestState,
   type RemoteStack,
   StackNumberSchema,
   WorkflowRunIdSchema,
@@ -150,6 +151,20 @@ export const openPullRequest = (base: string, number: number, title: string): Pu
   draft: true,
   number: PullRequestNumberSchema.make(number),
   title,
+});
+
+/** Pull request `number` of this repository as a listing shows it, in the state and with the head given. */
+export const pullRequest = (
+  number: number,
+  state: PullRequestState,
+  head: string,
+): ListedPullRequest => ({
+  head,
+  number: PullRequestNumberSchema.make(number),
+  stack: Option.none(),
+  state,
+  title: `Pull request ${number}`,
+  url: `https://github.com/kkom/jj-octo/pull/${number}`,
 });
 
 /** Runs a program against the scratch repository and the fake GitHub, with `env` as its environment. */

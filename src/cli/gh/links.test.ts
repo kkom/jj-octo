@@ -8,14 +8,9 @@ import {
   type ClipboardWrite,
   type RichText,
 } from "../../clients/clipboard";
-import {
-  type ListedPullRequest,
-  PullRequestNumberSchema,
-  type PullRequestState,
-  StackNumberSchema,
-} from "../../clients/github/types";
+import { type ListedPullRequest, StackNumberSchema } from "../../clients/github/types";
 import { fakeConsole } from "../../testing/fake-console";
-import { fakeGitHub, inRepository } from "../../testing/fake-github";
+import { fakeGitHub, inRepository, pullRequest } from "../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import {
   htmlLinks,
@@ -27,15 +22,6 @@ import {
 } from "./links";
 
 afterAll(removeScratchRepositories);
-
-const pullRequest = (number: number, state: PullRequestState, head: string): ListedPullRequest => ({
-  head,
-  number: PullRequestNumberSchema.make(number),
-  stack: Option.none(),
-  state,
-  title: `Pull request ${number}`,
-  url: `https://github.com/kkom/jj-octo/pull/${number}`,
-});
 
 // A pull request with the lines its change adds and removes, by default the one line of `stack`.
 const linked = (listed: ListedPullRequest, added = 1, removed = 0): LinkedPullRequest => ({
