@@ -11,6 +11,7 @@ import {
 import { type ListedPullRequest, StackNumberSchema } from "../../clients/github/types";
 import { fakeConsole } from "../../testing/fake-console";
 import { fakeGitHub, inRepository, pullRequest } from "../../testing/fake-github";
+import { linked } from "../../testing/links";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import {
   htmlLinks,
@@ -22,13 +23,6 @@ import {
 } from "./links";
 
 afterAll(removeScratchRepositories);
-
-// A pull request with the lines its change adds and removes, by default the one line of `stack`.
-const linked = (listed: ListedPullRequest, added = 1, removed = 0): LinkedPullRequest => ({
-  ...listed,
-  added,
-  removed,
-});
 
 // A clipboard that keeps what is written to it, and reports the given outcome.
 const fakeClipboard = (outcome: ClipboardWrite = "copied") => {
@@ -79,8 +73,9 @@ describe("stackPullRequests", () => {
 
 describe("markdownLinks and htmlLinks", () => {
   const listed = [
-    linked(pullRequest(4, "closed", "x"), 123, 45),
-    linked(pullRequest(3, "draft", "x"), 0, 7),
+    linked(pullRequest(5, "closed", "x"), 123, 45),
+    linked(pullRequest(4, "draft", "x"), 0, 7),
+    { ...linked(pullRequest(3, "ready", "x")), state: "approved" as const },
     linked(pullRequest(2, "ready", "x")),
     { ...linked(pullRequest(1, "merged", "x")), title: `Escape <b> & "quotes"` },
   ];
@@ -88,8 +83,9 @@ describe("markdownLinks and htmlLinks", () => {
   it("writes a Markdown line per pull request, marked with its state", () => {
     expect(markdownLinks(listed)).toBe(
       [
-        "🚫 [#4 Pull request 4](https://github.com/kkom/jj-octo/pull/4) `+123/-45`",
-        "📝 [#3 Pull request 3](https://github.com/kkom/jj-octo/pull/3) `+0/-7`",
+        "🚫 [#5 Pull request 5](https://github.com/kkom/jj-octo/pull/5) `+123/-45`",
+        "📝 [#4 Pull request 4](https://github.com/kkom/jj-octo/pull/4) `+0/-7`",
+        "✅ [#3 Pull request 3](https://github.com/kkom/jj-octo/pull/3) `+1/-0`",
         "👀 [#2 Pull request 2](https://github.com/kkom/jj-octo/pull/2) `+1/-0`",
         `🏁 [#1 Escape <b> & "quotes"](https://github.com/kkom/jj-octo/pull/1) \`+1/-0\``,
       ].join("\n"),
@@ -99,8 +95,9 @@ describe("markdownLinks and htmlLinks", () => {
   it("writes the same lines as HTML, escaping the titles", () => {
     expect(htmlLinks(listed)).toBe(
       [
-        '<meta charset="utf-8">🚫 <a href="https://github.com/kkom/jj-octo/pull/4">#4 Pull request 4</a> <code>+123/-45</code>',
-        '📝 <a href="https://github.com/kkom/jj-octo/pull/3">#3 Pull request 3</a> <code>+0/-7</code>',
+        '<meta charset="utf-8">🚫 <a href="https://github.com/kkom/jj-octo/pull/5">#5 Pull request 5</a> <code>+123/-45</code>',
+        '📝 <a href="https://github.com/kkom/jj-octo/pull/4">#4 Pull request 4</a> <code>+0/-7</code>',
+        '✅ <a href="https://github.com/kkom/jj-octo/pull/3">#3 Pull request 3</a> <code>+1/-0</code>',
         '👀 <a href="https://github.com/kkom/jj-octo/pull/2">#2 Pull request 2</a> <code>+1/-0</code>',
         '🏁 <a href="https://github.com/kkom/jj-octo/pull/1">#1 Escape &lt;b&gt; &amp; &quot;quotes&quot;</a> <code>+1/-0</code>',
       ].join("<br>"),
@@ -109,7 +106,10 @@ describe("markdownLinks and htmlLinks", () => {
 });
 
 // The pull request in GitHub stack `number`.
-const inStack = (listed: LinkedPullRequest, number: number): LinkedPullRequest => ({
+const inStack = <P extends ListedPullRequest | LinkedPullRequest>(
+  listed: P,
+  number: number,
+): P => ({
   ...listed,
   stack: Option.some({
     number: StackNumberSchema.make(number),
@@ -235,7 +235,7 @@ describe("links", () => {
     repository.stack("a", "b");
     const github = fakeGitHub({}, Option.none(), {
       pullRequestsFrom: (branch) => [
-        inStack(linked(pullRequest(branch === "a" ? 1 : 2, "ready", "anything")), 5),
+        inStack(pullRequest(branch === "a" ? 1 : 2, "ready", "anything"), 5),
       ],
     });
     const console = fakeConsole();
