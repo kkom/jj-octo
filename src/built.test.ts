@@ -63,7 +63,7 @@ const run = async (command: readonly string[], args: readonly string[], options:
 
 // GitHub's answer to a request for the open pull requests from branch `a`.
 const pullRequestOfA = ({ path: requestPath }: InterceptedRequest) =>
-  requestPath === "/repos/owner/name/pulls?state=open&head=owner:a"
+  requestPath === "/repos/owner/name/pulls?head=owner%3Aa&state=open"
     ? [{ base: { ref: "main" }, body: "", draft: true, number: 7, title: "a" }]
     : [];
 
@@ -71,14 +71,14 @@ const pullRequestOfA = ({ path: requestPath }: InterceptedRequest) =>
 const logOfA = {
   log: [
     "CONNECT api.github.com:443",
-    "GET api.github.com/repos/owner/name/pulls?state=open&head=owner:a",
+    "GET api.github.com/repos/owner/name/pulls?head=owner%3Aa&state=open",
   ],
   result: "a  #7 draft  not pushed\n",
 };
 
 // GitHub's answer to a request for every pull request from branch `a`.
 const listOfA = ({ path: requestPath }: InterceptedRequest) =>
-  requestPath === "/repos/owner/name/pulls?state=all&head=owner:a&per_page=100"
+  requestPath === "/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1"
     ? [
         {
           draft: false,
@@ -161,7 +161,7 @@ describe.each(builds)("$name", ({ command }) => {
     expect(received).toStrictEqual({
       log: [
         "CONNECT api.github.com:443",
-        "GET api.github.com/repos/owner/name/pulls?state=all&head=owner:a&per_page=100",
+        "GET api.github.com/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1",
       ],
       result: "👀 [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`\n",
     });

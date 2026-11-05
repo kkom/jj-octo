@@ -1,9 +1,10 @@
-import { Context, Effect, Layer, Option, Schedule, type Schema, Stream } from "effect";
+import { Context, Effect, Layer, Option, Schedule, type Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { Connection } from "./connection";
-import { failWith, GitHubFailed } from "./failure";
+import { failWith, GitHubFailed, urlOf } from "./failure";
 import { bodyOf } from "./openapi";
+import { everyPage } from "./pages";
 import { markReadyForReview } from "./ready-for-review";
 import type { Repository } from "./repository";
 import {
@@ -68,7 +69,7 @@ export class GitHub extends Context.Service<
     readonly openPullRequest: (
       branch: string,
     ) => Effect.Effect<Option.Option<PullRequest>, GitHubFailed>;
-    /** The pull requests from the branch in any state, newest first, up to 100. */
+    /** The pull requests from the branch in any state, newest first. */
     readonly pullRequestsFrom: (
       branch: string,
     ) => Effect.Effect<readonly ListedPullRequest[], GitHubFailed>;
@@ -145,14 +146,16 @@ export const GitHubLive = (
               SchemaError: (error) =>
                 Effect.fail(
                   new GitHubFailed({
-                    message: `unexpected response to ${request.url}: ${error.message}`,
+                    message: `unexpected response to ${urlOf(request)}: ${error.message}`,
                   }),
                 ),
             }),
           );
 
       const stackOf = (pullRequest: PullRequestNumber) =>
-        json(Stacks)(HttpClientRequest.get(repo(`/stacks?pull_request=${pullRequest}`))).pipe(
+        json(Stacks)(
+          HttpClientRequest.get(repo("/stacks"), { urlParams: { pull_request: pullRequest } }),
+        ).pipe(
           Effect.map((stacks) =>
             Option.map(Option.fromNullishOr(stacks[0]), (stack) => remoteStack(stack)),
           ),
@@ -161,7 +164,9 @@ export const GitHubLive = (
       const mergeRequest = (path: string) => json(MergeResult)(HttpClientRequest.get(repo(path)));
 
       const fromBranch = (branch: string, state: "all" | "open") =>
-        repo(`/pulls?state=${state}&head=${repository.owner}:${encodeURIComponent(branch)}`);
+        HttpClientRequest.get(repo("/pulls"), {
+          urlParams: { head: `${repository.owner}:${branch}`, state },
+        });
 
       return {
         addToStack: (stack, pullRequests) =>
@@ -232,7 +237,7 @@ export const GitHubLive = (
             });
           }),
         openPullRequest: (branch) =>
-          json(PullRequests)(HttpClientRequest.get(fromBranch(branch, "open"))).pipe(
+          json(PullRequests)(fromBranch(branch, "open")).pipe(
             Effect.map((found) =>
               Option.map(
                 Option.fromNullishOr(found[0]),
@@ -247,9 +252,9 @@ export const GitHubLive = (
             ),
           ),
         pullRequestsFrom: (branch) =>
-          json(AnyPullRequests)(
-            HttpClientRequest.get(`${fromBranch(branch, "all")}&per_page=100`),
-          ).pipe(Effect.map((found) => found.map((listed) => listedPullRequest(listed)))),
+          everyPage(fromBranch(branch, "all"), json(AnyPullRequests)).pipe(
+            Effect.map((found) => found.map((listed) => listedPullRequest(listed))),
+          ),
         setBase: (pullRequest, base) =>
           send(
             HttpClientRequest.patch(repo(`/pulls/${pullRequest}`)).pipe(
@@ -263,26 +268,17 @@ export const GitHubLive = (
             ),
           ).pipe(Effect.asVoid),
         stackOf,
-        // Pages of 100 runs, until one comes back short
         unfinishedRuns: (commit) =>
-          Stream.paginate(1, (page) =>
-            json(WorkflowRuns)(
-              HttpClientRequest.get(
-                repo(`/actions/runs?head_sha=${commit}&per_page=100&page=${page}`),
-              ),
-            ).pipe(
-              Effect.map(
-                ({ workflow_runs }) =>
-                  [
-                    workflow_runs,
-                    workflow_runs.length < 100 ? Option.none() : Option.some(page + 1),
-                  ] as const,
-              ),
-            ),
+          everyPage(
+            HttpClientRequest.get(repo("/actions/runs"), { urlParams: { head_sha: commit } }),
+            (request) =>
+              json(WorkflowRuns)(request).pipe(Effect.map(({ workflow_runs }) => workflow_runs)),
           ).pipe(
-            Stream.filter(({ status }) => status !== "completed"),
-            Stream.map(({ id }) => WorkflowRunIdSchema.make(String(id))),
-            Stream.runCollect,
+            Effect.map((runs) =>
+              runs
+                .filter(({ status }) => status !== "completed")
+                .map(({ id }) => WorkflowRunIdSchema.make(String(id))),
+            ),
           ),
         unstack: (stack) =>
           send(HttpClientRequest.post(repo(`/stacks/${stack}/unstack`))).pipe(Effect.asVoid),
