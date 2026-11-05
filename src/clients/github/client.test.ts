@@ -4,6 +4,7 @@ import { Effect, Option, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 
 import { environment } from "../../testing/environment";
+import { pullRequest } from "../../testing/fake-github";
 import { type InterceptedRequest, Reply, throughProxy } from "../../testing/intercepting-proxy";
 import { GitHub, GitHubLive } from "./client";
 import { MarkReadyForReview } from "./documents";
@@ -56,6 +57,67 @@ describe("unfinishedRuns", () => {
     ).toStrictEqual({
       requests: [`GET api.github.com${runsPath(1)}`, `GET api.github.com${runsPath(2)}`],
       result: [WorkflowRunIdSchema.make("100"), WorkflowRunIdSchema.make("101")],
+    });
+  });
+
+  it("fails with the page it read, for an error response", async () => {
+    expect(
+      await withGitHub(
+        () => new Reply(500, { message: "answered 500" }),
+        (github) =>
+          github
+            .unfinishedRuns("abc")
+            .pipe(
+              Effect.catchTag("GitHubFailed", ({ message, status }) =>
+                Effect.succeed({ message, status }),
+              ),
+            ),
+      ),
+    ).toStrictEqual({
+      requests: [`GET api.github.com${runsPath(1)}`],
+      result: {
+        message: `GET ${runsPath(1)} returned 500: {"message":"answered 500"}`,
+        status: 500,
+      },
+    });
+  });
+});
+
+const pullsPath = (page: number) =>
+  `/repos/owner/name/pulls?head=owner%3Aclaude%2Fa&state=all&per_page=100&page=${page}`;
+
+// Pull request `number` from branch `claude/a`, as GitHub lists it, and as `pullRequestsFrom` reads it.
+const listed = (number: number, state: "closed" | "open") => ({
+  github: {
+    head: { sha: `head-${number}` },
+    html_url: `https://github.com/kkom/jj-octo/pull/${number}`,
+    merged_at: null,
+    number,
+    state,
+    title: `Pull request ${number}`,
+  },
+  read: pullRequest(number, state === "open" ? "ready" : "closed", `head-${number}`),
+});
+
+describe("pullRequestsFrom", () => {
+  it("lists the pull requests from every page, until one comes back short", async () => {
+    // A full first page, then a short one.
+    const all = [
+      listed(101, "open"),
+      ...Array.from({ length: 100 }, (_, index) => listed(100 - index, "closed")),
+    ];
+    const pages: Readonly<Record<string, unknown>> = {
+      [pullsPath(1)]: all.slice(0, 100).map(({ github }) => github),
+      [pullsPath(2)]: all.slice(100).map(({ github }) => github),
+    };
+    expect(
+      await withGitHub(
+        ({ path }) => pages[path],
+        (github) => github.pullRequestsFrom("claude/a"),
+      ),
+    ).toStrictEqual({
+      requests: [`GET api.github.com${pullsPath(1)}`, `GET api.github.com${pullsPath(2)}`],
+      result: all.map(({ read }) => read),
     });
   });
 });
