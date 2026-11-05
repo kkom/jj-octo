@@ -11,13 +11,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer } from "effect";
 
 import { lines } from "../cli/gh/stack/changes";
 import { type Git, gitLayer } from "../clients/git";
-import { type ListedPullRequest, PullRequestNumberSchema } from "../clients/github/types";
+import type { ListedPullRequest } from "../clients/github/types";
 import { type Jj, jjLayer } from "../clients/jj";
 import { PrDescriptions, prDescriptionsLayer } from "../clients/pr-descriptions";
+import { pullRequest } from "./fake-github";
 
 /**
  * A jj repository with `main` pushed to a bare `origin`, for tests that run the real jj. A second,
@@ -183,19 +184,14 @@ const open = (root: string): ScratchRepository => {
       const number = merged.length + 1;
       merged.unshift({
         branch,
-        pullRequest: {
-          head,
-          number: PullRequestNumberSchema.make(number),
-          stack: Option.none(),
-          state: "merged",
-          title: branch,
-          url: `https://github.com/kkom/jj-octo/pull/${number}`,
-        },
+        pullRequest: { ...pullRequest(number, "merged", head), title: branch },
       });
     },
     printed: () => printed.join(""),
     pullRequestsFrom: (branch) =>
-      merged.filter((recorded) => recorded.branch === branch).map(({ pullRequest }) => pullRequest),
+      merged
+        .filter((recorded) => recorded.branch === branch)
+        .map((recorded) => recorded.pullRequest),
     records: (effect) =>
       Effect.runPromise(Effect.flatMap(PrDescriptions, effect).pipe(Effect.provide(layer))),
     stack: (...names) => {
