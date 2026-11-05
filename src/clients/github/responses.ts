@@ -5,6 +5,7 @@ import {
   type ListedPullRequest,
   PullRequestNumberSchema,
   type RemoteStack,
+  type Review,
   StackNumberSchema,
 } from "./types";
 
@@ -53,6 +54,14 @@ export const Stacks = responseOf<"pull-request-stacks/list">()(
 );
 export const PullRequestNodeId = responseOf<"pulls/get">()(
   Schema.Struct({ node_id: Schema.String }),
+);
+export const Reviews = responseOf<"pulls/list-reviews">()(
+  Schema.Array(
+    Schema.Struct({
+      state: Schema.String,
+      submitted_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    }),
+  ),
 );
 export const RepositoryDetails = responseOf<"repos/get">()(
   Schema.Struct({ default_branch: Schema.String }),
@@ -129,6 +138,20 @@ export const listedPullRequest = ({
     url: html_url,
   };
 };
+
+/**
+ * The submitted reviews of a `Reviews` listing, in the order they were submitted. GitHub lists them
+ * in the order they were started, and sends no `submitted_at`, or a null one, for one still being
+ * written.
+ */
+export const submittedReviews = (listed: typeof Reviews.Type): readonly Review[] =>
+  listed
+    .filter(
+      (review): review is { readonly state: string; readonly submitted_at: string } =>
+        typeof review.submitted_at === "string",
+    )
+    .toSorted((left, right) => Date.parse(left.submitted_at) - Date.parse(right.submitted_at))
+    .map(({ state }) => ({ state }));
 
 /** One stack of a `Stacks` listing, with the pull requests that haven't merged, bottom to top. */
 export const remoteStack = ({

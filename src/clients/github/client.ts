@@ -16,8 +16,10 @@ import {
   MergeResult,
   PullRequests,
   RepositoryDetails,
+  Reviews,
   Stacks,
   StartedMerge,
+  submittedReviews,
   WorkflowRuns,
 } from "./responses";
 import {
@@ -25,6 +27,7 @@ import {
   type ListedPullRequest,
   type PullRequestNumber,
   type RemoteStack,
+  type Review,
   type StackNumber,
   type WorkflowRunId,
   WorkflowRunIdSchema,
@@ -73,6 +76,10 @@ export class GitHub extends Context.Service<
     readonly pullRequestsFrom: (
       branch: string,
     ) => Effect.Effect<readonly ListedPullRequest[], GitHubFailed>;
+    /** The submitted reviews of the pull request, in the order they were submitted. */
+    readonly reviews: (
+      pullRequest: PullRequestNumber,
+    ) => Effect.Effect<readonly Review[], GitHubFailed>;
     readonly setBase: (
       pullRequest: PullRequestNumber,
       base: string,
@@ -255,6 +262,11 @@ export const GitHubLive = (
           everyPage(fromBranch(branch, "all"), json(AnyPullRequests)).pipe(
             Effect.map((found) => found.map((listed) => listedPullRequest(listed))),
           ),
+        reviews: (pullRequest) =>
+          everyPage(
+            HttpClientRequest.get(repo(`/pulls/${pullRequest}/reviews`)),
+            json(Reviews),
+          ).pipe(Effect.map(submittedReviews)),
         setBase: (pullRequest, base) =>
           send(
             HttpClientRequest.patch(repo(`/pulls/${pullRequest}`)).pipe(

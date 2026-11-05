@@ -40,6 +40,11 @@ export interface ListedPullRequest {
   readonly url: string;
 }
 
+/** A review of a pull request, with its state, such as `APPROVED` or `COMMENTED`. */
+export interface Review {
+  readonly state: string;
+}
+
 /**
  * A stack registered on GitHub, with its pull requests that haven't merged bottom to top. One closed
  * without merging stays in the stack, so it is among them.
