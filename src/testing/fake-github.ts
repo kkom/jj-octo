@@ -10,6 +10,7 @@ import {
   PullRequestNumberSchema,
   type PullRequestState,
   type RemoteStack,
+  type Review,
   StackNumberSchema,
   WorkflowRunIdSchema,
 } from "../clients/github/types";
@@ -31,6 +32,8 @@ interface FakeGitHubOptions {
   readonly onMerge?: (pullRequest: PullRequestNumber) => void;
   /** The pull requests from the branch in any state, newest first. None by default. */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
+  /** The submitted reviews of the pull request, in the order they were submitted. None by default. */
+  readonly reviews?: (pullRequest: PullRequestNumber) => readonly Review[];
   /** Each commit's workflow runs. None by default. */
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
@@ -39,7 +42,7 @@ interface FakeGitHubOptions {
 export const fakeGitHub = (
   open: Readonly<Record<string, PullRequest>>,
   stack: Option.Option<RemoteStack>,
-  { onMerge, pullRequestsFrom = () => [], runs = {} }: FakeGitHubOptions = {},
+  { onMerge, pullRequestsFrom = () => [], reviews = () => [], runs = {} }: FakeGitHubOptions = {},
 ): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
   const calls: string[] = [];
   // Marking a pull request ready changes what `openPullRequest` returns afterwards.
@@ -116,6 +119,7 @@ export const fakeGitHub = (
       ),
     openPullRequest: (branch) => Effect.sync(() => Option.fromNullishOr(opened.get(branch))),
     pullRequestsFrom: (branch) => Effect.sync(() => pullRequestsFrom(branch)),
+    reviews: (number) => Effect.sync(() => reviews(number)),
     setBase: (number, base) => record(`base #${number} → ${base}`),
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
     stackOf: () => Effect.sync(() => registered),

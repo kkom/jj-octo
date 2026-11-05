@@ -122,6 +122,43 @@ describe("pullRequestsFrom", () => {
   });
 });
 
+const reviewsPath = (page: number) => `/repos/owner/name/pulls/7/reviews?per_page=100&page=${page}`;
+
+describe("reviews", () => {
+  it("lists the submitted reviews from every page, in the order they were submitted", async () => {
+    // A full first page of comments, then a short one. GitHub lists reviews in the order they were
+    // started, so a request for changes started before an approval, and submitted after it, comes
+    // first. A review being written has no `submitted_at`, or a null one, and a deleted account's has
+    // `user: null`.
+    const pages: Readonly<Record<string, unknown>> = {
+      [reviewsPath(1)]: Array.from({ length: 100 }, () => ({
+        state: "COMMENTED",
+        submitted_at: "2026-01-01T00:00:00Z",
+        user: { login: "ada" },
+      })),
+      [reviewsPath(2)]: [
+        { state: "CHANGES_REQUESTED", submitted_at: "2026-01-03T00:00:00Z", user: null },
+        { state: "APPROVED", submitted_at: "2026-01-02T00:00:00Z", user: { login: "grace" } },
+        { state: "PENDING", user: { login: "ada" } },
+        { state: "PENDING", submitted_at: null, user: { login: "grace" } },
+      ],
+    };
+    expect(
+      await withGitHub(
+        ({ path }) => pages[path],
+        (github) => github.reviews(PullRequestNumberSchema.make(7)),
+      ),
+    ).toStrictEqual({
+      requests: [`GET api.github.com${reviewsPath(1)}`, `GET api.github.com${reviewsPath(2)}`],
+      result: [
+        ...Array.from({ length: 100 }, () => ({ state: "COMMENTED" })),
+        { state: "APPROVED" },
+        { state: "CHANGES_REQUESTED" },
+      ],
+    });
+  });
+});
+
 // Cancels run 7 where GitHub answers the cancel with the status, and returns the outcome or how it
 // failed.
 const cancel = (status: number) =>
