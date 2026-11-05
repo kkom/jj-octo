@@ -54,11 +54,11 @@ export class GitHub extends Context.Service<
       pullRequests: readonly PullRequestNumber[],
     ) => Effect.Effect<StackNumber, GitHubFailed>;
     readonly defaultBranch: Effect.Effect<string, GitHubFailed>;
-    /** Merges the pull request through its stack, together with everything below it. */
     /** Marks a draft pull request ready for review, as `ready-for-review.ts` says. */
     readonly markReadyForReview: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<void, GitHubFailed>;
+    /** Merges the pull request through its stack, together with everything below it. */
     readonly mergeStack: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<MergeOutcome, GitHubFailed>;
