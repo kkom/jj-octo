@@ -76,21 +76,25 @@ const logOfA = {
   result: "a  #7 draft  not pushed\n",
 };
 
-// GitHub's answer to a request for every pull request from branch `a`.
-const listOfA = ({ path: requestPath }: InterceptedRequest) =>
-  requestPath === "/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1"
-    ? [
-        {
-          draft: false,
-          head: { sha: "0000000" },
-          html_url: "https://github.com/owner/name/pull/7",
-          merged_at: null,
-          number: 7,
-          state: "open",
-          title: "Add a",
-        },
-      ]
-    : [];
+// GitHub's answers to a request for every pull request from branch `a`, which lists #7 ready for
+// review, and to one for the reviews of #7, which approve it.
+const answersOfA: Readonly<Record<string, unknown>> = {
+  "/repos/owner/name/pulls/7/reviews?per_page=100&page=1": [
+    { state: "APPROVED", submitted_at: "2026-01-01T00:00:00Z", user: { login: "ada" } },
+  ],
+  "/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1": [
+    {
+      draft: false,
+      head: { sha: "0000000" },
+      html_url: "https://github.com/owner/name/pull/7",
+      merged_at: null,
+      number: 7,
+      state: "open",
+      title: "Add a",
+    },
+  ],
+};
+const listOfA = ({ path: requestPath }: InterceptedRequest) => answersOfA[requestPath] ?? [];
 
 // The environment that sends jj-octo's requests through the proxy, with a token it can pass on.
 const proxyEnv = ({ caFile, url }: InterceptingProxy) => ({
@@ -162,8 +166,9 @@ describe.each(builds)("$name", ({ command }) => {
       log: [
         "CONNECT api.github.com:443",
         "GET api.github.com/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1",
+        "GET api.github.com/repos/owner/name/pulls/7/reviews?per_page=100&page=1",
       ],
-      result: "👀 [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`\n",
+      result: "✅ [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`\n",
     });
   });
 
@@ -184,7 +189,7 @@ describe.each(builds)("$name", ({ command }) => {
         "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks. They then show as links that paste into Slack.\n",
       stdout: [
         "-----BEGIN TEXT TO PASTE VERBATIM-----",
-        "👀 [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`",
+        "✅ [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`",
         "-----END TEXT TO PASTE VERBATIM-----",
         "",
       ].join("\n"),
