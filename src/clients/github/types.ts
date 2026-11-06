@@ -28,21 +28,18 @@ export interface StackLink {
 }
 
 /**
- * A pull request from a branch, in any state, with its head commit, title and address, and the
- * stack it is in, where it is in one.
+ * A pull request from a branch, in any state, with when GitHub created it, its head commit, title
+ * and address, and the stack it is in, where it is in one.
  */
 export interface ListedPullRequest {
+  /** As GitHub writes it, such as `2026-10-04T16:40:29Z`. */
+  readonly createdAt: string;
   readonly head: string;
   readonly number: PullRequestNumber;
   readonly stack: Option.Option<StackLink>;
   readonly state: PullRequestState;
   readonly title: string;
   readonly url: string;
-}
-
-/** A review of a pull request, with its state, such as `APPROVED` or `COMMENTED`. */
-export interface Review {
-  readonly state: string;
 }
 
 /**

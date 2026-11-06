@@ -1,38 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { Effect, Option, Redacted } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { Effect } from "effect";
 
-import { environment } from "../../testing/environment";
 import { pullRequest } from "../../testing/fake-github";
-import { type InterceptedRequest, Reply, throughProxy } from "../../testing/intercepting-proxy";
-import { GitHub, GitHubLive } from "./client";
+import { failureOf, withGitHub } from "../../testing/github-client";
+import { Reply } from "../../testing/intercepting-proxy";
 import { MarkReadyForReview } from "./documents";
 import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
-
-// Runs `use` with the real client, against a GitHub that answers as `respond` does, with `env` as
-// the environment. Returns what it produced and the requests GitHub received, without the proxy's
-// CONNECTs.
-const withGitHub = async <A>(
-  respond: (request: InterceptedRequest) => unknown,
-  use: (github: GitHub["Service"]) => Effect.Effect<A, unknown>,
-  env: Readonly<Record<string, string>> = {},
-) => {
-  const { log, result } = await throughProxy("api.github.com", respond, ({ ca, url }) => {
-    const live = GitHubLive(
-      { name: "name", owner: "owner" },
-      { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
-    );
-    return Effect.runPromise(
-      GitHub.use(use).pipe(
-        Effect.provide(live),
-        Effect.provide(FetchHttpClient.layer),
-        Effect.provide(environment(env)),
-      ),
-    );
-  });
-  return { requests: log.filter((line) => !line.startsWith("CONNECT ")), result };
-};
 
 const runsPath = (page: number) =>
   `/repos/owner/name/actions/runs?head_sha=abc&per_page=100&page=${page}`;
@@ -64,14 +38,7 @@ describe("unfinishedRuns", () => {
     expect(
       await withGitHub(
         () => new Reply(500, { message: "answered 500" }),
-        (github) =>
-          github
-            .unfinishedRuns("abc")
-            .pipe(
-              Effect.catchTag("GitHubFailed", ({ message, status }) =>
-                Effect.succeed({ message, status }),
-              ),
-            ),
+        (github) => failureOf(github.unfinishedRuns("abc")),
       ),
     ).toStrictEqual({
       requests: [`GET api.github.com${runsPath(1)}`],
@@ -89,6 +56,7 @@ const pullsPath = (page: number) =>
 // Pull request `number` from branch `claude/a`, as GitHub lists it, and as `pullRequestsFrom` reads it.
 const listed = (number: number, state: "closed" | "open") => ({
   github: {
+    created_at: "2026-01-01T00:00:00Z",
     head: { sha: `head-${number}` },
     html_url: `https://github.com/kkom/jj-octo/pull/${number}`,
     merged_at: null,
@@ -118,43 +86,6 @@ describe("pullRequestsFrom", () => {
     ).toStrictEqual({
       requests: [`GET api.github.com${pullsPath(1)}`, `GET api.github.com${pullsPath(2)}`],
       result: all.map(({ read }) => read),
-    });
-  });
-});
-
-const reviewsPath = (page: number) => `/repos/owner/name/pulls/7/reviews?per_page=100&page=${page}`;
-
-describe("reviews", () => {
-  it("lists the submitted reviews from every page, in the order they were submitted", async () => {
-    // A full first page of comments, then a short one. GitHub lists reviews in the order they were
-    // started, so a request for changes started before an approval, and submitted after it, comes
-    // first. A review being written has no `submitted_at`, or a null one, and a deleted account's has
-    // `user: null`.
-    const pages: Readonly<Record<string, unknown>> = {
-      [reviewsPath(1)]: Array.from({ length: 100 }, () => ({
-        state: "COMMENTED",
-        submitted_at: "2026-01-01T00:00:00Z",
-        user: { login: "ada" },
-      })),
-      [reviewsPath(2)]: [
-        { state: "CHANGES_REQUESTED", submitted_at: "2026-01-03T00:00:00Z", user: null },
-        { state: "APPROVED", submitted_at: "2026-01-02T00:00:00Z", user: { login: "grace" } },
-        { state: "PENDING", user: { login: "ada" } },
-        { state: "PENDING", submitted_at: null, user: { login: "grace" } },
-      ],
-    };
-    expect(
-      await withGitHub(
-        ({ path }) => pages[path],
-        (github) => github.reviews(PullRequestNumberSchema.make(7)),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${reviewsPath(1)}`, `GET api.github.com${reviewsPath(2)}`],
-      result: [
-        ...Array.from({ length: 100 }, () => ({ state: "COMMENTED" })),
-        { state: "APPROVED" },
-        { state: "CHANGES_REQUESTED" },
-      ],
     });
   });
 });

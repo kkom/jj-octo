@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { HttpClientRequest, type HttpClientResponse } from "effect/http";
+import { HttpClientRequest } from "effect/http";
 
 import { claudeCodeCloudSession } from "../../settings";
 import { MarkReadyForReview } from "./documents";
@@ -8,22 +8,11 @@ import type {
   MarkReadyForReviewMutation,
   MarkReadyForReviewMutationVariables,
 } from "./graphql/graphql";
+import type { Requests } from "./requests";
 import { graphqlResponseOf, PullRequestNodeId } from "./responses";
 import type { PullRequestNumber } from "./types";
 
 // Marking a draft ready for review, which GitHub's REST API can't do.
-
-/** The client's requests: one that fails on an error status, and one that also decodes the body. */
-interface Requests {
-  readonly json: <S extends Schema.Top>(
-    schema: S,
-  ) => (
-    request: HttpClientRequest.HttpClientRequest,
-  ) => Effect.Effect<S["Type"], GitHubFailed, S["DecodingServices"]>;
-  readonly send: (
-    request: HttpClientRequest.HttpClientRequest,
-  ) => Effect.Effect<HttpClientResponse.HttpClientResponse, GitHubFailed>;
-}
 
 const MarkedPullRequest = Schema.Struct({
   pullRequest: Schema.NullOr(Schema.Struct({ isDraft: Schema.Boolean })),
