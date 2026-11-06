@@ -5,6 +5,7 @@ import path from "node:path";
 import manifest from "../package.json" with { type: "json" };
 import { SET_UP_VERSION } from "./cli/gh/setup";
 import { ENVIRONMENT_VARIABLES, SETTINGS } from "./settings";
+import { searchPath } from "./testing/github-client";
 import {
   type InterceptedRequest,
   type InterceptingProxy,
@@ -76,14 +77,15 @@ const logOfA = {
   result: "a  #7 draft  not pushed\n",
 };
 
+// The search for whether #7 is open and approved.
+const searchOfA = searchPath("7 created:2026-01-01T00:00:00Z..2026-01-01T00:00:00Z");
+
 // GitHub's answers to a request for every pull request from branch `a`, which lists #7 ready for
-// review, and to one for the reviews of #7, which approve it.
+// review, and to the search, which lists #7 as approved.
 const answersOfA: Readonly<Record<string, unknown>> = {
-  "/repos/owner/name/pulls/7/reviews?per_page=100&page=1": [
-    { state: "APPROVED", submitted_at: "2026-01-01T00:00:00Z", user: { login: "ada" } },
-  ],
   "/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1": [
     {
+      created_at: "2026-01-01T00:00:00Z",
       draft: false,
       head: { sha: "0000000" },
       html_url: "https://github.com/owner/name/pull/7",
@@ -93,6 +95,7 @@ const answersOfA: Readonly<Record<string, unknown>> = {
       title: "Add a",
     },
   ],
+  [searchOfA]: { incomplete_results: false, items: [{ number: 7 }], total_count: 1 },
 };
 const listOfA = ({ path: requestPath }: InterceptedRequest) => answersOfA[requestPath] ?? [];
 
@@ -166,7 +169,7 @@ describe.each(builds)("$name", ({ command }) => {
       log: [
         "CONNECT api.github.com:443",
         "GET api.github.com/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1",
-        "GET api.github.com/repos/owner/name/pulls/7/reviews?per_page=100&page=1",
+        `GET api.github.com${searchOfA}`,
       ],
       result: "✅ [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`\n",
     });
