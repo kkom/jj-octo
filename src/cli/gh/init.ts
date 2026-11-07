@@ -81,10 +81,10 @@ export const setUpOnUpgrade: Effect.Effect<
 export const initCommand = Command.make("init", {}, () => asUserError(init)).pipe(
   withHelp(
     "Set up a git checkout for the other commands",
-    "Makes it a jj repository colocated with git, unless it already is one, and copies git's name and email into the repository's jj config where jj has none. Where neither has them, set them with `jj config set --user`.",
-    "Reads the default branch from `origin`, fetches and tracks it, and sets `trunk()` to it in the repository's config. jj's own `trunk()` guesses from branch names, so without this a default branch it doesn't guess would be the base of pull requests but not of local rebases. `submit`, `merge` and `sync` check that the two agree.",
-    "Sets the `jj gh` alias to run `jj-octo` from `PATH`, in the repository's config, unless the repository has one, such as one that runs another build.",
-    `Records its version as \`${SET_UP_VERSION}\` in the repository's config. The other commands, except \`doctor\`, run it first where an older version is recorded, or none is.`,
-    "Needs no GitHub token. Running it again changes nothing that is already set up. Run it again after the default branch changes on GitHub. Fails with what it couldn't set up, after setting up the rest. Where it can't make a colocated jj repository, such as in a git worktree, it sets up nothing else.",
+    "Makes the checkout a jj repository colocated with git, unless it already is one. Copies git's name and email into the repository's jj config where jj has none. Where neither has them, set them with `jj config set --user`.",
+    "Fetches and tracks the default branch of `origin`, and sets `trunk()` to it in the repository's config. jj's own `trunk()` guesses from branch names, and can miss the default branch. `submit`, `merge` and `sync` fail where `trunk()` and that branch point at different commits.",
+    "Sets the `jj gh` alias to run `jj-octo` from `PATH` in the repository's config, unless the repository already has one.",
+    `Records its version as \`${SET_UP_VERSION}\` in the repository's config, once everything is set up. Where the config holds no version, an older one, or a value that isn't a version, the other commands, except \`doctor\`, run \`init\` first. Where \`init\` reports what it couldn't set up, they still record the version.`,
+    "Needs no GitHub token. Changes nothing that is already set up. After the default branch changes on GitHub, run it again. Fails with what it couldn't set up, after setting up the rest. Where it can't make a colocated jj repository, as in a git worktree, it sets up nothing.",
   ),
 );

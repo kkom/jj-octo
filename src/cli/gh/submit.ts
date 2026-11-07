@@ -31,12 +31,12 @@ export const submitCommand = Command.make(
 ).pipe(
   withHelp(
     "Push a change and the ones below it, and open their pull requests",
-    "Pushes the bookmark of each of those changes. An empty working copy means the change below it, so from the top of a stack this submits all of it. Opens a pull request for each branch that has none, with the title and body from the change's description. Points each pull request at the branch below it, and the bottom one at the default branch.",
-    "New pull requests are opened as drafts. With `--publish`, they're opened ready for review, and existing drafts are marked ready after the push, as `jj gh publish` does.",
-    "Keeps each pull request's title and body the same as its change's description. A description edited on GitHub is written into the change, one edited locally is sent to the pull request, and edits on both sides are merged line by line. That holds for a local edit pushed with `jj git push` too, since submit records the description that both sides last agreed on in `jj-octo/pr-descriptions` under the repository's `.jj/repo`, in the main workspace. Edits to the same lines stop the submit before anything is pushed.",
-    "First, where any of those changes' pull requests merged or any of their branches changed on GitHub, syncs their stack as `jj gh sync` does, and leaves other stacks alone. That drops the merged changes, takes what GitHub added to the branches, and rebases the rest onto the trunk, so the push doesn't undo GitHub's work.",
-    "Stops before changing anything where one of their branches was deleted on GitHub and their change doesn't count as merged: no pull request from it merged, another commit merged, or the change was edited since. It says how to push the change again, or drop it.",
-    "Registers the pull requests as one GitHub stack. A stack of one change is a single pull request, which GitHub has no stack for.",
-    "If changes were reordered, inserted or dropped since the last submit, the GitHub stack is dissolved and registered again under a new number. The pull requests stay open, including the one of a dropped change.",
+    "Pushes the bookmark of each change. An empty working copy means the change below it. Opens a pull request for each branch that has none, with the title and body from its change's description. Points each pull request at the branch below it, and the bottom one at the default branch.",
+    "Opens new pull requests as drafts. With `--publish`, opens them ready for review, and marks existing drafts ready after the push.",
+    "Keeps each pull request's title and body the same as its change's description. `submit` writes an edit made on GitHub into the change, and sends a local edit to the pull request. It merges edits on both sides line by line. It also sends a local edit pushed with `jj git push`, because it records the description both sides last agreed on, in `jj-octo/pr-descriptions` under the main workspace's `.jj/repo`. Edits to the same lines stop the submit before it pushes anything.",
+    "First, where a submitted change's pull request merged or its branch changed on GitHub, syncs that stack as `jj gh sync` does, so the push doesn't undo what GitHub did. It leaves other stacks as they are.",
+    "Stops before changing anything where someone deleted a submitted change's branch on GitHub and the change doesn't count as merged: no pull request from it merged, another commit merged, or you edited the change since. It says how to push the change again or drop it.",
+    "Registers the pull requests as one GitHub stack, unless there is only one.",
+    "After a reorder, an insertion or a dropped change, dissolves the GitHub stack and registers it again under a new number. The pull requests stay open, including a dropped change's.",
   ),
 );

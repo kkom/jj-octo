@@ -245,11 +245,11 @@ export const linksCommand = Command.make(
 ).pipe(
   withHelp(
     "Print the stack's pull requests as Markdown links",
-    'Prints a link to the GitHub stack of the open pull requests, where they are in one. It says "Current stack", since `submit` registers a stack again under a new number when it moves a base. Then prints one line per pull request, top first: 📝 for a draft, 👀 for one ready for review and not approved, ✅ for one ready for review and approved, 🏁 for a merged one and 🚫 for one closed unmerged, then a Markdown link showing its number and title, then the lines its change adds and removes, in inline code, as `+123/-45`.',
+    'Prints a link to the GitHub stack of the open pull requests, as "Current stack", where they are in one. Then prints one line per pull request, top first: 📝 for a draft, 👀 for one ready for review and not approved, ✅ for one ready for review and approved, 🏁 for a merged one, and 🚫 for one closed unmerged. Each line has a Markdown link with the number and title, and the lines the change adds and removes, in inline code, as `+123/-45`.',
     "A pull request is approved where a reviewer approved it, and nobody requested changes after that approval. A dismissed review neither approves nor requests changes.",
-    "A change's pull request is the open one from its branch, or else the newest closed one whose head is the change or the commit pushed for it. A change with no pull request is left out, as is one that `sync` abandoned because its pull request merged. Fails where no change has one.",
-    "With `--copy`, also puts the links on the clipboard as HTML, which Slack and other apps paste as links. That runs `osascript` on macOS, which also copies the Markdown as plain text, and `wl-copy` or `xclip` on Linux, which copy the HTML alone.",
-    "In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, `--copy` copies nothing. It prints the Markdown between begin and end markers, and tells the agent to copy what is between them into its reply. The Claude app shows that as links that paste into Slack.",
-    "Fails if the changes aren't a chain, if one has conflicts, or if one doesn't have exactly one bookmark, as `log` does. Changes nothing, locally or on GitHub.",
+    "A change's pull request is the open one from its branch, or else the newest closed one whose head is the change or its pushed commit. Leaves out a change with no pull request, and one that `sync` abandoned because its pull request merged. Fails where no change has one.",
+    "With `--copy`, also copies the links to the clipboard as HTML, which Slack pastes as links. That needs `osascript` on macOS, or `wl-copy` or `xclip` on Linux. On macOS, it also copies the Markdown as plain text.",
+    "In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, `--copy` copies nothing. It prints the Markdown between markers, and tells the agent to copy it into its reply. The Claude app shows that as links that paste into Slack.",
+    "Fails if the changes aren't a chain, if one has conflicts, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
   ),
 );
