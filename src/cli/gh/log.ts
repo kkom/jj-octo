@@ -65,8 +65,7 @@ export const logCommand = Command.make(
 ).pipe(
   withHelp(
     "Show changes and their pull requests",
-    "Prints one line per change, top first: its bookmark, its pull request with whether that is a draft or ready for review, and whether the change is pushed, changed since the push, or not pushed.",
-    "Fails if the changes aren't a chain, if one has conflicts, or if one doesn't have exactly one bookmark. `submit` makes the same check before it changes anything.",
-    "Changes nothing, locally or on GitHub.",
+    "Prints one line per change, top first: its bookmark, its pull request and whether that is a draft or ready for review, and whether the change is pushed, changed since the push, or not pushed.",
+    "Fails if the changes aren't a chain, if one has conflicts, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
   ),
 );

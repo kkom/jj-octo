@@ -44,10 +44,10 @@ export const syncCommand = Command.make("sync", {}, () =>
 ).pipe(
   withHelp(
     "Fetch, and rebase every change onto the trunk",
-    "Fetches, then rebases every change that isn't merged yet onto the trunk, keeping each on the changes below it. A change whose pull request GitHub merged is abandoned and its bookmark forgotten, unless it was edited after the merge.",
-    "A stack that would conflict with the trunk is left where it was, and named. Rebase it yourself with `jj rebase` when you want to resolve it. The rest of a stack whose changes merged is rebased even where it conflicts, and the conflict is recorded in the change.",
-    "Commits added to a branch on GitHub are squashed into the branch's local change, whether or not that change was also edited locally. Where GitHub only rebased a branch, the local change is kept.",
+    "Fetches, then rebases every unmerged change onto the trunk, keeping each on the changes below it. Abandons each change whose pull request merged, and forgets its bookmark, unless you edited the change after the merge.",
+    "Leaves a stack that would conflict with the trunk where it was, and names it. When you want to resolve the conflict, rebase it with `jj rebase`. `sync` rebases the rest of a stack whose changes merged even where the rebase conflicts, and records the conflict in the change.",
+    "Squashes commits added to a branch on GitHub into the branch's local change, even where that change has local edits too. Where GitHub only rebased a branch, keeps the local change.",
     "Fails before fetching if `trunk()` isn't GitHub's default branch, which `jj-octo init` sets.",
-    "Pushes nothing. Run `jj gh submit` to update the pull requests of a change and the ones below it.",
+    "Pushes nothing. To update the pull requests of a change and the ones below it, run `jj gh submit`.",
   ),
 );

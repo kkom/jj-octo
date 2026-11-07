@@ -64,8 +64,8 @@ export const publishCommand = Command.make(
 ).pipe(
   withHelp(
     "Mark the draft pull requests of a change and the ones below it ready for review",
-    "An empty working copy means the change below it, so from the top of a stack this publishes all of it. Leaves a pull request that is already ready as it is.",
-    "Fails before publishing any where one of the changes has edits that aren't pushed, or has no open pull request. `jj gh submit --publish` pushes them and publishes in one go.",
-    "GitHub's REST API can't make a draft ready, so this uses its GraphQL API. Where `CLAUDE_CODE_REMOTE` is `true`, in a Claude Code cloud session whose GitHub proxy rejects GraphQL, it uses the proxy's own route for it instead. A proxy that doesn't serve that route fails the publish with its own error.",
+    "An empty working copy means the change below it. Leaves pull requests that are already ready as they are.",
+    "Fails before publishing any where a change has edits that aren't pushed, or has no open pull request. `jj gh submit --publish` pushes the changes and then publishes them.",
+    "Uses GitHub's GraphQL API, since REST can't mark a draft ready. In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, it uses the GitHub proxy's own route for this instead. Where the proxy doesn't serve that route, it fails with the proxy's error.",
   ),
 );

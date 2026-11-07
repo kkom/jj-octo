@@ -168,10 +168,10 @@ export const mergeCommand = Command.make(
 ).pipe(
   withHelp(
     "Merge the pull requests of a change and the ones below it",
-    "Squash-merges them, and prints which before it does. An empty working copy means the change below it. Fails before merging if any of the changes has edits that aren't pushed.",
-    "A pull request in a GitHub stack is merged together with the pull requests below it. Either all of them merge or none does. A pull request outside a stack is merged alone, and only if its base is the trunk.",
-    "Then syncs, as `jj gh sync` does: it abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk even where it conflicts, recording the conflict in the change. Then it pushes what is left of the change's stack again, up to the highest branch already on GitHub.",
-    "With `--cancel-pr-runs`, it also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it still tries the rest and pushes the stack, then fails.",
-    "If GitHub queues the merge instead, nothing is synced or cancelled. Run `jj gh sync` once it has merged.",
+    "Prints which pull requests it merges, then squash-merges them. An empty working copy means the change below it. Fails before merging if a change has edits that aren't pushed.",
+    "Pull requests in a GitHub stack merge together with the ones below them: all of them or none. A pull request outside a stack merges alone, and only if its base is the trunk.",
+    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. Then pushes the rest of the stack again, up to the highest branch already on GitHub.",
+    "With `--cancel-pr-runs`, also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it tries the rest and pushes the stack, then fails.",
+    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync`.",
   ),
 );

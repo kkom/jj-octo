@@ -34,6 +34,6 @@ export const doctor: Effect.Effect<void, NotSetUp, FileSystem.FileSystem | Git |
 export const doctorCommand = Command.make("doctor", {}, () => asUserError(doctor)).pipe(
   withHelp(
     "Check that a checkout is set up for the other commands",
-    "Runs the checks of everything `init` sets up or requires, and changes nothing. Fails with each problem, and what fixes it.",
+    "Checks everything `init` sets up or requires, and changes nothing. Fails with each problem and what fixes it.",
   ),
 );
