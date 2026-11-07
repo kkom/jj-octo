@@ -5,7 +5,6 @@ import {
   type ListedPullRequest,
   PullRequestNumberSchema,
   type RemoteStack,
-  type Review,
   StackNumberSchema,
 } from "./types";
 
@@ -32,6 +31,7 @@ const StackOfPullRequest = Schema.Struct({ number: Schema.optionalKey(StackNumbe
 export const AnyPullRequests = responseOf<"pulls/list">()(
   Schema.Array(
     Schema.Struct({
+      created_at: Schema.String,
       draft: Schema.optionalKey(Schema.Boolean),
       head: Schema.Struct({ sha: Schema.String }),
       html_url: Schema.String,
@@ -55,13 +55,12 @@ export const Stacks = responseOf<"pull-request-stacks/list">()(
 export const PullRequestNodeId = responseOf<"pulls/get">()(
   Schema.Struct({ node_id: Schema.String }),
 );
-export const Reviews = responseOf<"pulls/list-reviews">()(
-  Schema.Array(
-    Schema.Struct({
-      state: Schema.String,
-      submitted_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
-    }),
-  ),
+export const FoundPullRequests = responseOf<"search/issues-and-pull-requests">()(
+  Schema.Struct({
+    incomplete_results: Schema.Boolean,
+    items: Schema.Array(Schema.Struct({ number: PullRequestNumberSchema })),
+    total_count: Schema.Number,
+  }),
 );
 export const RepositoryDetails = responseOf<"repos/get">()(
   Schema.Struct({ default_branch: Schema.String }),
@@ -114,6 +113,7 @@ export const graphqlResponseOf =
 
 /** One pull request of an `AnyPullRequests` listing, with its state in one value. */
 export const listedPullRequest = ({
+  created_at,
   draft,
   head,
   html_url,
@@ -126,6 +126,7 @@ export const listedPullRequest = ({
   const open = draft === true ? "draft" : "ready";
   const closed = merged_at === null ? "closed" : "merged";
   return {
+    createdAt: created_at,
     head: head.sha,
     number,
     // The stack's page is beside the pull request's: `…/pull/2` and `…/stack/7`.
@@ -138,20 +139,6 @@ export const listedPullRequest = ({
     url: html_url,
   };
 };
-
-/**
- * The submitted reviews of a `Reviews` listing, in the order they were submitted. GitHub lists them
- * in the order they were started, and sends no `submitted_at`, or a null one, for one still being
- * written.
- */
-export const submittedReviews = (listed: typeof Reviews.Type): readonly Review[] =>
-  listed
-    .filter(
-      (review): review is { readonly state: string; readonly submitted_at: string } =>
-        typeof review.submitted_at === "string",
-    )
-    .toSorted((left, right) => Date.parse(left.submitted_at) - Date.parse(right.submitted_at))
-    .map(({ state }) => ({ state }));
 
 /** One stack of a `Stacks` listing, with the pull requests that haven't merged, bottom to top. */
 export const remoteStack = ({

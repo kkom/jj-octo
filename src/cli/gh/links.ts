@@ -7,7 +7,6 @@ import {
   ClipboardLive,
   type ClipboardWrite,
 } from "../../clients/clipboard";
-import { approvedBy } from "../../clients/github/approval";
 import { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
 import { GitHubFromOrigin } from "../../clients/github/origin";
@@ -28,7 +27,8 @@ export class NoPullRequests extends Data.TaggedError("NoPullRequests")<{
 
 /**
  * Where a change's pull request is: a state GitHub lists it in, where `ready` is one ready for
- * review that its reviews don't approve, or `approved`, one ready for review that they do.
+ * review that GitHub's search doesn't list as approved, or `approved`, one ready for review that it
+ * does.
  */
 export type LinkState = PullRequestState | "approved";
 
@@ -142,21 +142,6 @@ const pullRequestOf = (
       pullRequests.find(({ head }) => head === commitId || head === pushed),
   );
 
-/** The pull request, marked `approved` where it's ready for review and its reviews approve it. */
-const withApproval = (
-  github: GitHub["Service"],
-  pullRequest: CountedPullRequest,
-): Effect.Effect<LinkedPullRequest, GitHubFailed> =>
-  pullRequest.state === "ready"
-    ? github
-        .reviews(pullRequest.number)
-        .pipe(
-          Effect.map((reviews) =>
-            approvedBy(reviews) ? { ...pullRequest, state: "approved" } : pullRequest,
-          ),
-        )
-    : Effect.succeed(pullRequest);
-
 /** The pull request of each change of the revision's stack, top first. */
 export const stackPullRequests = (
   revision: string,
@@ -189,11 +174,14 @@ export const stackPullRequests = (
         counted.push({ ...pullRequest.value, ...changed });
       }
     }
-    return yield* Effect.forEach(
-      counted.toReversed(),
-      (pullRequest) => withApproval(github, pullRequest),
-      { concurrency: "unbounded" },
+    const approved = yield* github.approvedPullRequests(
+      counted.filter(({ state }) => state === "ready"),
     );
+    return counted
+      .toReversed()
+      .map((pullRequest): LinkedPullRequest =>
+        approved.has(pullRequest.number) ? { ...pullRequest, state: "approved" } : pullRequest,
+      );
   });
 
 /** Prints the links to the stack's pull requests, and writes them to the clipboard if asked. */
@@ -246,7 +234,7 @@ export const linksCommand = Command.make(
   withHelp(
     "Print the stack's pull requests as Markdown links",
     'Prints a link to the GitHub stack of the open pull requests, as "Current stack", where they are in one. Then prints one line per pull request, top first: 📝 for a draft, 👀 for one ready for review and not approved, ✅ for one ready for review and approved, 🏁 for a merged one, and 🚫 for one closed unmerged. Each line has a Markdown link with the number and title, and the lines the change adds and removes, in inline code, as `+123/-45`.',
-    "A pull request is approved where a reviewer approved it, and nobody requested changes after that approval. A dismissed review neither approves nor requests changes.",
+    "A pull request is approved where GitHub's search lists it as approved, which follows GitHub's own review decision. Search answers from an index, so a new review can take a few seconds to change the mark.",
     "A change's pull request is the open one from its branch, or else the newest closed one whose head is the change or its pushed commit. Leaves out a change with no pull request, and one that `sync` abandoned because its pull request merged. Fails where no change has one.",
     "With `--copy`, also copies the links to the clipboard as HTML, which Slack pastes as links. That needs `osascript` on macOS, or `wl-copy` or `xclip` on Linux. On macOS, it also copies the Markdown as plain text.",
     "In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, `--copy` copies nothing. It prints the Markdown between markers, and tells the agent to copy it into its reply. The Claude app shows that as links that paste into Slack.",

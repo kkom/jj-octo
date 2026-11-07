@@ -10,7 +10,6 @@ import {
   PullRequestNumberSchema,
   type PullRequestState,
   type RemoteStack,
-  type Review,
   StackNumberSchema,
   WorkflowRunIdSchema,
 } from "../clients/github/types";
@@ -28,12 +27,12 @@ export interface FakeRun {
 }
 
 interface FakeGitHubOptions {
+  /** The open pull requests GitHub's search lists as approved. None by default. */
+  readonly approved?: readonly PullRequestNumber[];
   /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
   readonly onMerge?: (pullRequest: PullRequestNumber) => void;
   /** The pull requests from the branch in any state, newest first. None by default. */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
-  /** The submitted reviews of the pull request, in the order they were submitted. None by default. */
-  readonly reviews?: (pullRequest: PullRequestNumber) => readonly Review[];
   /** Each commit's workflow runs. None by default. */
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
@@ -42,7 +41,7 @@ interface FakeGitHubOptions {
 export const fakeGitHub = (
   open: Readonly<Record<string, PullRequest>>,
   stack: Option.Option<RemoteStack>,
-  { onMerge, pullRequestsFrom = () => [], reviews = () => [], runs = {} }: FakeGitHubOptions = {},
+  { approved = [], onMerge, pullRequestsFrom = () => [], runs = {} }: FakeGitHubOptions = {},
 ): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
   const calls: string[] = [];
   // Marking a pull request ready changes what `openPullRequest` returns afterwards.
@@ -54,6 +53,12 @@ export const fakeGitHub = (
     });
   const layer = Layer.succeed(GitHub, {
     addToStack: (number, pullRequests) => record(`add ${pullRequests.join(",")} to #${number}`),
+    approvedPullRequests: (pullRequests) =>
+      Effect.succeed(
+        new Set(
+          pullRequests.map(({ number }) => number).filter((number) => approved.includes(number)),
+        ),
+      ),
     cancelRun: (run) => {
       const found = Object.values(runs)
         .flat()
@@ -119,7 +124,6 @@ export const fakeGitHub = (
       ),
     openPullRequest: (branch) => Effect.sync(() => Option.fromNullishOr(opened.get(branch))),
     pullRequestsFrom: (branch) => Effect.sync(() => pullRequestsFrom(branch)),
-    reviews: (number) => Effect.sync(() => reviews(number)),
     setBase: (number, base) => record(`base #${number} → ${base}`),
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
     stackOf: () => Effect.sync(() => registered),
@@ -163,6 +167,7 @@ export const pullRequest = (
   state: PullRequestState,
   head: string,
 ): ListedPullRequest => ({
+  createdAt: "2026-01-01T00:00:00Z",
   head,
   number: PullRequestNumberSchema.make(number),
   stack: Option.none(),

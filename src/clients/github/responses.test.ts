@@ -7,6 +7,7 @@ import { PullRequestNumberSchema, type PullRequestState, StackNumberSchema } fro
 
 const listed = (state: string, draft: boolean | undefined, mergedAt: string | null) => ({
   ...(draft === undefined ? {} : { draft }),
+  created_at: "2026-01-01T00:00:00Z",
   head: { sha: "abc" },
   html_url: "https://github.com/kkom/jj-octo/pull/1",
   merged_at: mergedAt,
@@ -16,6 +17,7 @@ const listed = (state: string, draft: boolean | undefined, mergedAt: string | nu
 });
 
 const link = (state: PullRequestState) => ({
+  createdAt: "2026-01-01T00:00:00Z",
   head: "abc",
   number: PullRequestNumberSchema.make(1),
   stack: Option.none(),

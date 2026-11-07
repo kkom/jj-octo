@@ -16,18 +16,16 @@ import {
   MergeResult,
   PullRequests,
   RepositoryDetails,
-  Reviews,
   Stacks,
   StartedMerge,
-  submittedReviews,
   WorkflowRuns,
 } from "./responses";
+import { approvedPullRequests, type SearchedPullRequest } from "./search";
 import {
   type PullRequest,
   type ListedPullRequest,
   type PullRequestNumber,
   type RemoteStack,
-  type Review,
   type StackNumber,
   type WorkflowRunId,
   WorkflowRunIdSchema,
@@ -46,6 +44,10 @@ export class GitHub extends Context.Service<
       stack: StackNumber,
       pullRequests: readonly PullRequestNumber[],
     ) => Effect.Effect<void, GitHubFailed>;
+    /** Those of the pull requests that GitHub's search lists as open and approved. */
+    readonly approvedPullRequests: (
+      pullRequests: readonly SearchedPullRequest[],
+    ) => Effect.Effect<ReadonlySet<PullRequestNumber>, GitHubFailed>;
     readonly cancelRun: (run: WorkflowRunId) => Effect.Effect<CancelOutcome, GitHubFailed>;
     readonly createPullRequest: (pullRequest: {
       readonly base: string;
@@ -76,10 +78,6 @@ export class GitHub extends Context.Service<
     readonly pullRequestsFrom: (
       branch: string,
     ) => Effect.Effect<readonly ListedPullRequest[], GitHubFailed>;
-    /** The submitted reviews of the pull request, in the order they were submitted. */
-    readonly reviews: (
-      pullRequest: PullRequestNumber,
-    ) => Effect.Effect<readonly Review[], GitHubFailed>;
     readonly setBase: (
       pullRequest: PullRequestNumber,
       base: string,
@@ -104,7 +102,9 @@ export const GitHubLive = (
   repository: Repository,
   connection: Connection,
 ): Layer.Layer<GitHub, never, HttpClient.HttpClient> => {
-  // A cloud session's proxy only allows paths under the repository, so every call starts there.
+  // A cloud session's proxy allows the paths under the repository and `/search/issues`, so the
+  // other REST calls start under the repository. Only `markReadyForReview`, outside a cloud
+  // session, calls `/graphql`.
   const repo = (path: string): string => `/repos/${repository.owner}/${repository.name}${path}`;
   return Layer.effect(
     GitHub,
@@ -182,6 +182,8 @@ export const GitHubLive = (
               bodyOf<"pull-request-stacks/add">({ pull_requests: [...pullRequests] }),
             ),
           ).pipe(Effect.asVoid),
+        approvedPullRequests: (pullRequests) =>
+          approvedPullRequests({ json, send }, repository, pullRequests),
         // GitHub answers 409 for a run that has completed, as one can between listing and cancel
         cancelRun: (run) =>
           send(HttpClientRequest.post(repo(`/actions/runs/${run}/cancel`))).pipe(
@@ -262,11 +264,6 @@ export const GitHubLive = (
           everyPage(fromBranch(branch, "all"), json(AnyPullRequests)).pipe(
             Effect.map((found) => found.map((listed) => listedPullRequest(listed))),
           ),
-        reviews: (pullRequest) =>
-          everyPage(
-            HttpClientRequest.get(repo(`/pulls/${pullRequest}/reviews`)),
-            json(Reviews),
-          ).pipe(Effect.map(submittedReviews)),
         setBase: (pullRequest, base) =>
           send(
             HttpClientRequest.patch(repo(`/pulls/${pullRequest}`)).pipe(
