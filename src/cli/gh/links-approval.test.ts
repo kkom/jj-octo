@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import type { ListedPullRequest } from "../../clients/github/types";
 import { fakeGitHub, inRepository, pullRequest, pullRequests } from "../../testing/fake-github";
@@ -25,7 +25,7 @@ const linkedWithApproved = (
     stackPullRequests("@").pipe(
       inRepository(
         repository,
-        fakeGitHub({}, Option.none(), {
+        fakeGitHub({}, [], {
           approved: pullRequests(...approved),
           pullRequestsFrom: (branch) => byBranch[branch] ?? [],
         }),

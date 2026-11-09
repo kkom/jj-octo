@@ -56,7 +56,7 @@ describe("stackPullRequests", () => {
       d: [pullRequest(4, "closed", commitOf("d"))],
       e: [pullRequest(5, "merged", "a head from an earlier branch named e")],
     };
-    const github = fakeGitHub({}, Option.none(), {
+    const github = fakeGitHub({}, [], {
       pullRequestsFrom: (branch) => byBranch[branch] ?? [],
     });
     const found = await Effect.runPromise(
@@ -170,7 +170,7 @@ describe("links", () => {
       const repository = scratchRepository();
       repository.stack("a");
       const listed = pullRequest(1, "draft", "anything");
-      const github = fakeGitHub({}, Option.none(), {
+      const github = fakeGitHub({}, [], {
         pullRequestsFrom: (branch) => (branch === "a" ? [listed] : []),
       });
       const clipboard = fakeClipboard(outcome);
@@ -196,7 +196,7 @@ describe("links", () => {
     const repository = scratchRepository();
     repository.stack("a");
     const listed = pullRequest(1, "draft", "anything");
-    const github = fakeGitHub({}, Option.none(), {
+    const github = fakeGitHub({}, [], {
       pullRequestsFrom: (branch) => (branch === "a" ? [listed] : []),
     });
     const failure = new ClipboardFailed({ message: "xclip exited with 1" });
@@ -221,7 +221,7 @@ describe("links", () => {
     const failure = await Effect.runPromise(
       Effect.flip(links({ copy: true, revision: "@" })).pipe(
         Effect.provide(clipboard.layer),
-        inRepository(repository, fakeGitHub({}, Option.none())),
+        inRepository(repository, fakeGitHub({}, [])),
       ),
     );
     expect({ copied: clipboard.copied, failure }).toStrictEqual({
@@ -233,7 +233,7 @@ describe("links", () => {
   it("prints the GitHub stack the pull requests are in above them", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b");
-    const github = fakeGitHub({}, Option.none(), {
+    const github = fakeGitHub({}, [], {
       pullRequestsFrom: (branch) => [
         inStack(pullRequest(branch === "a" ? 1 : 2, "ready", "anything"), 5),
       ],
@@ -262,7 +262,7 @@ describe("links", () => {
     const repository = scratchRepository();
     repository.stack("a");
     const listed = pullRequest(1, "draft", "anything");
-    const github = fakeGitHub({}, Option.none(), { pullRequestsFrom: () => [listed] });
+    const github = fakeGitHub({}, [], { pullRequestsFrom: () => [listed] });
     const clipboard = fakeClipboard();
     const console = fakeConsole();
     await Effect.runPromise(

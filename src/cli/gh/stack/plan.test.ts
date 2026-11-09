@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { Option } from "effect";
 
 import { PullRequestNumberSchema, StackNumberSchema } from "../../../clients/github/types";
-import { pullRequests, stackOf } from "../../../testing/fake-github";
+import { pullRequests, stackNumbered } from "../../../testing/fake-github";
 import {
   agreedDescription,
   basesFor,
@@ -38,56 +38,56 @@ describe("mustDissolve", () => {
     {
       basesMove: false,
       dissolves: false,
-      existing: stackOf(1, 2),
+      existing: Option.some(stackNumbered(7, 1, 2)),
       order: wanted(1, 2),
       when: "the stack is in the wanted order",
     },
     {
       basesMove: false,
       dissolves: false,
-      existing: stackOf(1, 2),
+      existing: Option.some(stackNumbered(7, 1, 2)),
       order: wanted(1, 2),
       when: "pull requests are added on top",
     },
     {
       basesMove: false,
       dissolves: false,
-      existing: stackOf(1, 2, 3),
+      existing: Option.some(stackNumbered(7, 1, 2, 3)),
       order: wanted(1, 2),
       when: "only the bottom part is wanted",
     },
     {
       basesMove: false,
       dissolves: true,
-      existing: stackOf(1, 2, 3),
+      existing: Option.some(stackNumbered(7, 1, 2, 3)),
       order: wanted(1, 3, 2),
       when: "the order changed",
     },
     {
       basesMove: false,
       dissolves: true,
-      existing: stackOf(1, 2, 3),
+      existing: Option.some(stackNumbered(7, 1, 2, 3)),
       order: wanted(1, 3),
       when: "a change was dropped",
     },
     {
       basesMove: false,
       dissolves: true,
-      existing: stackOf(1, 2),
+      existing: Option.some(stackNumbered(7, 1, 2)),
       order: wanted(1, undefined, 2),
       when: "a change was inserted",
     },
     {
       basesMove: true,
       dissolves: true,
-      existing: stackOf(1, 2),
+      existing: Option.some(stackNumbered(7, 1, 2)),
       order: wanted(1, 2),
       when: "a base has to move",
     },
     {
       basesMove: false,
       dissolves: true,
-      existing: stackOf(),
+      existing: Option.some(stackNumbered(7)),
       order: wanted(4, 5),
       when: "every pull request of it merged",
     },
@@ -109,11 +109,13 @@ describe("registrationFor", () => {
   });
 
   it("leaves a stack that already holds the pull requests", () => {
-    expect(registrationFor(stackOf(1, 2, 3), pullRequests(1, 2))).toEqual({ _tag: "Unchanged" });
+    expect(registrationFor(Option.some(stackNumbered(7, 1, 2, 3)), pullRequests(1, 2))).toEqual({
+      _tag: "Unchanged",
+    });
   });
 
   it("appends pull requests added on top", () => {
-    expect(registrationFor(stackOf(1, 2), pullRequests(1, 2, 3))).toEqual({
+    expect(registrationFor(Option.some(stackNumbered(7, 1, 2)), pullRequests(1, 2, 3))).toEqual({
       _tag: "Append",
       pullRequests: pullRequests(3),
       stack: StackNumberSchema.make(7),

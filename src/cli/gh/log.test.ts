@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import { fakeGitHub, inRepository, openPullRequest } from "../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
@@ -16,7 +16,7 @@ describe("log", () => {
     repository.jj("describe", "-r", "b", "-m", "b, reworded");
     const github = fakeGitHub(
       { a: { ...openPullRequest("main", 1, "a"), draft: false }, b: openPullRequest("a", 2, "b") },
-      Option.none(),
+      [],
     );
     const printed = await Effect.runPromise(log("@").pipe(inRepository(repository, github)));
     expect(printed).toEqual([

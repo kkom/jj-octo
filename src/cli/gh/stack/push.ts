@@ -1,9 +1,9 @@
-import { Array as EffectArray, Console, Data, Effect, Match, Option } from "effect";
+import { Console, Effect, Option } from "effect";
 
 import type { Git, GitFailed } from "../../../clients/git";
 import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
-import type { PullRequest, PullRequestNumber, RemoteStack } from "../../../clients/github/types";
+import type { PullRequest, PullRequestNumber } from "../../../clients/github/types";
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting } from "../../../settings";
@@ -25,57 +25,11 @@ import {
   syncDescription,
   type SyncedDescription,
 } from "./descriptions";
-import { basesFor, mustDissolve, registrationFor, titleAndBody } from "./plan";
+import { basesFor, mustDissolve, titleAndBody } from "./plan";
 import type { NotCombined } from "./reconcile";
+import { register, type SeveralStacks, stackContaining } from "./stacks";
 import { type BranchesDeleted, syncStack } from "./sync-stack";
 import { checkedTrunk, type TrunkMismatch } from "./trunk";
-
-export class SeveralStacks extends Data.TaggedError("SeveralStacks")<{
-  readonly message: string;
-}> {}
-
-/** The one GitHub stack containing any of the pull requests, if there is one. */
-const stackContaining = (pullRequests: readonly PullRequestNumber[]) =>
-  Effect.gen(function* () {
-    const github = yield* GitHub;
-    const found = yield* Effect.all(
-      pullRequests.map((pullRequest) => github.stackOf(pullRequest)),
-      { concurrency: "unbounded" },
-    );
-    const stacks = EffectArray.dedupeWith(
-      found.flatMap((stack) => Option.toArray(stack)),
-      (a, b) => a.number === b.number,
-    );
-    if (stacks.length > 1) {
-      return yield* new SeveralStacks({
-        message: `the pull requests belong to stacks ${stacks.map(({ number }) => `#${number}`).join(" and ")}; unstack all but one`,
-      });
-    }
-    return Option.fromNullishOr(stacks[0]);
-  });
-
-/** Makes the pull requests, bottom to top, the unmerged part of one GitHub stack. */
-const register = (
-  remaining: Option.Option<RemoteStack>,
-  pullRequests: readonly PullRequestNumber[],
-) =>
-  Effect.gen(function* () {
-    const github = yield* GitHub;
-    yield* Match.value(registrationFor(remaining, pullRequests)).pipe(
-      Match.tag("Unchanged", () => Effect.void),
-      Match.tag("Append", ({ pullRequests: added, stack }) =>
-        github
-          .addToStack(stack, added)
-          .pipe(Effect.andThen(Console.error(`added ${added.join(", ")} to stack #${stack}`))),
-      ),
-      Match.tag("Create", ({ pullRequests: all }) =>
-        github
-          .createStack(all)
-          .pipe(Effect.flatMap((stack) => Console.error(`registered stack #${stack}`))),
-      ),
-      Match.exhaustive,
-    );
-  });
 
 interface PushOptions {
   /** GitHub's default branch, which the bottom pull request is based on. */
@@ -131,6 +85,12 @@ const push = (
       ),
       { concurrency: "unbounded" },
     );
+    // Before a description is synced, which can rewrite changes, so a failure changes nothing.
+    const existing = yield* stackContaining(
+      found.flatMap(({ pullRequest }) =>
+        Option.toArray(Option.map(pullRequest, ({ number }) => number)),
+      ),
+    );
     const targets = yield* bookmarkTargets;
     const pushedDescriptions = yield* descriptionsOf(
       bookmarks.flatMap((bookmark) => targets.get(bookmark)?.origin ?? []),
@@ -169,7 +129,6 @@ const push = (
     const wanted = changes.map(({ open }) =>
       Option.map(open, ({ pullRequest }) => pullRequest.number),
     );
-    const existing = yield* stackContaining(wanted.flatMap((number) => Option.toArray(number)));
     const dissolve = mustDissolve(existing, wanted, moving.length > 0);
     if (dissolve && Option.isSome(existing)) {
       yield* github.unstack(existing.value.number);
