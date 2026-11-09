@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import {
   addCommitOnGitHub,
@@ -24,7 +24,7 @@ const submitting = (
   open: Parameters<typeof fakeGitHub>[0],
   revision: string,
 ) => {
-  const github = fakeGitHub(open, Option.none(), { pullRequestsFrom: repository.pullRequestsFrom });
+  const github = fakeGitHub(open, [], { pullRequestsFrom: repository.pullRequestsFrom });
   return {
     calls: github.calls,
     program: submit(revision, { draft: true, overwriteDescriptions: false }).pipe(

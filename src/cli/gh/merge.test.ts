@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import { moveTrunkOnGitHub, squashMergeOnGitHub } from "../../testing/branch-changes";
 import { fakeGitHub, inRepository, openPullRequest, stackOf } from "../../testing/fake-github";
@@ -118,7 +118,7 @@ describe("merge", () => {
     const repository = pushedStack("a", "b");
     const github = fakeGitHub(
       open,
-      Option.none(),
+      [],
       mergingIn(repository, () => {
         squashMergeOnGitHub(repository, "a");
       }),
@@ -132,7 +132,7 @@ describe("merge", () => {
     const repository = pushedStack("a", "b");
     const github = fakeGitHub(
       open,
-      Option.none(),
+      [],
       mergingIn(repository, () => {
         squashMergeOnGitHub(repository, "a");
         repository.writeOnGitHub("b.txt", "somebody else's\n");
@@ -192,7 +192,7 @@ describe("merge", () => {
 
   it("merges nothing outside a GitHub stack when the base isn't the trunk", async () => {
     const repository = pushedStack("a", "b");
-    const github = fakeGitHub(open, Option.none());
+    const github = fakeGitHub(open, []);
     const failure = await Effect.runPromise(Effect.flip(mergeIn(repository, github, "b")));
     expect(failure.message).toContain("#2 isn't in a GitHub stack, and its base is a");
     expect(github.calls).toEqual([]);
@@ -210,7 +210,7 @@ describe("merge", () => {
   it("merges nothing for a change with no bookmark", async () => {
     const repository = pushedStack("a", "b");
     repository.jj("describe", "-m", "c");
-    const github = fakeGitHub(open, Option.none());
+    const github = fakeGitHub(open, []);
     const failure = await Effect.runPromise(Effect.flip(mergeIn(repository, github, "@")));
     expect(failure.message).toContain("needs a bookmark");
     expect(github.calls).toEqual([]);
@@ -218,7 +218,7 @@ describe("merge", () => {
 
   it("merges nothing for a bookmark with no open pull request", async () => {
     const repository = pushedStack("a", "b");
-    const github = fakeGitHub({}, Option.none());
+    const github = fakeGitHub({}, []);
     const failure = await Effect.runPromise(Effect.flip(mergeIn(repository, github, "b")));
     expect(failure.message).toContain("no open pull request for b");
     expect(github.calls).toEqual([]);

@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import type { NotCombined } from "../cli/gh/stack/reconcile";
 import { sync } from "../cli/gh/sync";
@@ -12,10 +12,7 @@ export const syncing = (
   repository: ScratchRepository,
 ): Effect.Effect<void, GitHubFailed | JjFailed | NotCombined> =>
   sync().pipe(
-    inRepository(
-      repository,
-      fakeGitHub({}, Option.none(), { pullRequestsFrom: repository.pullRequestsFrom }),
-    ),
+    inRepository(repository, fakeGitHub({}, [], { pullRequestsFrom: repository.pullRequestsFrom })),
   );
 
 export const syncIn = (repository: ScratchRepository): Promise<void> =>

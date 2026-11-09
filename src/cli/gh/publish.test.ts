@@ -64,10 +64,7 @@ describe("publish", () => {
 
   it("publishes nothing where every pull request is ready", async () => {
     const repository = pushedStack("a");
-    const github = fakeGitHub(
-      { a: { ...openPullRequest("main", 1, "a"), draft: false } },
-      Option.none(),
-    );
+    const github = fakeGitHub({ a: { ...openPullRequest("main", 1, "a"), draft: false } }, []);
     await Effect.runPromise(publishIn(repository, github, "a"));
     expect(github.calls).toStrictEqual([]);
   });
@@ -88,7 +85,7 @@ describe("publish", () => {
 
   it("publishes nothing where a change has no open pull request", async () => {
     const repository = pushedStack("a", "b");
-    const github = fakeGitHub({ b: openPullRequest("a", 2, "b") }, Option.none());
+    const github = fakeGitHub({ b: openPullRequest("a", 2, "b") }, []);
     const failure = await Effect.runPromise(Effect.flip(publishIn(repository, github, "b")));
     expect({ calls: github.calls, message: failure.message }).toStrictEqual({
       calls: [],

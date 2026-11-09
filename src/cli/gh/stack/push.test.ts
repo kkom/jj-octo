@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
 
 import { fakeGitHub, openPullRequest, stackOf } from "../../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
@@ -12,7 +12,7 @@ describe("submit", () => {
   it("pushes the bookmarks, opens the missing pull requests and registers a new stack", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b");
-    const github = fakeGitHub({}, Option.none());
+    const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github));
     expect(Object.keys(repository.branches())).toEqual(["a", "b", "main"]);
     expect(github.calls).toEqual([
@@ -25,7 +25,7 @@ describe("submit", () => {
   it("opens the missing pull requests ready for review when not drafts", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b");
-    const github = fakeGitHub({}, Option.none());
+    const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github, { draft: false }));
     expect(github.calls).toEqual(["open a on main", "open b on a", "create stack 99,99"]);
   });
@@ -66,46 +66,11 @@ describe("submit", () => {
     expect(github.calls).toEqual(["open c on b as a draft", "add 99 to #7"]);
   });
 
-  // As after a pull request on top of the stack is closed, its change dropped, and another pushed
-  // in its place: GitHub adds only above the closed one, whose head no new pull request is on.
-  it("registers the stack again where its top pull request was closed without merging", async () => {
-    const repository = scratchRepository();
-    repository.stack("a", "b");
-    const github = fakeGitHub({ a: openPullRequest("main", 1, "a") }, stackOf(1, 2));
-    await Effect.runPromise(submitIn(repository, github));
-    expect(github.calls).toEqual(["unstack #7", "open b on a as a draft", "create stack 1,99"]);
-  });
-
-  // GitHub rejects a base change on a pull request in a stack, and closes a pull request whose
-  // head becomes reachable from its base. So the stack goes first, the moved pull request is parked
-  // on the trunk before the push, and it gets its new base and a new stack after.
-  it("reorders by dissolving, parking on the trunk, pushing, then rebasing and registering", async () => {
-    const repository = scratchRepository();
-    repository.stack("a", "c", "b");
-    const github = fakeGitHub(
-      {
-        a: openPullRequest("main", 1, "a"),
-        b: openPullRequest("a", 2, "b"),
-        c: openPullRequest("b", 3, "c"),
-      },
-      stackOf(1, 2, 3),
-    );
-    await Effect.runPromise(submitIn(repository, github));
-    expect(github.calls).toEqual([
-      "unstack #7",
-      "base #3 → main",
-      "base #2 → main",
-      "base #3 → a",
-      "base #2 → c",
-      "create stack 1,3,2",
-    ]);
-  });
-
   it("submits a named change and the ones below it, from a working copy elsewhere", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b", "c");
     repository.jj("new", "main", "-m", "d");
-    const github = fakeGitHub({}, Option.none());
+    const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github, { revision: "b" }));
     expect(Object.keys(repository.branches())).toEqual(["a", "b", "main"]);
     expect(github.calls).toEqual([

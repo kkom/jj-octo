@@ -2,6 +2,7 @@ import { Command } from "effect/cli";
 
 import { ENVIRONMENT_VARIABLES, GITHUB_AUTH, SETTINGS } from "../../settings";
 import { asUserError, type HelpSection, table, withHelp, withSections } from "../command";
+import { dissolveCommand } from "./dissolve";
 import { doctorCommand } from "./doctor";
 import { initCommand, setUpOnUpgrade } from "./init";
 import { linksCommand } from "./links";
@@ -45,6 +46,7 @@ const environmentSection: HelpSection = {
 export const jjGhCommand = Command.make("jj gh").pipe(
   // `doctor` reports the setup without changing it, and `init` is the setup itself.
   Command.withSubcommands([
+    dissolveCommand.pipe(setUpFirst),
     doctorCommand,
     initCommand,
     linksCommand.pipe(setUpFirst),
