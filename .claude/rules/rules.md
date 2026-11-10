@@ -1,6 +1,6 @@
 # Writing rules
 
-A rule is one of two kinds, and each has its own structure.
+A rule is one of three kinds, and each has its own structure.
 
 ## Style guides
 
@@ -18,7 +18,18 @@ An instruction or index says what exists and how to use it — a tool, a system,
 - Capabilities are indexed in a list or table, one line each.
 - A process is walked through in the order it's done, with each trap beside the step it belongs to.
 
-## Both kinds
+## Designs
+
+A design states how one part of the system works, or will work: its parts, what each part does, and the order things happen in. It's written as a specification:
+
+- Headings name parts of the design, numbered where sections refer to each other: "2. The lock table", "5. Retrying a failed step".
+- Each part is stated concretely, as the tables and columns, the functions and what each returns, and the steps in order, not as principles a reader has to turn into a design.
+- Terms are defined once, in a table near the top, and used the same way throughout.
+- Where the code doesn't follow the design yet, a section at the end lists each gap with its issue.
+
+That's because a reader builds the part from the design, so every choice has to be on the page.
+
+## Every kind
 
 - In a rule that applies beyond this repository, describe the kind of thing rather than naming a package, path or worker only this repository has.
 - Claim only what the configuration behind the rule enforces.
