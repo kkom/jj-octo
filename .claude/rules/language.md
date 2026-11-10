@@ -35,3 +35,14 @@ From *On Writing Well*:
 
 - ❌ "It's worth noting that, in order to ensure robust and seamless rate limiting, we leverage Valkey."
 - ✅ "The rate limiter stores its counters in Valkey."
+
+## Don't use "fence" and "seam" as metaphors
+
+Name the check, boundary or interface itself. That covers the words' other forms, such as "fenced off" and "seamless". A term for the literal thing keeps its name, such as a code fence in Markdown.
+
+That's because, used as metaphors, they name no file, check or value, so each reader guesses what they stand for.
+
+- ❌ "The lockfile check is a fence around the release."
+- ✅ "`bun install --frozen-lockfile` fails the release when `bun.lock` is out of date."
+- ❌ "Inject the clock at the seam."
+- ✅ "Pass the `Clock` service to `createSession` as a parameter."
