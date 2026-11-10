@@ -35,8 +35,8 @@
   },
   "devDependencies": {
     "@effect/platform-bun": "4.1.2",
-    "@graphql-codegen/cli": "7.4.6",
-    "@graphql-codegen/client-preset": "6.2.3",
+    "@graphql-codegen/cli": "8.0.0",
+    "@graphql-codegen/client-preset": "7.0.0",
     "@octokit/graphql-schema": "15.26.1",
     "@octokit/openapi-types": "29.0.1",
     "@tsconfig/strictest": "2.0.8",
