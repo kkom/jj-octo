@@ -2,6 +2,7 @@ import { Command } from "effect/cli";
 
 import { ENVIRONMENT_VARIABLES, GITHUB_AUTH, SETTINGS } from "../../settings";
 import { asUserError, type HelpSection, table, withHelp, withSections } from "../command";
+import { checksCommand } from "./checks";
 import { dissolveCommand } from "./dissolve";
 import { doctorCommand } from "./doctor";
 import { initCommand, setUpOnUpgrade } from "./init";
@@ -46,6 +47,7 @@ const environmentSection: HelpSection = {
 export const jjGhCommand = Command.make("jj gh").pipe(
   // `doctor` reports the setup without changing it, and `init` is the setup itself.
   Command.withSubcommands([
+    checksCommand.pipe(setUpFirst),
     dissolveCommand.pipe(setUpFirst),
     doctorCommand,
     initCommand,
@@ -59,7 +61,7 @@ export const jjGhCommand = Command.make("jj gh").pipe(
   withHelp(
     "Commands for publishing jj changes as GitHub pull requests",
     "A stack is a chain of changes, each published as one pull request on the branch its bookmark names. Each pull request targets the branch of the change below it, so it shows only that change's diff. A single change gets an ordinary pull request, outside any GitHub stack.",
-    "A change's stack is every change connected to it through mutable changes, except an empty working copy with no description. `log` shows the stack, and `links` lists its pull requests. `submit`, `publish` and `merge` act on a change and the ones below it. Those must be a chain: no merges, no conflicts, and exactly one bookmark on each change.",
+    "A change's stack is every change connected to it through mutable changes, except an empty working copy with no description. `log` shows the stack, `links` lists its pull requests, and `checks` shows their checks. `submit`, `publish` and `merge` act on a change and the ones below it. Those must be a chain: no merges, no conflicts, and exactly one bookmark on each change.",
     `jj-octo acts on the repository that the \`origin\` remote points to. The GitHub proxy of a Claude Code cloud session rejects GraphQL, so jj-octo uses GitHub's REST API. Marking a draft ready, in \`publish\` and \`submit --publish\`, is the one exception, as \`jj gh publish --help\` says. In an Anthropic-hosted session, the default settings work. On a self-hosted runner that sends git through the Anthropic git proxy, set \`${GITHUB_AUTH.key}\` to \`git-proxy\`. SETTINGS and ENVIRONMENT below list the jj config keys and environment variables that change how jj-octo works.`,
   ),
   withSections(settingsSection, environmentSection),

@@ -4,12 +4,14 @@ import type { Git } from "../clients/git";
 import { GitHub } from "../clients/github/client";
 import { GitHubFailed } from "../clients/github/failure";
 import {
+  type Check,
   type PullRequest,
   type ListedPullRequest,
   type PullRequestNumber,
   PullRequestNumberSchema,
   type PullRequestState,
   type RemoteStack,
+  type RequiredChecks,
   StackNumberSchema,
   WorkflowRunIdSchema,
 } from "../clients/github/types";
@@ -29,10 +31,14 @@ export interface FakeRun {
 interface FakeGitHubOptions {
   /** The open pull requests GitHub's search lists as approved. None by default. */
   readonly approved?: readonly PullRequestNumber[];
+  /** The latest result of each check of each commit. None by default. */
+  readonly checks?: Readonly<Record<string, readonly Check[]>>;
   /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
   readonly onMerge?: (pullRequest: PullRequestNumber) => void;
   /** The pull requests from the branch in any state, newest first. None by default. */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
+  /** The checks each branch requires. A branch not named here doesn't exist. */
+  readonly required?: Readonly<Record<string, RequiredChecks>>;
   /** Each commit's workflow runs. None by default. */
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
@@ -42,7 +48,14 @@ interface FakeGitHubOptions {
 export const fakeGitHub = (
   open: Readonly<Record<string, PullRequest>>,
   stacks: readonly RemoteStack[],
-  { approved = [], onMerge, pullRequestsFrom = () => [], runs = {} }: FakeGitHubOptions = {},
+  {
+    approved = [],
+    checks = {},
+    onMerge,
+    pullRequestsFrom = () => [],
+    required = {},
+    runs = {},
+  }: FakeGitHubOptions = {},
 ): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
   const calls: string[] = [];
   // Marking a pull request ready changes what `openPullRequest` returns afterwards.
@@ -121,6 +134,7 @@ export const fakeGitHub = (
       );
     },
     defaultBranch: Effect.succeed("main"),
+    latestChecks: (commit) => Effect.succeed(checks[commit] ?? []),
     markReadyForReview: (number) => {
       const found = [...opened.entries()].find(([, pullRequest]) => pullRequest.number === number);
       if (found === undefined) {
@@ -156,6 +170,14 @@ export const fakeGitHub = (
       ),
     openPullRequest: (branch) => Effect.sync(() => Option.fromNullishOr(opened.get(branch))),
     pullRequestsFrom: (branch) => Effect.sync(() => pullRequestsFrom(branch)),
+    // GitHub answers 404 for a branch it doesn't have, which the client reads as unknown.
+    requiredChecks: (branch) =>
+      Effect.succeed(
+        required[branch] ?? {
+          _tag: "Unknown" as const,
+          reason: `couldn't read the rules of ${branch}: GET /branches/${branch} returned 404`,
+        },
+      ),
     setBase: (number, base) => record(`base #${number} → ${base}`),
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
     stackOf: (pullRequest) =>

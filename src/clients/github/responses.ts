@@ -86,6 +86,62 @@ export const WorkflowRuns = responseOf<"actions/list-workflow-runs-for-repo">()(
   }),
 );
 
+// A check run's id is an int64 too.
+const CheckRun = Schema.Struct({
+  app: Schema.NullOr(Schema.Struct({ id: Schema.Number })),
+  conclusion: Schema.NullOr(Schema.String),
+  id: Schema.Union([Schema.Number, Schema.BigInt]),
+  name: Schema.String,
+  status: Schema.String,
+});
+export const CheckRuns = responseOf<"checks/list-for-ref">()(
+  Schema.Struct({ check_runs: Schema.Array(CheckRun) }),
+);
+const CommitStatus = Schema.Struct({ context: Schema.String, state: Schema.String });
+export const CombinedStatus = responseOf<"repos/get-combined-status-for-ref">()(
+  Schema.Struct({ statuses: Schema.Array(CommitStatus) }),
+);
+// A rule's `type` names the kind of rule, and decides what its `parameters` hold. A rule requiring
+// status checks whose `parameters` `StatusCheckRule` can't decode fails `OtherRule` too, so the
+// response fails to decode rather than the rule going unread.
+const StatusCheck = Schema.Struct({
+  context: Schema.String,
+  integration_id: Schema.optionalKey(Schema.Number),
+});
+export const StatusCheckRule = Schema.Struct({
+  parameters: Schema.optionalKey(
+    Schema.Struct({ required_status_checks: Schema.Array(StatusCheck) }),
+  ),
+  type: Schema.Literal("required_status_checks"),
+});
+const { literal: STATUS_CHECKS } = StatusCheckRule.fields.type;
+const OtherRule = Schema.Struct({
+  type: Schema.String.pipe(
+    Schema.check(
+      Schema.makeFilter((type) => type !== STATUS_CHECKS || `a type other than ${STATUS_CHECKS}`),
+    ),
+  ),
+});
+export const BranchRules = responseOf<"repos/get-branch-rules">()(
+  Schema.Array(Schema.Union([StatusCheckRule, OtherRule])),
+);
+const ProtectionCheck = Schema.Struct({
+  app_id: Schema.NullOr(Schema.Number),
+  context: Schema.String,
+});
+const RequiredStatusChecks = Schema.Struct({
+  checks: Schema.Array(ProtectionCheck),
+  enforcement_level: Schema.optionalKey(Schema.String),
+});
+export const BranchProtection = responseOf<"repos/get-branch">()(
+  Schema.Struct({
+    protected: Schema.Boolean,
+    protection: Schema.optionalKey(
+      Schema.Struct({ required_status_checks: Schema.optionalKey(RequiredStatusChecks) }),
+    ),
+  }),
+);
+
 const GraphqlErrors = Schema.Array(Schema.Struct({ message: Schema.String }));
 
 /** A GraphQL response: the fields read from its `data`, and the `errors` sent beside or in place of it. */
