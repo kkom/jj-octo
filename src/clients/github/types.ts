@@ -21,6 +21,16 @@ export interface PullRequest {
 /** Where a pull request is: open as a draft or ready for review, merged, or closed unmerged. */
 export type PullRequestState = "closed" | "draft" | "merged" | "ready";
 
+const OPEN: Readonly<Record<PullRequestState, boolean>> = {
+  closed: false,
+  draft: true,
+  merged: false,
+  ready: true,
+};
+
+/** Whether a pull request in the state is open. */
+export const isOpen = (state: PullRequestState): boolean => OPEN[state];
+
 /** A stack registered on GitHub, with the address of its page. */
 export interface StackLink {
   readonly number: StackNumber;
@@ -41,6 +51,39 @@ export interface ListedPullRequest {
   readonly title: string;
   readonly url: string;
 }
+
+/**
+ * Where a check is, as GitHub counts it for a required check: not finished, or finished as a pass
+ * or a failure.
+ */
+export type CheckState = "failed" | "passed" | "pending";
+
+/** The latest result of one check of a commit: a check run, or a commit status. */
+export interface Check {
+  /**
+   * The id of the GitHub App that sent a check run. A commit status has none, since GitHub doesn't
+   * say which app sent it.
+   */
+  readonly app: Option.Option<number>;
+  readonly name: string;
+  /**
+   * GitHub's own word for the result: a check run's conclusion, or its status before it has one,
+   * or a commit status's state. Such as `success`, `cancelled` or `in_progress`.
+   */
+  readonly outcome: string;
+  readonly state: CheckState;
+}
+
+/** A check that a branch requires, by name, with the GitHub App that must send it, where one must. */
+export interface RequiredCheck {
+  readonly app: Option.Option<number>;
+  readonly name: string;
+}
+
+/** The checks that a branch requires, or why they couldn't be read. */
+export type RequiredChecks =
+  | { readonly _tag: "Known"; readonly checks: readonly RequiredCheck[] }
+  | { readonly _tag: "Unknown"; readonly reason: string };
 
 /**
  * A stack registered on GitHub, with its pull requests that haven't merged bottom to top. One closed

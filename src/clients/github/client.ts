@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Option, Schedule, type Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
+import { type CheckReads, checkReads } from "./checks";
 import type { Connection } from "./connection";
 import { failWith, GitHubFailed, urlOf } from "./failure";
 import { bodyOf } from "./openapi";
@@ -95,7 +96,7 @@ export class GitHub extends Context.Service<
     ) => Effect.Effect<readonly WorkflowRunId[], GitHubFailed>;
     /** Dissolves the stack. Its pull requests stay open. */
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
-  }
+  } & CheckReads
 >()("jj-octo/GitHub") {}
 
 export const GitHubLive = (
@@ -184,6 +185,7 @@ export const GitHubLive = (
           ).pipe(Effect.asVoid),
         approvedPullRequests: (pullRequests) =>
           approvedPullRequests({ json, send }, repository, pullRequests),
+        ...checkReads({ json, send }, repo),
         // GitHub answers 409 for a run that has completed, as one can between listing and cancel
         cancelRun: (run) =>
           send(HttpClientRequest.post(repo(`/actions/runs/${run}/cancel`))).pipe(
