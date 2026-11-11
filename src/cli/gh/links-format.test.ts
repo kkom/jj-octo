@@ -7,17 +7,17 @@ import { htmlLinks, markdownLinks } from "./links";
 describe("markdownLinks and htmlLinks", () => {
   const listed = [
     linked(pullRequest(5, "closed", "x"), 123, 45),
-    linked(pullRequest(4, "draft", "x"), 0, 7),
+    { ...linked(pullRequest(4, "draft", "x"), 0, 7), conflict: true },
     { ...linked(pullRequest(3, "ready", "x")), state: "approved" as const },
     linked(pullRequest(2, "ready", "x")),
     { ...linked(pullRequest(1, "merged", "x")), title: `Escape <b> & "quotes"` },
   ];
 
-  it("writes a Markdown line per pull request, marked with its state", () => {
+  it("writes a Markdown line per pull request, marked with its state and any conflict", () => {
     expect(markdownLinks(listed)).toBe(
       [
         "🚫 [#5 Pull request 5](https://github.com/kkom/jj-octo/pull/5) `+123/-45`",
-        "📝 [#4 Pull request 4](https://github.com/kkom/jj-octo/pull/4) `+0/-7`",
+        "📝 [#4 Pull request 4](https://github.com/kkom/jj-octo/pull/4) `+0/-7` conflicted",
         "✅ [#3 Pull request 3](https://github.com/kkom/jj-octo/pull/3) `+1/-0`",
         "👀 [#2 Pull request 2](https://github.com/kkom/jj-octo/pull/2) `+1/-0`",
         `🏁 [#1 Escape <b> & "quotes"](https://github.com/kkom/jj-octo/pull/1) \`+1/-0\``,
@@ -29,7 +29,7 @@ describe("markdownLinks and htmlLinks", () => {
     expect(htmlLinks(listed)).toBe(
       [
         '<meta charset="utf-8">🚫 <a href="https://github.com/kkom/jj-octo/pull/5">#5 Pull request 5</a> <code>+123/-45</code>',
-        '📝 <a href="https://github.com/kkom/jj-octo/pull/4">#4 Pull request 4</a> <code>+0/-7</code>',
+        '📝 <a href="https://github.com/kkom/jj-octo/pull/4">#4 Pull request 4</a> <code>+0/-7</code> conflicted',
         '✅ <a href="https://github.com/kkom/jj-octo/pull/3">#3 Pull request 3</a> <code>+1/-0</code>',
         '👀 <a href="https://github.com/kkom/jj-octo/pull/2">#2 Pull request 2</a> <code>+1/-0</code>',
         '🏁 <a href="https://github.com/kkom/jj-octo/pull/1">#1 Escape &lt;b&gt; &amp; &quot;quotes&quot;</a> <code>+1/-0</code>',

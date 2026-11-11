@@ -4,6 +4,7 @@ import { Effect } from "effect";
 
 import type { ListedPullRequest, RequiredChecks } from "../../clients/github/types";
 import { requiring, run } from "../../testing/checks";
+import { conflictWithTrunk } from "../../testing/conflicts";
 import { fakeGitHub, inRepository, pullRequest } from "../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import { checks } from "./checks";
@@ -103,6 +104,39 @@ describe("checks", () => {
       "c  no open pull request",
       "b  #2 no required checks  head 0123456789ab differs from the change",
       "a  #1 no required checks",
+    ]);
+  });
+
+  // As where the stack merges from the bottom, and the unmerged changes above conflict with the
+  // trunk.
+  it("marks the changes with conflicts, and shows them as any other", async () => {
+    const repository = scratchRepository();
+    repository.stack("a", "b", "c");
+    repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+    conflictWithTrunk(repository, "b", { pushed: ["a"] });
+    const commitOf = (bookmark: string) =>
+      repository.jj("log", "--no-graph", "-r", bookmark, "-T", "commit_id");
+    const pushedB = repository.branches()["b"] ?? "";
+    const byBranch: Readonly<Record<string, readonly ListedPullRequest[]>> = {
+      a: [pullRequest(1, "ready", commitOf("a"))],
+      b: [pullRequest(2, "ready", pushedB)],
+    };
+    const github = fakeGitHub({}, [], {
+      checks: {
+        [commitOf("a")]: [run("CI", "success", "passed")],
+        [pushedB]: [run("CI", "failure", "failed")],
+      },
+      pullRequestsFrom: (branch) => byBranch[branch] ?? [],
+      required: { main: requiring("CI") },
+    });
+    expect(
+      await Effect.runPromise(
+        checks("@", { verbose: false }).pipe(inRepository(repository, github)),
+      ),
+    ).toStrictEqual([
+      "c  no open pull request  conflicted",
+      `b  #2 failed: CI         head ${pushedB.slice(0, 12)} differs from the change  conflicted`,
+      "a  #1 passed",
     ]);
   });
 });

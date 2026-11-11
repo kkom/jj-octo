@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 
 import { Effect } from "effect";
 
+import { conflictWithTrunk, labelsOf } from "../../../testing/conflicts";
 import { fakeGitHub, openPullRequest, stackOf } from "../../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
 import { description, githubWith, pushed, submitIn } from "../../../testing/submit";
@@ -9,6 +10,37 @@ import { description, githubWith, pushed, submitIn } from "../../../testing/subm
 afterAll(removeScratchRepositories);
 
 describe("submit", () => {
+  it("submits a change and the ones below it where a change above has conflicts", async () => {
+    const repository = scratchRepository();
+    repository.stack("a", "b", "c");
+    conflictWithTrunk(repository, "c");
+    const github = fakeGitHub({}, []);
+    await Effect.runPromise(submitIn(repository, github, { revision: "b" }));
+    expect({ branches: Object.keys(repository.branches()), calls: github.calls }).toStrictEqual({
+      branches: ["a", "b", "main"],
+      calls: ["open a on main as a draft", "open b on a as a draft", "create stack 99,99"],
+    });
+  });
+
+  it("fails before pushing anything where a submitted change has conflicts", async () => {
+    const repository = scratchRepository();
+    repository.stack("a", "b", "c");
+    conflictWithTrunk(repository, "b");
+    const github = fakeGitHub({}, []);
+    const failure = await Effect.runPromise(
+      Effect.flip(submitIn(repository, github, { revision: "b" })),
+    );
+    expect({
+      branches: Object.keys(repository.branches()),
+      calls: github.calls,
+      message: failure.message,
+    }).toStrictEqual({
+      branches: ["main"],
+      calls: [],
+      message: `resolve the conflicts first:\n${labelsOf(repository, "b")}`,
+    });
+  });
+
   it("pushes the bookmarks, opens the missing pull requests and registers a new stack", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b");

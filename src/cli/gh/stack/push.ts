@@ -18,6 +18,7 @@ import {
   type StackChange,
   stackChanges,
   stackRevset,
+  withoutConflicts,
 } from "./changes";
 import {
   type DescriptionConflict,
@@ -217,7 +218,7 @@ export const submit = (
   Effect.gen(function* () {
     const trunk = yield* checkedTrunk;
     // Read first, so a stack that isn't one fails before the sync rewrites anything.
-    const downstack = yield* downstackChanges(revision);
+    const downstack = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
     if (!(yield* syncStack(revision, trunk))) {
       yield* push(downstack, { ...options, trunk });
       return;
@@ -234,13 +235,18 @@ export const submit = (
       );
       return;
     }
-    yield* push(yield* downstackChanges(bookmarkRevset(top.bookmark)), { ...options, trunk });
+    // The sync rebases the rest of the stack even where that conflicts.
+    const synced = yield* downstackChanges(bookmarkRevset(top.bookmark)).pipe(
+      Effect.flatMap(withoutConflicts),
+    );
+    yield* push(synced, { ...options, trunk });
   });
 
 /**
  * Pushes the stack containing the revision again, up to the highest bookmark already pushed, so
- * local work above it stays local. Does nothing when the stack has no changes left or was
- * never pushed.
+ * local work above it stays local. A change with conflicts can't be pushed, so it pushes only the
+ * changes below the lowest one, and prints which it leaves local. Does nothing when the stack has
+ * no changes left or was never pushed.
  */
 export const pushAgain = (
   revision: string,
@@ -252,8 +258,22 @@ export const pushAgain = (
     }
     const stack = yield* stackChanges(revision);
     const targets = yield* bookmarkTargets;
-    const top = stack.findLastIndex(({ bookmark }) => targets.get(bookmark)?.origin !== undefined);
-    if (top !== -1) {
-      yield* push(stack.slice(0, top + 1), { draft: true, overwriteDescriptions: false, trunk });
+    const pushed = stack.slice(
+      0,
+      stack.findLastIndex(({ bookmark }) => targets.get(bookmark)?.origin !== undefined) + 1,
+    );
+    const conflicted = pushed.findIndex(({ conflict }) => conflict);
+    const left = conflicted === -1 ? [] : pushed.slice(conflicted);
+    if (left.length > 0) {
+      yield* Console.error(
+        [
+          "left these changes local, since they or a change below them have conflicts:",
+          ...left.map(({ label }) => label),
+        ].join("\n"),
+      );
+    }
+    const pushing = pushed.slice(0, pushed.length - left.length);
+    if (pushing.length > 0) {
+      yield* push(pushing, { draft: true, overwriteDescriptions: false, trunk });
     }
   });

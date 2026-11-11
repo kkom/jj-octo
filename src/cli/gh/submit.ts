@@ -36,6 +36,7 @@ export const submitCommand = Command.make(
     "Keeps each pull request's title and body the same as its change's description. `submit` writes an edit made on GitHub into the change, and sends a local edit to the pull request. It merges edits on both sides line by line. It also sends a local edit pushed with `jj git push`, because it records the description both sides last agreed on, in `jj-octo/pr-descriptions` under the main workspace's `.jj/repo`. Edits to the same lines stop the submit before it pushes anything.",
     "First, where a submitted change's pull request merged or its branch changed on GitHub, syncs that stack as `jj gh sync` does, so the push doesn't undo what GitHub did. It leaves other stacks as they are.",
     "Stops before changing anything where someone deleted a submitted change's branch on GitHub and the change doesn't count as merged: no pull request from it merged, another commit merged, or you edited the change since. It says how to push the change again or drop it.",
+    "Fails before pushing anything where a submitted change has conflicts, as `jj git push` doesn't push one. That includes a conflict that the sync gives a change, by rebasing it onto the trunk. A change above the one submitted can have conflicts.",
     "Registers the pull requests as one GitHub stack, unless there is only one.",
     "After a reorder, an insertion or a dropped change, dissolves the GitHub stack and registers it again under a new number. The pull requests stay open, including a dropped change's.",
   ),

@@ -15,6 +15,7 @@ import {
   bookmarkTargets,
   commitsAt,
   downstackChanges,
+  withoutConflicts,
   pushedState,
   type StackChange,
   upstackRevset,
@@ -111,7 +112,7 @@ export const merge = (
 > =>
   Effect.gen(function* () {
     const trunk = yield* checkedTrunk;
-    const changes = yield* downstackChanges(revision);
+    const changes = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
     const top = changes.at(-1)?.bookmark ?? "";
 
     // GitHub merges what was pushed, so an edit made since would be left behind on a change
@@ -170,7 +171,8 @@ export const mergeCommand = Command.make(
     "Merge the pull requests of a change and the ones below it",
     "Prints which pull requests it merges, then squash-merges them. An empty working copy means the change below it. Fails before merging if a change has edits that aren't pushed.",
     "Pull requests in a GitHub stack merge together with the ones below them: all of them or none. A pull request outside a stack merges alone, and only if its base is the trunk.",
-    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. Then pushes the rest of the stack again, up to the highest branch already on GitHub.",
+    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. Then pushes the rest of the stack again, up to the highest branch already on GitHub. A change with conflicts can't be pushed, so it pushes only the changes below the lowest one, and prints which it leaves local.",
+    "Fails before merging where the change named or one below it has conflicts. A change above it can have conflicts.",
     "With `--cancel-pr-runs`, also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it tries the rest and pushes the stack, then fails.",
     "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync`.",
   ),

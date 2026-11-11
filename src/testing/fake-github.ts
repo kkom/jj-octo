@@ -28,7 +28,7 @@ export interface FakeRun {
   readonly id: string;
 }
 
-interface FakeGitHubOptions {
+export interface FakeGitHubOptions {
   /** The open pull requests GitHub's search lists as approved. None by default. */
   readonly approved?: readonly PullRequestNumber[];
   /** The latest result of each check of each commit. None by default. */

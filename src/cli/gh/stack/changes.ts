@@ -120,12 +120,19 @@ export const bookmarkTargets: Effect.Effect<
   return targets;
 });
 
+/** What the commands that show a stack print beside a change with conflicts. */
+export const CONFLICTED = "conflicted";
+
 /** One change of a stack, with the bookmark that names its branch. */
 export interface StackChange {
   readonly bookmark: string;
   readonly changeId: string;
   readonly commitId: string;
+  /** Whether the change has conflicts, which `jj git push` won't push. */
+  readonly conflict: boolean;
   readonly description: string;
+  /** The short change id and the first line of the description. */
+  readonly label: string;
 }
 
 export type Pushed = "changed since push" | "not pushed" | "pushed";
@@ -193,7 +200,8 @@ const labels = (changes: readonly LoggedChange[]): readonly string[] =>
 /**
  * The changes of the revset, bottom to top, each with its bookmark. A GitHub stack must be a
  * chain, but jj allows any history: one head and no merges means the changes form a chain. Each
- * change becomes one pull request, so it needs exactly one bookmark to name its branch.
+ * change becomes one pull request, so it needs exactly one bookmark to name its branch. A change
+ * with conflicts is still part of the chain, which only a command that pushes or merges it fails on.
  */
 const chain = (
   revset: string,
@@ -220,10 +228,6 @@ const chain = (
     if (merges.length > 0) {
       return yield* notAStack("merge commits can't be pull requests in a stack:", labels(merges));
     }
-    const withConflicts = changes.filter(({ conflict }) => conflict);
-    if (withConflicts.length > 0) {
-      return yield* notAStack("resolve the conflicts first:", labels(withConflicts));
-    }
     const unnamed = changes.filter(({ bookmarks }) => bookmarks.length === 0);
     if (unnamed.length > 0) {
       return yield* notAStack(
@@ -247,11 +251,13 @@ const chain = (
         several.map(({ bookmarks }) => bookmarks.join(" ")),
       );
     }
-    return changes.map(({ bookmarks, changeId, commitId, description }) => ({
+    return changes.map(({ bookmarks, changeId, commitId, conflict, description, label }) => ({
       bookmark: bookmarks[0] ?? "",
       changeId,
       commitId,
+      conflict,
       description,
+      label,
     }));
   });
 
@@ -266,3 +272,19 @@ export const downstackChanges = (
   revision: string,
 ): Effect.Effect<readonly StackChange[], JjFailed | NotAStack, Jj> =>
   chain(downstackRevset(revision), revision);
+
+/**
+ * The changes, where none has conflicts. A command that pushes or merges changes checks the ones it
+ * acts on, before it touches the remote.
+ */
+export const withoutConflicts = (
+  changes: readonly StackChange[],
+): Effect.Effect<readonly StackChange[], NotAStack> => {
+  const conflicted = changes.filter(({ conflict }) => conflict);
+  return conflicted.length > 0
+    ? notAStack(
+        "resolve the conflicts first:",
+        conflicted.map(({ label }) => label),
+      )
+    : Effect.succeed(changes);
+};

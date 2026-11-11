@@ -8,6 +8,7 @@ import {
   rebaseOnGitHub,
   squashMergeOnGitHub,
 } from "../../../testing/branch-changes";
+import { labelsOf } from "../../../testing/conflicts";
 import { fakeGitHub, inRepository, openPullRequest } from "../../../testing/fake-github";
 import {
   pushedStack,
@@ -60,6 +61,18 @@ const deletedFailure = (...branches: readonly string[]): string =>
   ].join("\n");
 
 describe("submit, where the stack changed on GitHub", () => {
+  it("fails before pushing anything where the sync gives a submitted change conflicts", async () => {
+    const repository = pushedStack("a", "b");
+    const pushed = repository.branches()["b"];
+    squashMergeOnGitHub(repository, "a");
+    moveTrunkOnGitHub(repository, "b.txt");
+    const failure = await failureIn(repository, { b: openPullRequest("a", 2, "b") }, "b");
+    expect({ branch: repository.branches()["b"], failure }).toStrictEqual({
+      branch: pushed,
+      failure: `resolve the conflicts first:\n${labelsOf(repository, "b")}`,
+    });
+  });
+
   it("drops a merged change and takes the rest of the stack as GitHub rebased it", async () => {
     const repository = pushedStack("a", "b");
     squashMergeOnGitHub(repository, "a", { above: ["b"] });

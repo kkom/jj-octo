@@ -9,6 +9,7 @@ import {
   type RichText,
 } from "../../clients/clipboard";
 import type { ListedPullRequest } from "../../clients/github/types";
+import { conflictWithTrunk } from "../../testing/conflicts";
 import { fakeConsole } from "../../testing/fake-console";
 import { fakeGitHub, inRepository, pullRequest } from "../../testing/fake-github";
 import { inStack, linked } from "../../testing/links";
@@ -60,6 +61,37 @@ describe("stackPullRequests", () => {
       linked(pullRequest(3, "draft", "anything")),
       linked(pullRequest(2, "ready", "anything")),
       linked(pullRequest(1, "merged", pushedA)),
+    ]);
+  });
+
+  it("finds the pull requests of changes with conflicts, and says they have them", async () => {
+    const repository = scratchRepository();
+    repository.stack("a", "b", "c");
+    repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+    const pushedB = repository.branches()["b"] ?? "";
+    conflictWithTrunk(repository, "b", { pushed: ["a"] });
+    const byBranch: Readonly<Record<string, readonly ListedPullRequest[]>> = {
+      a: [pullRequest(1, "ready", "anything")],
+      b: [pullRequest(2, "draft", pushedB)],
+    };
+    const github = fakeGitHub({}, [], {
+      pullRequestsFrom: (branch) => byBranch[branch] ?? [],
+    });
+    const count = (bookmark: string, total: string) =>
+      Number(repository.jj("log", "--no-graph", "-r", bookmark, "-T", `diff.stat().${total}()`));
+    const found = await Effect.runPromise(
+      stackPullRequests("@").pipe(inRepository(repository, github)),
+    );
+    expect(found).toStrictEqual([
+      {
+        ...linked(
+          pullRequest(2, "draft", pushedB),
+          count("b", "total_added"),
+          count("b", "total_removed"),
+        ),
+        conflict: true,
+      },
+      linked(pullRequest(1, "ready", "anything")),
     ]);
   });
 });
