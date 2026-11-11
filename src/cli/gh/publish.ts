@@ -7,7 +7,13 @@ import type { GitHubFailed } from "../../clients/github/failure";
 import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { Jj, JjFailed } from "../../clients/jj";
 import { asUserError, revisionFlag, withHelp } from "../command";
-import { bookmarkTargets, downstackChanges, type NotAStack, pushedState } from "./stack/changes";
+import {
+  bookmarkTargets,
+  downstackChanges,
+  type NotAStack,
+  pushedState,
+  withoutConflicts,
+} from "./stack/changes";
 
 export class NotPublishable extends Data.TaggedError("NotPublishable")<{
   readonly message: string;
@@ -15,15 +21,15 @@ export class NotPublishable extends Data.TaggedError("NotPublishable")<{
 
 /**
  * Marks the draft pull requests of the revision's change and the ones below it ready for review,
- * bottom to top. Fails before marking any where a change has edits that aren't pushed, or has no
- * open pull request, so a reviewer never sees one that is out of date.
+ * bottom to top. Fails before marking any where a change has conflicts, has edits that aren't
+ * pushed, or has no open pull request, so a reviewer never sees one that is out of date.
  */
 export const publish = (
   revision: string,
 ): Effect.Effect<void, GitHubFailed | JjFailed | NotAStack | NotPublishable, Git | GitHub | Jj> =>
   Effect.gen(function* () {
     const github = yield* GitHub;
-    const changes = yield* downstackChanges(revision);
+    const changes = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
     const targets = yield* bookmarkTargets;
     const unpushed = changes.filter(
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
@@ -65,7 +71,7 @@ export const publishCommand = Command.make(
   withHelp(
     "Mark the draft pull requests of a change and the ones below it ready for review",
     "An empty working copy means the change below it. Leaves pull requests that are already ready as they are.",
-    "Fails before publishing any where a change has edits that aren't pushed, or has no open pull request. `jj gh submit --publish` pushes the changes and then publishes them.",
+    "Fails before publishing any where a change has conflicts, has edits that aren't pushed, or has no open pull request. A change above the one named can have conflicts. `jj gh submit --publish` pushes the changes and then publishes them.",
     "Uses GitHub's GraphQL API, since REST can't mark a draft ready. In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, it uses the GitHub proxy's own route for this instead. Where the proxy doesn't serve that route, it fails with the proxy's error.",
   ),
 );

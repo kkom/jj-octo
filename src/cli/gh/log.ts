@@ -9,6 +9,7 @@ import type { Jj, JjFailed } from "../../clients/jj";
 import { asUserError, revisionFlag, table, withHelp } from "../command";
 import {
   bookmarkTargets,
+  CONFLICTED,
   type NotAStack,
   type Pushed,
   pushedState,
@@ -17,19 +18,21 @@ import {
 
 interface LogEntry {
   readonly bookmark: string;
+  readonly conflict: boolean;
   readonly pullRequest: Option.Option<PullRequest>;
   readonly pushed: Pushed;
 }
 
 /** One line per change, top first, with the columns aligned. */
 const logLines = (entries: readonly LogEntry[]): readonly string[] => {
-  const rows = entries.toReversed().map(({ bookmark, pullRequest, pushed }) => [
+  const rows = entries.toReversed().map(({ bookmark, conflict, pullRequest, pushed }) => [
     bookmark,
     Option.match(pullRequest, {
       onNone: () => "no pull request",
       onSome: ({ draft, number }) => `#${number} ${draft ? "draft" : "ready"}`,
     }),
     pushed,
+    ...(conflict ? [CONFLICTED] : []),
   ]);
   return table(rows, 2);
 };
@@ -49,6 +52,7 @@ export const log = (
     return logLines(
       stack.map((change, index) => ({
         bookmark: change.bookmark,
+        conflict: change.conflict,
         pullRequest: pullRequests[index] ?? Option.none(),
         pushed: pushedState(targets.get(change.bookmark), change),
       })),
@@ -65,7 +69,7 @@ export const logCommand = Command.make(
 ).pipe(
   withHelp(
     "Show changes and their pull requests",
-    "Prints one line per change, top first: its bookmark, its pull request and whether that is a draft or ready for review, and whether the change is pushed, changed since the push, or not pushed.",
-    "Fails if the changes aren't a chain, if one has conflicts, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
+    "Prints one line per change, top first: its bookmark, its pull request and whether that is a draft or ready for review, and whether the change is pushed, changed since the push, or not pushed. A change with conflicts is marked `conflicted`.",
+    "Fails if the changes aren't a chain, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
   ),
 );

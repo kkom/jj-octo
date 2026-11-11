@@ -4,28 +4,13 @@ import { Effect } from "effect";
 
 import { moveTrunkOnGitHub, squashMergeOnGitHub } from "../../testing/branch-changes";
 import { fakeGitHub, inRepository, openPullRequest, stackOf } from "../../testing/fake-github";
-import {
-  pushedStack,
-  removeScratchRepositories,
-  type ScratchRepository,
-} from "../../testing/scratch-repository";
+import { mergeIn, mergingIn } from "../../testing/merge";
+import { pushedStack, removeScratchRepositories } from "../../testing/scratch-repository";
 import { merge } from "./merge";
 
 afterAll(removeScratchRepositories);
 
 const open = { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") };
-
-// GitHub reports the pull requests `squashMergeOnGitHub` merged, and merges as `onMerge` says.
-const mergingIn = (repository: ScratchRepository, onMerge: () => void) => ({
-  onMerge,
-  pullRequestsFrom: repository.pullRequestsFrom,
-});
-
-const mergeIn = (
-  repository: ScratchRepository,
-  github: ReturnType<typeof fakeGitHub>,
-  revision: string,
-) => merge(revision, { cancelPrRuns: false }).pipe(inRepository(repository, github));
 
 // A stack of `a` and `b`, merged up to `b`, whose head commits have workflow runs: one running and
 // one completed for `a`, and one queued for `b`. Cancelling `a`'s running one is forbidden where
@@ -126,27 +111,6 @@ describe("merge", () => {
     await Effect.runPromise(mergeIn(repository, github, "a"));
     expect(github.calls[0]).toBe("merge #1");
     expect(repository.log()).toEqual(["b [b]"]);
-  });
-
-  it("rebases the rest of the stack even where it conflicts with the trunk", async () => {
-    const repository = pushedStack("a", "b");
-    const github = fakeGitHub(
-      open,
-      [],
-      mergingIn(repository, () => {
-        squashMergeOnGitHub(repository, "a");
-        repository.writeOnGitHub("b.txt", "somebody else's\n");
-        repository.git("add", ".");
-        repository.git("commit", "--quiet", "-m", "another pull request");
-        repository.git("push", "--quiet", "origin", "main");
-      }),
-    );
-    const failure = await Effect.runPromise(Effect.flip(mergeIn(repository, github, "a")));
-    expect(failure.message).toContain("resolve the conflicts first");
-    expect(repository.log()).toEqual(["b [b]"]);
-    expect(repository.jj("log", "--no-graph", "-r", "conflicts()", "-T", "description")).toBe(
-      "b\n",
-    );
   });
 
   it("merges from the change below an empty working copy by default", async () => {
