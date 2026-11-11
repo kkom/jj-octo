@@ -80,38 +80,6 @@ export const commitsAt = (revset: string): Effect.Effect<readonly string[], JjFa
 export const changeIdsAt = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   logLines(revset, String.raw`change_id ++ "\n"`);
 
-/** The lines a change adds and removes. */
-export interface LineCounts {
-  readonly added: number;
-  readonly removed: number;
-}
-
-/**
- * The lines each of the commits adds and removes, by commit id. It skips the snapshot, so it can
- * run alongside a jj command that takes one, where two would be concurrent operations. A line that
- * isn't two counts is left out.
- */
-export const lineCountsAt = (
-  commitIds: readonly string[],
-): Effect.Effect<ReadonlyMap<string, LineCounts>, JjFailed, Jj> =>
-  logLines(
-    anyOf(commitIds),
-    String.raw`commit_id ++ "\t" ++ diff.stat().total_added() ++ "\t" ++ diff.stat().total_removed() ++ "\n"`,
-    { ignoreWorkingCopy: true },
-  ).pipe(
-    Effect.map(
-      (logged) =>
-        new Map(
-          logged.flatMap((line) => {
-            const [commitId = "", added = "", removed = ""] = line.split("\t");
-            return /^\d+$/u.test(added) && /^\d+$/u.test(removed)
-              ? [[commitId, { added: Number(added), removed: Number(removed) }] as const]
-              : [];
-          }),
-        ),
-    ),
-  );
-
 /** The names of the local bookmarks on the revset's commits. */
 export const bookmarksAt = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   Effect.gen(function* () {

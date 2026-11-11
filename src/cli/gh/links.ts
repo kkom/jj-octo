@@ -14,10 +14,11 @@ import type { ListedPullRequest, PullRequestState, StackLink } from "../../clien
 import { type Jj, JjFailed } from "../../clients/jj";
 import { asUserError, revisionFlag, withHelp } from "../command";
 import {
+  anyOf,
   bookmarkTargets,
-  type LineCounts,
-  lineCountsAt,
+  lines,
   type NotAStack,
+  readLog,
   stackChanges,
 } from "./stack/changes";
 
@@ -68,6 +69,38 @@ const COPY_PRINT: Readonly<Record<ClipboardWrite, (text: string) => string>> = {
       "\n",
     ),
 };
+
+/** The lines a change adds and removes. */
+interface LineCounts {
+  readonly added: number;
+  readonly removed: number;
+}
+
+/**
+ * The lines each of the commits adds and removes, by commit id. It skips the snapshot, so it can
+ * run alongside a jj command that takes one, where two would be concurrent operations. A line that
+ * isn't two counts is left out.
+ */
+const lineCountsAt = (
+  commitIds: readonly string[],
+): Effect.Effect<ReadonlyMap<string, LineCounts>, JjFailed, Jj> =>
+  readLog(
+    anyOf(commitIds),
+    String.raw`commit_id ++ "\t" ++ diff.stat().total_added() ++ "\t" ++ diff.stat().total_removed() ++ "\n"`,
+    { ignoreWorkingCopy: true },
+  ).pipe(
+    Effect.map(
+      (logged) =>
+        new Map(
+          lines(logged).flatMap((line) => {
+            const [commitId = "", added = "", removed = ""] = line.split("\t");
+            return /^\d+$/u.test(added) && /^\d+$/u.test(removed)
+              ? [[commitId, { added: Number(added), removed: Number(removed) }] as const]
+              : [];
+          }),
+        ),
+    ),
+  );
 
 /** A change's pull request as GitHub lists it, with the lines the change adds and removes. */
 interface CountedPullRequest extends ListedPullRequest, LineCounts {}
