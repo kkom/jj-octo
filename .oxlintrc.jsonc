@@ -131,14 +131,27 @@
     "no-undef": "off",
     "no-undefined": "off",
     "no-unmodified-loop-condition": ["error", { "checkConditionalExpressions": true }],
+    // With func-style, two functions that call each other are arrows, so one of
+    // them reads the other before its declaration. A use inside a function body
+    // runs later, and a use in the same scope still fails.
+    "no-use-before-define": ["error", { "variables": false }],
+    // As a statement, `void` is how no-floating-promises lets a promise go
+    // unawaited on purpose.
+    "no-void": ["error", { "allowAsStatement": true }],
     "no-warning-comments": "off",
     "one-var": ["error", "never"],
+    // With promise-function-async, a method that returns a promise is async,
+    // and return-await bans awaiting it on the return. This one fails that method
+    // for having no await; typescript/require-await knows a returned promise.
+    "require-await": "off",
     "sort-imports": "off",
     // Bracket access is what the compiler requires on an index signature, and the type
     // information tells the rule which reads those are.
     "typescript/dot-notation": ["error", { "allowIndexSignaturePropertyAccess": true }],
     "typescript/no-empty-interface": ["error", { "allowSingleExtends": true }],
     "typescript/no-empty-object-type": ["error", { "allowInterfaces": "with-single-extends" }],
+    // It asks for `x!`, which no-non-null-assertion bans.
+    "typescript/non-nullable-type-assertion-style": "off",
     "typescript/prefer-readonly-parameter-types": [
       "error",
       {
@@ -177,8 +190,15 @@
     // Effect.forEach(items, f), which take no `thisArg`. Nothing here passes
     // one, since no callback uses `this`.
     "unicorn/no-array-method-this-argument": "off",
+    // A fold and a loop do the same job; which reads better depends on the fold.
+    "unicorn/no-array-reduce": "off",
     "unicorn/no-immediate-mutation": "off",
     "unicorn/no-null": "off",
+    // Skipped holes read as well as an index, and prefer-destructuring bans the index.
+    "unicorn/no-unreadable-array-destructuring": "off",
+    // no-invalid-void-type bans `void` in a call's type arguments, so a promise
+    // with no value is resolved with `undefined`, which an argument has to name.
+    "unicorn/no-useless-undefined": ["error", { "checkArguments": false }],
     // oxfmt prints hexadecimal digits in lowercase and this rule, which takes
     // no option, demands uppercase; the formatter owns a literal's spelling.
     "unicorn/number-literal-case": "off",

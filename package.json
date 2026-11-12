@@ -21,7 +21,7 @@
     "check": "bun run --sequential \"check:*\" && bun run test",
     "check:codegen": "graphql-codegen --config codegen.ts --check",
     "check:format": "oxfmt --check .",
-    "check:lint": "oxlint --type-aware .",
+    "check:lint": "oxlint --type-aware --report-unused-disable-directives-severity=error .",
     "check:types": "tsc",
     "fix": "bun run --sequential \"fix:*\"",
     "fix:codegen": "graphql-codegen --config codegen.ts",
