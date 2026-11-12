@@ -25,6 +25,10 @@
     // Effect.gen takes an anonymous generator.
     "func-names": "off",
     "id-length": "off",
+    // unicorn/no-useless-undefined bans `let x: T | undefined = undefined`, and this
+    // rule bans the `let x: T | undefined;` left without it. The compiler still fails
+    // a read before the first assignment.
+    "init-declarations": "off",
     // Tagged errors live beside the program that fails with them.
     "max-classes-per-file": "off",
     "max-lines-per-function": "off",
