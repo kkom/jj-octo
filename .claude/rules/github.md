@@ -24,6 +24,16 @@ Human and AI reviewers may start as soon as a PR is published. So submit a draft
 
 When a branch's changes evolve, update its description to match.
 
+## Name only repositories every reader can see
+
+Name a private repository only where every reader of this repository can see it, as another rule here says. Where no rule says so, name none. Name a public repository anywhere. This covers a repository's name, links into it, its pull requests and issues, and what it holds. It applies to everything you write: code, comments, rules, commit messages, pull requests, comments on them, and messages to other sessions.
+
+That's because a reader may not have access to a private repository, and naming it tells them that it exists and what it holds.
+
+- ❌ A link to a pull request in a private repository that some readers can't see, as the source of a rule
+- ✅ The rule itself, with no word on where it came from
+- ✅ A link to an issue in a public library's repository
+
 ## Disclose that you're an AI
 
 When you use a human's access token, say that you're an AI agent, so your actions aren't mistaken for theirs. Name:

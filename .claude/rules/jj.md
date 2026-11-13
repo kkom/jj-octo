@@ -1,8 +1,6 @@
 # jj and stacked pull requests
 
-A stack is a linear chain of pull requests on top of the trunk (`main`), each targeting the branch below it, so reviewers see only that layer's diff. Toward the trunk is "downstack", away from it "upstack". GitHub registers such a chain as a stack of its own, and merges it atomically.
-
-Locally a stack is a chain of jj changes, one per pull request, each with the bookmark that names its branch. jj is colocated with git, so each bookmark is also a git branch. Still, make every change to history through jj. `jj gh` does all the work on GitHub. It's a jj alias, and `jj_setup.md` says how a checkout gets it. It uses only the REST API, stacks included, and signs in with `GH_TOKEN` or the token `gh auth login` stored.
+A stack is a linear chain of jj changes on top of `main`, one pull request per change, each with a bookmark naming its branch and each pull request targeting the one below. Make every change to history through jj, and do all GitHub work with `jj gh` (see `jj_setup.md`).
 
 ```
 ◯ top-change        claude/top
@@ -13,78 +11,55 @@ Locally a stack is a chain of jj changes, one per pull request, each with the bo
 
 ## What a good stack looks like
 
-Every stack is based on `main`. Related work is split into granular pull requests, each with one clear goal, and each change depends on or relates to the ones below it — unrelated work is a separate stack, started with `jj new main`. A change is understandable without reading the ones above it, and includes the tests for its own code. Parts that can ship separately are separate changes, and reverting upstack changes leaves a working system, unless they're irreversible like a data migration.
+Base every stack on `main`. Split related work into small pull requests, each with one goal and its own tests, each understandable without the ones above it. Start unrelated work as a separate stack with `jj new main`. Reverting upstack changes should leave a working system, unless they are irreversible, like a data migration.
 
-Each pull request is one change, amended in place for as long as it lives.
-
-## What makes a stack
-
-jj allows any history, but a GitHub stack must be a chain. So `jj gh log`, which shows a stack and its pull requests, and `jj gh links` fail on a change with two children, a merge, or a change with no bookmark or several. `submit` and `merge` run the same check on the changes they act on before they touch the remote. A change with conflicts is still part of a stack. `log`, `links` and `checks` show it marked `conflicted`, while `submit`, `publish` and `merge` fail before they push or merge anything where it's one they act on: the change named or one below it. The stack is every change connected to the working copy through mutable changes. Separate stacks meet only at the trunk, which is immutable, so each one is found on its own.
+Each pull request is one change, amended in place for as long as it lives. A stack must be a chain: `jj gh` fails on a change with two children, a merge, or a change with no bookmark or several.
 
 ## Commands
 
-All of them run from any directory of the checkout, and `jj help <command>` covers the flags.
+`jj help <command>` covers the flags.
 
 | Command | What it does |
 | --- | --- |
-| `jj new main -m "<message>"` | Starts a stack, or a separate one |
+| `jj new main -m "<message>"` | Starts a stack |
 | `jj bookmark create claude/<name> -r @` | Names the change's branch |
 | `jj new -m "<message>"` | Adds a change on top of the working copy |
-| `jj edit <change>` | Edits a change in place, wherever it sits |
+| `jj edit <change>` | Edits a change in place |
 | `jj describe -r <change> -m "<message>"` | Rewords a change |
-| `jj squash --from @ --into <change> <path>` | Moves edits from the working copy into a change below |
-| `jj split -r <change> <path>...` | Splits a change in two, the named paths going first |
+| `jj squash --from @ --into <change> <path>` | Moves edits into a change below |
+| `jj split -r <change> <path>...` | Splits a change, the named paths first |
 | `jj rebase -r <change> -B <other>` | Moves a change to just below another |
-| `jj abandon <change>` | Drops a change, rebasing its descendants onto its parent |
+| `jj abandon <change>` | Drops a change |
 | `jj log -r 'trunk()::'` | Shows the stacks |
-| `jj undo` | Undoes the last operation, whatever it was |
-| `jj gh init` | Sets up a checkout: colocates jj with git, makes GitHub's default branch `trunk()` and sets the `jj gh` alias. The other commands run it again after an upgrade of jj-octo |
-| `jj gh doctor` | Checks what `jj gh init` sets up, and prints each problem with what fixes it, without changing anything |
-| `jj gh log` | Shows the stack's changes, their pull requests and whether each is pushed, marking each change with conflicts `conflicted` |
-| `jj gh links` | Prints a link to the GitHub stack of the open pull requests, where they are in one, then the stack's pull requests as Markdown links, top first, each marked as a draft, ready, approved, merged or closed, and followed by the lines its change adds and removes, in inline code, as `` `+123/-45` ``, and by `conflicted` where the change has conflicts. `--copy` also puts them on the clipboard as links that Slack pastes, or in a Claude Code cloud session says how to give them to the user |
-| `jj gh checks` | Shows one line per change of the stack, top first, with its open pull request and the state of the checks the default branch requires: `failed`, `unknown`, `pending` or `passed`, naming the required checks in that state unless they passed, or `no required checks`, and `conflicted` where the change has conflicts. Where the required checks can't be known, a line above says why, and each pull request's line says `unknown`. A line also names GitHub's head of the pull request where it differs from the change. `--verbose` also prints the latest result of each check, the required ones first. Read CI's result here rather than from GitHub's listing of check runs, which also holds runs that a later run replaced |
-| `jj gh submit` | Pushes the working copy's change and the ones below it, and makes their pull requests one GitHub stack |
-| `jj gh dissolve <stack>` | Dissolves a GitHub stack, leaving its pull requests open on their bases |
-| `jj gh publish -r <change>` | Marks the draft pull requests of that change and the ones below it ready for review |
-| `jj gh merge -r <change>` | Merges the pull requests of that change and the ones below it, then syncs and republishes the rest of the stack. `--cancel-pr-runs` also cancels their workflow runs that haven't completed |
+| `jj undo` | Undoes the last operation |
+| `jj gh doctor` | Checks the checkout's setup and says what fixes each problem |
+| `jj gh log` | Shows the stack's changes, pull requests and push state |
+| `jj gh links` | Prints the stack's pull requests as Markdown links with their state and size. `--copy` copies them |
+| `jj gh checks` | Shows the state of each pull request's required checks. Read CI's result here, not from GitHub's check run list |
+| `jj gh submit` | Pushes the stack up to the working copy and opens or updates its pull requests as one GitHub stack |
+| `jj gh publish -r <change>` | Marks the drafts up to that change ready for review |
+| `jj gh merge -r <change>` | Merges the pull requests up to that change, then syncs and republishes the rest. `--cancel-pr-runs` cancels their runs |
 | `jj gh sync` | Rebases every stack onto the fetched trunk and drops what merged |
+| `jj gh dissolve <stack>` | Dissolves a GitHub stack, leaving its pull requests open. Where `submit` fails because the pull requests are in several stacks, it names the commands to run: check what each stack holds first |
 
 ## Building and changing a stack
 
-`jj edit <change>` makes a change the working copy, and every edit from then on is part of it — there is no staging and no amend. Everything upstack is rebased onto the edit as it happens. If that causes a conflict, jj records it in the change instead of stopping. Clear it with `jj resolve` or by editing the file.
+After `jj edit <change>`, every edit is part of that change: there is no staging or amend. jj rebases everything upstack as you edit, and records any conflict in the change. Clear it with `jj resolve` or by editing the file.
 
-jj records every file in the checkout that isn't ignored, so a scratch file written inside it becomes part of the change being edited. Scratch work belongs outside the checkout.
+jj records every file in the checkout that isn't ignored, so keep scratch files outside the checkout.
 
-`jj gh sync` keeps every stack current with `main`; the longer one lags, the worse the conflicts. It pushes nothing, so run `jj gh submit` afterwards on a stack whose pull requests should be updated.
-
-`sync` abandons each change whose pull request GitHub reports as merged, unless the change was edited after the merge, and forgets its bookmark. It rebases the rest of that stack onto the trunk even where it conflicts, since the changes it was based on are gone. `sync` leaves any other stack where it was if rebasing it would conflict with the trunk, and prints its name. Rebase that stack with `jj rebase` when you're ready to resolve the conflict. Commits added to a branch on GitHub are squashed into the branch's local change.
+Run `jj gh sync` often, since conflicts grow as a stack lags `main`. It pushes nothing, so run `jj gh submit` afterwards. Where `sync` leaves a stack in place because it would conflict, rebase it with `jj rebase` when ready.
 
 ## Publishing
 
-Before pushing, `submit` asks GitHub which of the pull requests it submits merged, and which of their branches changed. A stack merge does both: it merges the bottom pull requests and rebases the branches above them. Where anything merged or changed, `submit` syncs that stack alone, as `sync` does, and prints what it did. So a push never undoes what GitHub did to a branch. A branch deleted on GitHub stops `submit` before it changes anything where its change doesn't count as merged: no pull request from it merged, another commit merged, or the change was edited since.
+`submit` opens new pull requests as drafts. Write the description the PR template asks for with `jj describe`, run `submit` again, then `jj gh publish`. `submit` keeps each pull request's title and body equal to its change's description, merging edits made on GitHub into the change. Where both sides edited the same lines, it stops and prints both.
 
-`submit` pushes every branch of the stack, opens the missing pull requests as drafts titled and described by their changes, points each at the branch below it, and registers them as one GitHub stack. A stack of one is a single pull request, which GitHub has no stack for. Then publish the pull requests with `jj gh publish`, as `github.md` describes. It fails where a change has edits that aren't pushed. `submit --publish` opens new pull requests ready for review instead of as drafts, and marks existing drafts ready once the stack is registered.
-
-`submit` keeps each pull request's title and body the same as its change's description. So write the description the PR template asks for with `jj describe`, or edit it on GitHub, and run `submit` again. An edit made on GitHub is written into the change, one made locally is sent to the pull request, and edits on both sides are merged line by line. That holds for a local edit pushed with `jj git push` too. Edits to the same lines stop `submit` before it pushes, and it prints both versions.
-
-`submit` reads who edited a description against the one both sides last agreed on, which it records for each pull request in `jj-octo/pr-descriptions` under the repository's `.jj/repo`, in the main workspace. Every workspace of the repository shares the records. A record stops counting once the change takes another description from git, as from another clone's rewrite of the branch that a fetch brings in, and once git rewrites the commit, as `git commit --amend` in a colocated checkout does. A rebase that GitHub makes, as after a merge below it, gives the change a new id, so jj can't follow the record through it either. Then `submit` reads against the pushed description, as without a record. Each sync, including the ones `merge` and `submit` run, deletes the records of bookmarks that are gone. Without a record, as in another clone, a local edit pushed with `jj git push` is still sent where GitHub has a description the change had before.
-
-GitHub rejects a base change on a pull request that is in a stack, and can only add pull requests to a stack's top. So when a reorder, a dropped change or an insertion moves any base, `submit` dissolves the stack, moves the bases, and registers the stack again under a new number. The pull requests themselves stay open. A pull request closed without merging stays in its stack on GitHub, so `submit` reads it as a dropped change. `submit` changes only the one stack its pull requests are in. Where they belong to several, it won't take one out of another stack: it fails and names the `jj gh dissolve` commands that keep the stack holding the bottom one. Check what a stack holds before dissolving it.
-
-Before pushing, `submit` also points each pull request whose base is moving at the trunk. That's because GitHub closes a pull request as merged as soon as its head is reachable from its base, which the push would otherwise cause for a pull request that moved below its old base.
-
-A change dropped from the stack leaves its pull request open, for closing by hand.
+A change dropped from the stack leaves its pull request open; close it by hand.
 
 ## Merging
 
-Merge with `jj gh merge`, not `gh pr merge` or GitHub's merge button. That's because only `jj gh merge` syncs the checkout afterwards and republishes the rest of the stack.
+Merge with `jj gh merge`, ❌ not `gh pr merge` or GitHub's merge button. That's because only `jj gh merge` syncs the checkout and republishes the rest of the stack. Run `submit` first, since `merge` fails on edits that aren't pushed.
 
-Merge separate stacks one at a time. Each merge rebases the other stacks onto the new trunk, so run `jj gh submit` on the next stack before merging it.
+Merge separate stacks one at a time, and run `jj gh submit` on the next stack before merging it.
 
-`merge` fails before merging if the change named, or one below it, has edits that aren't pushed. Run `submit` first.
-
-`merge` squash-merges everything up to and including the pull request of the change named, in one operation that merges all of it or none of it, and GitHub rebases the pull requests above onto the result itself. `merge` then runs `sync`, which fetches, forgets the merged changes' bookmarks whether or not GitHub has deleted their branches yet, abandons the merged changes, and rebases every local stack onto the new trunk. The rest of the merged changes' stack is rebased even where it conflicts with the trunk. `merge` then republishes what was already on GitHub of the changes left in that stack, and leaves unpublished changes local. `jj git push` doesn't push a change with conflicts, so `merge` republishes only the changes below the lowest one, and prints which it leaves local.
-
-A merge doesn't stop the workflow runs of the pull requests it merges. `merge --cancel-pr-runs` cancels those that haven't completed, after the sync. Where a cancel fails, it tries the rest and republishes the stack, then fails.
-
-Don't use the `gh stack` extension. Its local commands keep their own record of the stack in `.git/gh-stack` and move branches without jj knowing, and `jj gh` already does its GitHub work over REST.
+❌ Don't use the `gh stack` extension: it moves branches without jj knowing.
