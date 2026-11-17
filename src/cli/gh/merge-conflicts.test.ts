@@ -125,6 +125,14 @@ describe("merge, where changes have conflicts", () => {
           stream: "stderr",
           text: `left these changes local, since they or a change below them have conflicts:\n${labelsOf(repository, "c", "d")}`,
         },
+        {
+          stream: "stderr",
+          text: [
+            "`jj gh publish` fails until these descriptions are ready for review:",
+            `${labelsOf(repository, "b")}: has no body`,
+            "write each with `jj describe -r <change id>`, then run `jj gh submit` before publishing",
+          ].join("\n"),
+        },
       ],
     });
   });

@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 
 import { conflictWithTrunk, labelsOf } from "../../../testing/conflicts";
+import { describeChanges } from "../../../testing/descriptions";
 import { fakeGitHub, openPullRequest, stackOf } from "../../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
 import { description, githubWith, pushed, submitIn } from "../../../testing/submit";
@@ -57,6 +58,7 @@ describe("submit", () => {
   it("opens the missing pull requests ready for review when not drafts", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b");
+    describeChanges(repository, { a: "Adds a.", b: "Adds b." });
     const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github, { draft: false }));
     expect(github.calls).toEqual(["open a on main", "open b on a", "create stack 99,99"]);
@@ -65,9 +67,10 @@ describe("submit", () => {
   it("marks the existing drafts ready when not drafts, and opens the missing ones ready", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b", "c");
+    describeChanges(repository, { a: "Adds a.", c: "Adds c." });
     const github = fakeGitHub(
       {
-        a: openPullRequest("main", 1, "a"),
+        a: { ...openPullRequest("main", 1, "a"), body: "Adds a." },
         b: { ...openPullRequest("a", 2, "b"), draft: false },
       },
       stackOf(1, 2),

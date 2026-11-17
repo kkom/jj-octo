@@ -209,6 +209,7 @@ const open = (root: string): ScratchRepository => {
       writeFileSync(path.join(other, file), content);
     },
     writeOnGitHub: (file, content) => {
+      mkdirSync(path.dirname(path.join(github, file)), { recursive: true });
       writeFileSync(path.join(github, file), content);
     },
   };

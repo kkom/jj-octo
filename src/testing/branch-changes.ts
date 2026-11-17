@@ -16,11 +16,15 @@ export const addCommitOnGitHub = (
   repository.git("push", "--quiet", "origin", branch);
 };
 
-/** Adds a commit to `main`. */
-export const moveTrunkOnGitHub = (repository: ScratchRepository, file = "trunk.txt"): void => {
+/** Adds a commit to `main` that writes the file. */
+export const moveTrunkOnGitHub = (
+  repository: ScratchRepository,
+  file = "trunk.txt",
+  content = "trunk\n",
+): void => {
   repository.git("fetch", "--quiet");
   repository.git("checkout", "--quiet", "-B", "main", "origin/main");
-  repository.writeOnGitHub(file, "trunk\n");
+  repository.writeOnGitHub(file, content);
   repository.git("add", ".");
   repository.git("commit", "--quiet", "-m", "trunk moves");
   repository.git("push", "--quiet", "origin", "main");

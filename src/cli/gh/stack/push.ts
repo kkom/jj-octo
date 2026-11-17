@@ -27,6 +27,7 @@ import {
   type SyncedDescription,
 } from "./descriptions";
 import { basesFor, mustDissolve, titleAndBody } from "./plan";
+import { checkDescriptions, type DescriptionsNotReady } from "./readiness";
 import type { NotCombined } from "./reconcile";
 import { register, type SeveralStacks, stackContaining } from "./stacks";
 import { type BranchesDeleted, syncStack } from "./sync-stack";
@@ -52,6 +53,7 @@ interface OpenPullRequest {
 
 export type PushFailed =
   | DescriptionConflict
+  | DescriptionsNotReady
   | GitFailed
   | GitHubFailed
   | JjFailed
@@ -121,6 +123,19 @@ const push = (
             }),
       });
     }
+
+    // The pull requests that are or will be drafts, which publishing them fails on before anything
+    // changes on GitHub. Opening them as drafts only warns, once they're open.
+    const warning = yield* checkDescriptions(
+      changes.flatMap(({ change, open }) =>
+        Option.match(open, {
+          onNone: () => [change],
+          onSome: ({ pullRequest, synced }) =>
+            pullRequest.draft ? [{ description: synced.text, label: change.label }] : [],
+        }),
+      ),
+      { publishing: !draft },
+    );
 
     // GitHub rejects a base change on a pull request that is in a stack, and can only add to a
     // stack's top, so a stack that doesn't fit what is wanted is dissolved first.
@@ -197,6 +212,7 @@ const push = (
     }
 
     yield* register(dissolve ? Option.none() : existing, numbers);
+    yield* Effect.forEach(Option.toArray(warning), (text) => Console.error(text));
     // Last, so a failure here leaves every pull request open and the stack registered.
     if (!draft) {
       for (const number of drafts) {
