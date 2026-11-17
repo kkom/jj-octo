@@ -1,69 +1,62 @@
 {
-  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   enabled: true,
-  // osvVulnerabilityAlerts raises a PR only where a fixed version exists. This lists the CVEs
-  // that have no fix yet, which nothing else here would report.
-  dependencyDashboardOSVVulnerabilitySummary: "unresolved",
+  dependencyDashboard: {
+    osvVulnerabilitySummary: 'unresolved',
+  },
   osvVulnerabilityAlerts: true,
-  timezone: "Europe/London",
+  timezone: 'Europe/London',
   extends: [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests",
-    // Reads the `# renovate:` comment above a workflow's `…_VERSION` value.
-    "customManagers:githubActionsVersions",
+    'config:recommended',
+    'helpers:pinGitHubActionDigests',
+    'customManagers:githubActionsVersions',
   ],
   lockFileMaintenance: {
     enabled: true,
-    commitMessagePrefix: "[{{manager}}]",
-    branchTopic: "lock-file-maintenance-{{manager}}",
-    // Off Renovate's Monday-before-4am default; one day a week, so wide enough not to miss a run.
-    schedule: ["after 5:30am and before 5:30pm on wednesday"],
+    commitMessagePrefix: '[{{manager}}]',
+    branchTopic: 'lock-file-maintenance-{{manager}}',
+    schedule: [
+      'after 5:30am and before 5:30pm on wednesday',
+    ],
   },
-  // The same age bunfig.toml makes bun wait for. A shorter one here raises PRs whose install
-  // fails, since bun refuses the version the PR asks for.
-  minimumReleaseAge: "3 days",
-  // "strict" is Renovate's default, set here explicitly. Renovate opens a branch only once the
-  // "renovate/stability-days" check passes, i.e. every update on it is at least
-  // minimumReleaseAge old. A group is opened with just the members that are old enough; the
-  // rest come in a later PR, and until then the dashboard lists them as neither pending nor
-  // scheduled.
-  //
-  // That breaks a group whose members list each other in peerDependencies, such as effect and
-  // @effect/platform-*. If a platform release is old enough but the effect release it requires
-  // is not, the branch pairs it with the older effect and fails at install, before any test
-  // runs. Renovate fixes the branch itself once every member is old enough, so wait for that.
-  // Don't pin versions to work around it, or relax minimumReleaseAge for the package involved.
-  internalChecksFilter: "strict",
+  minimumReleaseAge: '3 days',
+  internalChecksFilter: 'strict',
   prConcurrentLimit: 0,
   prHourlyLimit: 0,
-  schedule: ["after 11:30am and before 5:30pm every weekday"],
-  rangeStrategy: "pin",
-  // Renovate otherwise counts any commit subject shaped like "<word>: <text>" as a conventional
-  // commit, and gives PRs semantic titles while those are most of main's last 20 commits. It
-  // finds a closed PR by its title, so each switch reopens every update a closed PR ignored.
-  semanticCommits: "disabled",
+  schedule: [
+    'after 11:30am and before 5:30pm every weekday',
+  ],
+  rangeStrategy: 'pin',
+  semanticCommits: 'disabled',
   customManagers: [
     {
-      customType: "regex",
-      managerFilePatterns: ["/(^|/)package\\.json$/"],
-      matchStrings: ['"packageManager":\\s*"bun@(?<currentValue>[^"]+)"'],
-      depNameTemplate: "bun",
-      datasourceTemplate: "npm",
-      packageNameTemplate: "bun",
+      customType: 'regex',
+      managerFilePatterns: [
+        '/(^|/)package\\.json$/',
+      ],
+      matchStrings: [
+        '"packageManager":\\s*"bun@(?<currentValue>[^"]+)"',
+      ],
+      depNameTemplate: 'bun',
+      datasourceTemplate: 'npm',
+      packageNameTemplate: 'bun',
     },
     {
-      // mise's own version
-      customType: "regex",
-      managerFilePatterns: ["/(^|/)mise\\.toml$/"],
-      matchStrings: ['min_version = \\{ soft = "(?<currentValue>[^"]+)" \\}'],
-      depNameTemplate: "jdx/mise",
-      datasourceTemplate: "github-releases",
+      customType: 'regex',
+      managerFilePatterns: [
+        '/(^|/)mise\\.toml$/',
+      ],
+      matchStrings: [
+        'min_version = \\{ soft = "(?<currentValue>[^"]+)" \\}',
+      ],
+      depNameTemplate: 'jdx/mise',
+      datasourceTemplate: 'github-releases',
     },
     {
-      // Renovate's own mise manager skips the `http` backend, so this reads the
-      // version out of the `# renovate:` comment above it instead.
-      customType: "regex",
-      managerFilePatterns: ["/(^|/)mise\\.toml$/"],
+      customType: 'regex',
+      managerFilePatterns: [
+        '/(^|/)mise\\.toml$/',
+      ],
       matchStrings: [
         '# renovate: datasource=(?<datasource>\\S+) packageName=(?<packageName>\\S+)\\s+version = "(?<currentValue>[^"]+)"',
       ],
@@ -71,57 +64,71 @@
   ],
   packageRules: [
     {
-      // bun resolves to whatever is newest itself, so there's no age to gate here.
-      matchUpdateTypes: ["lockFileMaintenance"],
+      matchUpdateTypes: [
+        'lockFileMaintenance',
+      ],
       minimumReleaseAge: null,
       prBodyNotes: [
         "⚠️ minimumReleaseAge doesn't apply to lock file maintenance — check release age yourself before merging.",
       ],
     },
     {
-      // Off on purpose: we want mise to be portable across environments, so there is no mise.lock
-      // to maintain.
-      matchManagers: ["mise"],
-      matchUpdateTypes: ["lockFileMaintenance"],
+      matchManagers: [
+        'mise',
+      ],
+      matchUpdateTypes: [
+        'lockFileMaintenance',
+      ],
       enabled: false,
     },
     {
-      // Release age isn't wired into replacements yet: https://github.com/renovatebot/renovate/issues/39400
-      matchUpdateTypes: ["replacement"],
+      matchUpdateTypes: [
+        'replacement',
+      ],
       minimumReleaseAge: null,
       prBodyNotes: [
         "⚠️ minimumReleaseAge doesn't apply to replacements — check release age yourself before merging.",
       ],
     },
     {
-      // Pins fix an existing range to the version already resolved, not a newer one.
-      matchUpdateTypes: ["pin"],
+      matchUpdateTypes: [
+        'pin',
+      ],
       minimumReleaseAge: null,
     },
     {
-      // engines states the oldest runtime a published package supports, which we raise by hand.
-      // rangeStrategy "pin" applies to it too, and would demand exactly the newest release.
-      matchDepTypes: ["engines"],
+      matchDepTypes: [
+        'engines',
+      ],
       enabled: false,
     },
     {
-      matchPackageNames: ["@types/bun", "bun", "oven-sh/bun"],
-      groupName: "bun",
+      matchPackageNames: [
+        '@types/bun',
+        'bun',
+        'oven-sh/bun',
+      ],
+      groupName: 'bun',
     },
     {
-      matchPackageNames: ["effect", "@effect/**"],
-      groupName: "effect",
+      matchPackageNames: [
+        'effect',
+        '@effect/**',
+      ],
+      groupName: 'effect',
     },
     {
-      // oxlint-tsgolint embeds its own TypeScript compiler and its version says which one:
-      // 7.0.2001 is TypeScript 7.0.2, tsgolint patch 1. Bumping one alone leaves the type-aware
-      // lint rules answering about a compiler `tsc` no longer runs.
-      matchPackageNames: ["oxlint-tsgolint", "typescript"],
-      groupName: "TypeScript",
+      matchPackageNames: [
+        'oxlint-tsgolint',
+        'typescript',
+      ],
+      groupName: 'TypeScript',
     },
     {
-      matchSourceUrls: ["https://github.com/oxc-project/oxc"],
-      groupName: "oxc",
+      matchSourceUrls: [
+        'https://github.com/oxc-project/oxc',
+      ],
+      groupName: 'oxc',
     },
   ],
 }
