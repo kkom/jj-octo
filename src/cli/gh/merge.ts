@@ -20,7 +20,8 @@ import {
   type StackChange,
   upstackRevset,
 } from "./stack/changes";
-import { type PushFailed, pushAgain } from "./stack/push";
+import type { PushFailed } from "./stack/push";
+import { pushAgain } from "./stack/push-again";
 import type { NotCombined } from "./stack/reconcile";
 import { checkedTrunk } from "./stack/trunk";
 import { sync } from "./sync";
