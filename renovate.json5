@@ -1,9 +1,12 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   enabled: true,
-  // osvVulnerabilityAlerts raises a PR only where a fixed version exists. This lists the CVEs
-  // that have no fix yet, which nothing else here would report.
-  dependencyDashboardOSVVulnerabilitySummary: "unresolved",
+  // config:recommended turns the dashboard on, and this object merges with it.
+  dependencyDashboard: {
+    // osvVulnerabilityAlerts raises a PR only where a fixed version exists. This lists the CVEs
+    // that have no fix yet, which nothing else here would report.
+    osvVulnerabilitySummary: "unresolved",
+  },
   osvVulnerabilityAlerts: true,
   timezone: "Europe/London",
   extends: [
