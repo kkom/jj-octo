@@ -9,7 +9,7 @@ import type { ScratchRepository } from "./scratch-repository";
 
 /**
  * Syncs the repository, with GitHub reporting the pull requests `squashMergeOnGitHub` merged.
- * `allWorkspaces` syncs the stacks of other workspaces too.
+ * `allWorkspaces` also syncs the stacks that only other workspaces' working copies are on.
  */
 export const syncing = (
   repository: ScratchRepository,

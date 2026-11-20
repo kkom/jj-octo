@@ -135,7 +135,7 @@ export const merge = (
 
     if ((yield* mergeOnGitHub(pullRequest, trunk)) === "enqueued") {
       yield* Console.error(
-        `queued to merge; once it has, run \`jj gh sync\` in a workspace whose working copy is on the stack, or with \`--all-workspaces\`${cancelPrRuns ? ", and cancel the workflow runs yourself" : ""}`,
+        `queued to merge; once it has, run \`jj gh sync\`, with \`--all-workspaces\` where only other workspaces' working copies are on the stack${cancelPrRuns ? ", and cancel the workflow runs yourself" : ""}`,
       );
     } else {
       yield* Console.error(`merged up to #${pullRequest.number}`);
@@ -178,9 +178,9 @@ export const mergeCommand = Command.make(
     "Merge the pull requests of a change and the ones below it",
     "Prints which pull requests it merges, then squash-merges them. An empty working copy means the change below it. Fails before merging if a change has edits that aren't pushed.",
     "Pull requests in a GitHub stack merge together with the ones below them: all of them or none. A pull request outside a stack merges alone, and only if its base is the trunk.",
-    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. Like `sync`, it leaves out the stacks of other workspaces unless you pass `--all-workspaces`, but always syncs the stack it merged. Then pushes the rest of the stack again, up to the highest branch already on GitHub. A change with conflicts can't be pushed, so it pushes only the changes below the lowest one, and prints which it leaves local.",
+    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. It skips the stacks that only other workspaces' working copies are on, unless you pass `--all-workspaces`. It always syncs the stack it merged. Then pushes the rest of the stack again, up to the highest branch already on GitHub. A change with conflicts can't be pushed, so it pushes only the changes below the lowest one, and prints which it leaves local.",
     "Fails before merging where the change named or one below it has conflicts. A change above it can have conflicts.",
     "With `--cancel-pr-runs`, also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it tries the rest and pushes the stack, then fails.",
-    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync` in a workspace whose working copy is on the stack, or run it with `--all-workspaces`.",
+    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync`, with `--all-workspaces` where only other workspaces' working copies are on the stack.",
   ),
 );
