@@ -15,6 +15,7 @@ import {
   removeScratchRepositories,
   type ScratchRepository,
 } from "../../../testing/scratch-repository";
+import { addWorkspace } from "../../../testing/workspace";
 import { submit } from "./push";
 
 afterAll(removeScratchRepositories);
@@ -61,6 +62,22 @@ const deletedFailure = (...branches: readonly string[]): string =>
   ].join("\n");
 
 describe("submit, where the stack changed on GitHub", () => {
+  it("keeps another workspace's empty working copy on the stack GitHub rebased", async () => {
+    const repository = pushedStack("a", "b");
+    addWorkspace(repository, "b");
+    squashMergeOnGitHub(repository, "a", { above: ["b"] });
+    await submitIn(repository, { b: openPullRequest("main", 2, "b") }).run;
+    expect(repository.jj("log", "--no-graph", "-r", "other@-", "-T", "description")).toBe("b\n");
+  });
+
+  it("abandons a stack that merged whole, with the working copy on another stack", async () => {
+    const repository = pushedStack("a", "b");
+    repository.jj("new", "main", "-m", "elsewhere");
+    squashMergeOnGitHub(repository, "b", { below: ["a"], deleted: false });
+    await submitIn(repository, {}, "b").run;
+    expect(repository.log()).toEqual(["elsewhere []"]);
+  });
+
   it("fails before pushing anything where the sync gives a submitted change conflicts", async () => {
     const repository = pushedStack("a", "b");
     const pushed = repository.branches()["b"];

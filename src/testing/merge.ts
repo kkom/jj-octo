@@ -21,4 +21,6 @@ export const mergeIn = (
   github: ReturnType<typeof fakeGitHub>,
   revision: string,
 ): Effect.Effect<void, NotCombined | NotMergeable | PushFailed> =>
-  merge(revision, { cancelPrRuns: false }).pipe(inRepository(repository, github));
+  merge(revision, { allWorkspaces: false, cancelPrRuns: false }).pipe(
+    inRepository(repository, github),
+  );

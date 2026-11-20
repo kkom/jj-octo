@@ -38,8 +38,8 @@ Each pull request is one change, amended in place for as long as it lives. A sta
 | `jj gh checks` | Shows the state of each pull request's required checks. Read CI's result here, not from GitHub's check run list |
 | `jj gh submit` | Pushes the stack up to the working copy and opens or updates its pull requests as one GitHub stack |
 | `jj gh publish -r <change>` | Marks the drafts up to that change ready for review |
-| `jj gh merge -r <change>` | Merges the pull requests up to that change, then syncs and republishes the rest. `--cancel-pr-runs` cancels their runs |
-| `jj gh sync` | Rebases every stack onto the fetched trunk and drops what merged |
+| `jj gh merge -r <change>` | Merges the pull requests up to that change, then syncs and republishes the rest. `--cancel-pr-runs` cancels their runs, and `--all-workspaces` syncs as `sync` does with it |
+| `jj gh sync` | Rebases the stacks onto the fetched trunk and drops what merged. Leaves out the stacks that other workspaces' working copies are on, except the one this workspace's working copy is on, unless you pass `--all-workspaces` |
 | `jj gh dissolve <stack>` | Dissolves a GitHub stack, leaving its pull requests open. Where `submit` fails because the pull requests are in several stacks, it names the commands to run: check what each stack holds first |
 
 ## Building and changing a stack

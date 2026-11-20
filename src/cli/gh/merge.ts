@@ -24,7 +24,7 @@ import type { PushFailed } from "./stack/push";
 import { pushAgain } from "./stack/push-again";
 import type { NotCombined } from "./stack/reconcile";
 import { checkedTrunk } from "./stack/trunk";
-import { sync } from "./sync";
+import { allWorkspacesFlag, sync } from "./sync";
 
 export class NotMergeable extends Data.TaggedError("NotMergeable")<{
   readonly message: string;
@@ -105,7 +105,10 @@ const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
  */
 export const merge = (
   revision: string,
-  { cancelPrRuns }: { readonly cancelPrRuns: boolean },
+  {
+    allWorkspaces,
+    cancelPrRuns,
+  }: { readonly allWorkspaces: boolean; readonly cancelPrRuns: boolean },
 ): Effect.Effect<
   void,
   NotCombined | NotMergeable | PushFailed,
@@ -132,12 +135,12 @@ export const merge = (
 
     if ((yield* mergeOnGitHub(pullRequest, trunk)) === "enqueued") {
       yield* Console.error(
-        `queued to merge; run \`jj gh sync\` once it has${cancelPrRuns ? ", and cancel the workflow runs yourself" : ""}`,
+        `queued to merge; once it has, run \`jj gh sync\` in a workspace whose working copy is on the stack, or with \`--all-workspaces\`${cancelPrRuns ? ", and cancel the workflow runs yourself" : ""}`,
       );
     } else {
       yield* Console.error(`merged up to #${pullRequest.number}`);
       // GitHub merged exactly what was pushed, as checked above.
-      yield* sync(changes);
+      yield* sync({ allWorkspaces, known: changes, trunk });
       // Before the push, which can fail, and failing only after it, so a token that can't
       // cancel runs still leaves the rest of the stack pushed.
       const cancelling = cancelPrRuns
@@ -157,6 +160,7 @@ export const merge = (
 export const mergeCommand = Command.make(
   "merge",
   {
+    allWorkspaces: allWorkspacesFlag,
     cancelPrRuns: Flag.Boolean("cancel-pr-runs").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
@@ -165,16 +169,18 @@ export const mergeCommand = Command.make(
     ),
     revision: revisionFlag("The top change to merge"),
   },
-  ({ cancelPrRuns, revision }) =>
-    asUserError(merge(revision, { cancelPrRuns }).pipe(Effect.provide(GitHubFromOrigin))),
+  ({ allWorkspaces, cancelPrRuns, revision }) =>
+    asUserError(
+      merge(revision, { allWorkspaces, cancelPrRuns }).pipe(Effect.provide(GitHubFromOrigin)),
+    ),
 ).pipe(
   withHelp(
     "Merge the pull requests of a change and the ones below it",
     "Prints which pull requests it merges, then squash-merges them. An empty working copy means the change below it. Fails before merging if a change has edits that aren't pushed.",
     "Pull requests in a GitHub stack merge together with the ones below them: all of them or none. A pull request outside a stack merges alone, and only if its base is the trunk.",
-    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. Then pushes the rest of the stack again, up to the highest branch already on GitHub. A change with conflicts can't be pushed, so it pushes only the changes below the lowest one, and prints which it leaves local.",
+    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. Like `sync`, it leaves out the stacks of other workspaces unless you pass `--all-workspaces`, but always syncs the stack it merged. Then pushes the rest of the stack again, up to the highest branch already on GitHub. A change with conflicts can't be pushed, so it pushes only the changes below the lowest one, and prints which it leaves local.",
     "Fails before merging where the change named or one below it has conflicts. A change above it can have conflicts.",
     "With `--cancel-pr-runs`, also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it tries the rest and pushes the stack, then fails.",
-    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync`.",
+    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync` in a workspace whose working copy is on the stack, or run it with `--all-workspaces`.",
   ),
 );

@@ -2,7 +2,7 @@ import { Data, Effect, FileSystem } from "effect";
 
 import { Git, GitFailed, gitConfig, gitDirectories } from "../../clients/git";
 import { Jj, type JjFailed, jjConfig, readJjConfig, setJjConfig } from "../../clients/jj";
-import { commitsAt } from "./stack/changes";
+import { commitsAt, exactPattern } from "./stack/changes";
 import { trunkRevset } from "./stack/trunk";
 
 export class NotSetUp extends Data.TaggedError("NotSetUp")<{ readonly message: string }> {}
@@ -128,7 +128,7 @@ const authors: SetupStep = {
 /** Whether `origin`'s branch is fetched and tracked. */
 const isTracked = (branch: string) =>
   Effect.map(
-    commitsAt(`tracked_remote_bookmarks(exact:${JSON.stringify(branch)}, remote=exact:"origin")`),
+    commitsAt(`tracked_remote_bookmarks(${exactPattern(branch)}, remote=exact:"origin")`),
     (commits) => commits.length > 0,
   );
 
@@ -154,10 +154,10 @@ const trunk = (branchOnOrigin: Effect.Effect<string, GitFailed, Git>): SetupStep
     const jj = yield* Jj;
     const branch = yield* branchOnOrigin;
     if ((yield* commitsAt(`present(${trunkRevset(branch)})`)).length === 0) {
-      yield* jj.run(["git", "fetch", "--remote", "origin", "--branch", `exact:${branch}`]);
+      yield* jj.run(["git", "fetch", "--remote", "origin", "--branch", exactPattern(branch)]);
     }
     if (!(yield* isTracked(branch))) {
-      yield* jj.run(["bookmark", "track", `exact:${branch}`, "--remote", "origin"]);
+      yield* jj.run(["bookmark", "track", exactPattern(branch), "--remote", "origin"]);
     }
     if (!(yield* namesTrunk(branch))) {
       yield* setJjConfig('revset-aliases."trunk()"', trunkRevset(branch));
