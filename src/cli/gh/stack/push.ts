@@ -13,6 +13,7 @@ import {
   bookmarksAt,
   bookmarkTargets,
   downstackChanges,
+  exactPattern,
   type NotAStack,
   type StackChange,
   withoutConflicts,
@@ -143,12 +144,12 @@ export const push = (
 
     // Jj only creates a branch on the remote for a bookmark that tracks it.
     for (const bookmark of bookmarks.filter((name) => targets.get(name)?.tracked !== true)) {
-      yield* jj.run(["bookmark", "track", `exact:${bookmark}`, "--remote", "origin"]);
+      yield* jj.run(["bookmark", "track", exactPattern(bookmark), "--remote", "origin"]);
     }
     yield* jj.run([
       "git",
       "push",
-      ...bookmarks.flatMap((bookmark) => ["--bookmark", `exact:${bookmark}`]),
+      ...bookmarks.flatMap((bookmark) => ["--bookmark", exactPattern(bookmark)]),
     ]);
     // The commits pushed, which the records are agreed for.
     const pushedTargets = yield* bookmarkTargets;

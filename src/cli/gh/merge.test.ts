@@ -6,6 +6,7 @@ import { moveTrunkOnGitHub, squashMergeOnGitHub } from "../../testing/branch-cha
 import { fakeGitHub, inRepository, openPullRequest, stackOf } from "../../testing/fake-github";
 import { mergeIn, mergingIn } from "../../testing/merge";
 import { pushedStack, removeScratchRepositories } from "../../testing/scratch-repository";
+import { addWorkspace } from "../../testing/workspace";
 import { merge } from "./merge";
 
 afterAll(removeScratchRepositories);
@@ -35,6 +36,27 @@ const mergedWithRuns = (forbidden = false) => {
   return { github, repository };
 };
 
+// `c`, on the trunk `a` and `b` started from, with the other workspace's working copy on it.
+const withOtherStack = () => {
+  const repository = pushedStack("a", "b");
+  repository.jj("new", "main", "-m", "c");
+  repository.jj("bookmark", "create", "c", "-r", "@");
+  repository.jj("git", "push", "--bookmark", "c");
+  addWorkspace(repository, "c");
+  repository.jj("new", "b");
+  // `b` as GitHub rebased it in the merge.
+  const rebased = { b: "" };
+  const github = fakeGitHub(
+    open,
+    stackOf(1, 2),
+    mergingIn(repository, () => {
+      squashMergeOnGitHub(repository, "a", { above: ["b"] });
+      rebased.b = repository.branches()["b"] ?? "";
+    }),
+  );
+  return { github, rebased, repository };
+};
+
 describe("merge", () => {
   it("merges a stacked pull request through its stack, then syncs and republishes the rest", async () => {
     const repository = pushedStack("a", "b");
@@ -51,6 +73,70 @@ describe("merge", () => {
     expect(repository.branches()["b"]).toBe(
       repository.jj("log", "--no-graph", "-r", "b", "-T", "commit_id"),
     );
+  });
+
+  it("syncs the stack it merged, where another workspace's working copy is on it", async () => {
+    const repository = pushedStack("a", "b");
+    addWorkspace(repository, "b");
+    repository.jj("new", "main", "-m", "c");
+    const github = fakeGitHub(
+      open,
+      stackOf(1, 2),
+      mergingIn(repository, () => {
+        squashMergeOnGitHub(repository, "a", { above: ["b"] });
+      }),
+    );
+    await Effect.runPromise(mergeIn(repository, github, "a"));
+    expect({
+      b: repository.files("b"),
+      log: repository.log(),
+      workingCopy: repository.files("@"),
+    }).toStrictEqual({
+      b: ["a.txt", "b.txt", "base.txt"],
+      log: ["b [b]", "c []"],
+      workingCopy: ["a.txt", "base.txt"],
+    });
+  });
+
+  it("rebases another workspace's change on the stack it merged whole", async () => {
+    const repository = pushedStack("a", "b");
+    addWorkspace(repository, "b");
+    repository.jj("describe", "-r", "other@", "-m", "wip");
+    repository.jj("new", "main", "-m", "c");
+    const github = fakeGitHub(
+      open,
+      stackOf(1, 2),
+      mergingIn(repository, () => {
+        squashMergeOnGitHub(repository, "a", { deleted: false });
+        squashMergeOnGitHub(repository, "b", { deleted: false });
+      }),
+    );
+    await Effect.runPromise(mergeIn(repository, github, "b"));
+    expect({ log: repository.log(), wip: repository.files("other@") }).toStrictEqual({
+      log: ["c []", "wip []"],
+      wip: ["a.txt", "b.txt", "base.txt"],
+    });
+  });
+
+  describe("where another workspace's working copy is on a separate stack", () => {
+    it("leaves that stack where it was, and takes the rest of the merged stack from GitHub", async () => {
+      const { github, rebased, repository } = withOtherStack();
+      await Effect.runPromise(mergeIn(repository, github, "a"));
+      expect({
+        b: repository.jj("log", "--no-graph", "-r", "b", "-T", "commit_id"),
+        c: repository.files("c"),
+      }).toStrictEqual({ b: rebased.b, c: ["base.txt"] });
+    });
+
+    it("syncs that stack too with `allWorkspaces`", async () => {
+      const { github, repository } = withOtherStack();
+      await Effect.runPromise(
+        merge("a", { allWorkspaces: true, cancelPrRuns: false }).pipe(
+          inRepository(repository, github),
+        ),
+      );
+      expect(repository.files("c")).toEqual(["a.txt", "base.txt"]);
+    });
   });
 
   // Rebased onto the trunk, the first merged change would conflict with the second's edit of the
@@ -131,7 +217,9 @@ describe("merge", () => {
   it("cancels every merged pull request's workflow runs that haven't completed, with --cancel-pr-runs", async () => {
     const { github, repository } = mergedWithRuns();
     await Effect.runPromise(
-      merge("b", { cancelPrRuns: true }).pipe(inRepository(repository, github)),
+      merge("b", { allWorkspaces: false, cancelPrRuns: true }).pipe(
+        inRepository(repository, github),
+      ),
     );
     expect(github.calls).toEqual(["merge the stack up to #2", "cancel run 11", "cancel run 21"]);
   });
@@ -139,7 +227,11 @@ describe("merge", () => {
   it("still cancels the other runs where one cancel fails, then fails", async () => {
     const { github, repository } = mergedWithRuns(true);
     const failure = await Effect.runPromise(
-      Effect.flip(merge("b", { cancelPrRuns: true }).pipe(inRepository(repository, github))),
+      Effect.flip(
+        merge("b", { allWorkspaces: false, cancelPrRuns: true }).pipe(
+          inRepository(repository, github),
+        ),
+      ),
     );
     expect({ calls: github.calls, message: failure.message }).toStrictEqual({
       calls: ["merge the stack up to #2", "cancel run 21"],

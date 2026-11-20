@@ -5,9 +5,25 @@ import type { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
 import { Jj, type JjFailed } from "../../../clients/jj";
 import type { PrDescriptions } from "../../../clients/pr-descriptions";
-import { bookmarksAt, changeIdsAt, downstackRevset, lines, stackRevset } from "./changes";
+import {
+  anyOf,
+  bookmarkRevset,
+  bookmarksAt,
+  changeIdsAt,
+  changeRevset,
+  downstackRevset,
+  lines,
+  stackRevset,
+} from "./changes";
 import { type BookmarkBeforeFetch, bookmarksBeforeFetch, pushedOf } from "./combine";
-import { mergedHeadsOf, mergedIn, type NotCombined, notMerged, reconcile } from "./reconcile";
+import {
+  fetchBranches,
+  mergedHeadsOf,
+  mergedIn,
+  type NotCombined,
+  notMerged,
+  reconcile,
+} from "./reconcile";
 
 // Syncs one stack, for `submit`, where GitHub merged or changed any of it.
 
@@ -62,7 +78,7 @@ const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
   });
 
 /**
- * Syncs the revision's stack alone, as `sync` does every stack, where any pull request of the
+ * Syncs the revision's stack alone, as `sync` does, where any pull request of the
  * revision or the changes below it merged, or any of their branches changed on GitHub. Fetches
  * only those branches and the trunk, so other stacks stay as they are. The changes above are
  * rebased with the stack, and their branches are left for their own submit. Returns whether it
@@ -110,15 +126,19 @@ export const syncStack = (
     yield* Console.error(`on GitHub, ${found.join(", ")}; syncing the stack first`);
     // The whole stack is rebased, so the changes above the revision keep their place on it.
     const whole = stackRevset(revision);
+    const bookmarks = yield* bookmarksAt(whole);
+    // With the working copy on top, which follows the stack even where all of it merged.
+    const unnamed = yield* changeIdsAt(`((${whole}) | (@ & children(${whole}))) ~ bookmarks()`);
     yield* reconcile({
       before,
+      bookmarks,
+      fetch: fetchBranches([trunk, ...pushedOf(before).map(({ name }) => name)]),
       merged,
-      scope: {
-        bookmarks: yield* bookmarksAt(whole),
-        trunk,
-        // With the working copy on top, which follows the stack even where all of it merged.
-        unnamed: yield* changeIdsAt(`((${whole}) | (@ & children(${whole}))) ~ bookmarks()`),
-      },
+      skipped: "none()",
+      stacks: `::(${anyOf([
+        ...bookmarks.map((name) => bookmarkRevset(name)),
+        ...unnamed.map((change) => changeRevset(change)),
+      ])})`,
     });
     return true;
   });

@@ -6,12 +6,13 @@ import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";
 import {
   anyOf,
-  bookmarkRevset,
   bookmarksAt,
+  changeRevset,
   bookmarkTargets,
   changeIdsAt,
   changesIn,
   commitsAt,
+  exactPattern,
   lines,
   STACK_ROOTS,
   type StackChange,
@@ -20,7 +21,7 @@ import {
 import { type BookmarkBeforeFetch, combine, pushedOf } from "./combine";
 
 // A stack already on the trunk has nothing to rebase.
-const BEHIND_ROOTS = `(${STACK_ROOTS}) ~ children(trunk())`;
+export const BEHIND_ROOTS = `(${STACK_ROOTS}) ~ children(trunk())`;
 
 export class NotCombined extends Data.TaggedError("NotCombined")<{ readonly message: string }> {}
 
@@ -53,7 +54,7 @@ const rebaseStack = (root: string, required: readonly string[]) =>
     // combined with a push from another checkout has two commits with one id. `change_id()`
     // selects none or both, where the bare id fails. The other commit is in another stack, so a
     // conflict it already had isn't one this rebase caused.
-    const rebased = anyOf(changes.map((change) => `change_id(${change})`));
+    const rebased = anyOf(changes.map((change) => changeRevset(change)));
     const untouched = anyOf(conflictedCommits);
     const conflictedNow = yield* changeIdsAt(`(conflicts() & (${rebased})) ~ (${untouched})`);
     const mayRestore = !changes.some((change) => required.includes(change));
@@ -64,6 +65,10 @@ const rebaseStack = (root: string, required: readonly string[]) =>
       );
     }
   });
+
+/** The `jj git fetch` options that fetch only the branches. */
+export const fetchBranches = (branches: readonly string[]): string[] =>
+  [...new Set(branches)].flatMap((name) => ["--branch", exactPattern(name)]);
 
 /** A change whose pull request merged, with the bookmark that names its branch. */
 export type MergedChange = Pick<StackChange, "bookmark" | "changeId">;
@@ -143,7 +148,7 @@ const forget = (names: readonly string[]) =>
         "bookmark",
         "forget",
         "--include-remotes",
-        ...present.map((name) => `exact:${name}`),
+        ...present.map((name) => exactPattern(name)),
       ]);
     }
   });
@@ -151,19 +156,18 @@ const forget = (names: readonly string[]) =>
 interface Reconciliation {
   /** The bookmarks to combine with their branches, as they were before the fetch. */
   readonly before: readonly BookmarkBeforeFetch[];
+  /** The bookmarks of the stacks to sync, forgotten where they end up on the trunk. */
+  readonly bookmarks: readonly string[];
+  /** The options of `jj git fetch`, such as `--branch`. With none, it fetches what it does by default. */
+  readonly fetch: readonly string[];
   readonly merged: readonly MergedChange[];
+  /** The changes that no step rebases, abandons or moves, as a revset read at each step. */
+  readonly skipped: string;
   /**
-   * Every stack, or one stack: the trunk to fetch for it, its bookmarks, and the ids of its
-   * changes without one. Those find the stack after the sync, since a bookmark follows a change
-   * replaced with GitHub's, and a change keeps its id.
+   * A revset holding the bottom change of each stack to rebase, read after the fetch. So it names
+   * changes by bookmark or change id, which follow a change replaced with GitHub's.
    */
-  readonly scope:
-    | "every stack"
-    | {
-        readonly bookmarks: readonly string[];
-        readonly trunk: string;
-        readonly unnamed: readonly string[];
-      };
+  readonly stacks: string;
 }
 
 /**
@@ -185,22 +189,18 @@ interface Reconciliation {
  */
 export const reconcile = ({
   before,
+  bookmarks,
+  fetch,
   merged,
-  scope,
+  skipped,
+  stacks,
 }: Reconciliation): Effect.Effect<void, JjFailed | NotCombined, Jj | PrDescriptions> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
-    const branches =
-      scope === "every stack"
-        ? []
-        : [scope.trunk, ...pushedOf(before).map(({ name }) => name)].flatMap((branch) => [
-            "--branch",
-            `exact:${branch}`,
-          ]);
-    yield* jj.run(["git", "fetch", ...branches]);
+    yield* jj.run(["git", "fetch", ...fetch]);
     // After the fetch, so it can't bring a branch GitHub hasn't deleted yet back as a bookmark.
     yield* forget(merged.map(({ bookmark }) => bookmark));
-    const mergedRevset = `(${anyOf(merged.map(({ changeId }) => `change_id(${changeId})`))}) & mutable()`;
+    const mergedRevset = `(${anyOf(merged.map(({ changeId }) => changeRevset(changeId)))}) & mutable() ~ (${skipped})`;
     const required = yield* changeIdsAt(`(${mergedRevset}):: ~ (${mergedRevset})`);
     if (merged.length > 0) {
       yield* jj.run(["abandon", mergedRevset]);
@@ -211,23 +211,14 @@ export const reconcile = ({
     const fetched = yield* bookmarkTargets;
     const notCombined: string[] = [];
     for (const bookmark of before.filter(({ name }) => notMerged(merged)(name))) {
-      if (!(yield* combine(bookmark, fetched.get(bookmark.name)?.origin))) {
+      if (!(yield* combine(bookmark, fetched.get(bookmark.name)?.origin, skipped))) {
         notCombined.push(bookmark.name);
       }
     }
-    const roots =
-      scope === "every stack"
-        ? BEHIND_ROOTS
-        : `(${BEHIND_ROOTS}) & ::(${anyOf([
-            ...scope.bookmarks.map((name) => bookmarkRevset(name)),
-            ...scope.unnamed.map((change) => `change_id(${change})`),
-          ])})`;
-    for (const root of yield* commitsAt(roots)) {
+    for (const root of yield* commitsAt(`((${BEHIND_ROOTS}) & (${stacks})) ~ (${skipped})`)) {
       yield* rebaseStack(root, required);
     }
-    const onStacks = new Set(
-      scope === "every stack" ? before.map(({ name }) => name) : scope.bookmarks,
-    );
+    const onStacks = new Set(bookmarks);
     yield* forget((yield* bookmarksAt("::trunk()")).filter((name) => onStacks.has(name)));
     const records = yield* PrDescriptions;
     // `bookmarksAt` lists conflicted bookmarks too, which `bookmarkTargets` gives no local target.

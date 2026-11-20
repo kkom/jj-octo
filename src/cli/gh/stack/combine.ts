@@ -1,7 +1,14 @@
 import { Console, Effect } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
-import { anyOf, bookmarkRevset, bookmarkTargets, commitsAt, lines, readLog } from "./changes";
+import {
+  anyOf,
+  bookmarkRevset,
+  bookmarkTargets,
+  changeRevset,
+  commitsAt,
+  logLines,
+} from "./changes";
 
 // Combines a local change with its branch on GitHub after a fetch, for `sync` and `submit`.
 
@@ -33,18 +40,14 @@ export const bookmarksBeforeFetch = (
   Effect.gen(function* () {
     const targets = [...(yield* bookmarkTargets)];
     const bookmarked = `(${revset}) & bookmarks()`;
-    const bottomFirst = lines(
-      yield* readLog(
-        bookmarked,
-        String.raw`commit_id ++ "\t" ++ change_id ++ "\t" ++ current_working_copy ++ "\n"`,
-      ),
+    const bottomFirst = yield* logLines(
+      bookmarked,
+      String.raw`commit_id ++ "\t" ++ change_id ++ "\t" ++ current_working_copy ++ "\n"`,
     );
-    const children = lines(
-      yield* readLog(
-        `children(${bookmarked})`,
-        String.raw`parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ change_id ++ "\n"`,
-      ),
-    ).map((line) => line.split("\t"));
+    const children = (yield* logLines(
+      `children(${bookmarked})`,
+      String.raw`parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ change_id ++ "\n"`,
+    )).map((line) => line.split("\t"));
     return bottomFirst.toReversed().flatMap((line): readonly BookmarkBeforeFetch[] => {
       const [commit = "", change = "", workingCopy] = line.split("\t");
       const above = children.flatMap(([parents = "", child = ""]) =>
@@ -71,7 +74,7 @@ export const bookmarksBeforeFetch = (
  */
 const localCommit = (change: string, remote: string, fetched: string) =>
   Effect.gen(function* () {
-    const commits = yield* commitsAt(`change_id(${change})`);
+    const commits = yield* commitsAt(changeRevset(change));
     const local = commits.filter((commit) => commit !== remote && commit !== fetched);
     if (local.length === 0) {
       return commits.includes(remote) ? [remote] : [];
@@ -90,6 +93,8 @@ const localCommit = (change: string, remote: string, fetched: string) =>
 export const combine = (
   { above, change, editing, local: localBefore, name, remote }: BookmarkBeforeFetch,
   fetched: string | undefined,
+  // The changes to leave where they are, as `Reconciliation.skipped` says.
+  skipped: string,
 ): Effect.Effect<boolean, JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
@@ -106,7 +111,7 @@ export const combine = (
         yield* jj.run(["edit", fetched]);
       }
       // GitHub's own copies can carry the ids too, and are already on its commit.
-      const moved = `(${anyOf(above.map((child) => `change_id(${child})`))}) ~ children(${fetched})`;
+      const moved = `(${anyOf(above.map((child) => changeRevset(child)))}) ~ (${skipped}) ~ children(${fetched})`;
       if ((yield* commitsAt(moved)).length > 0) {
         yield* jj.run(["rebase", "--source", moved, "--destination", fetched]);
         yield* Console.error(`took GitHub's rewritten ${name}, and moved what was on it there`);
@@ -123,7 +128,7 @@ export const combine = (
     const held = `::(bookmarks() ~ ${bookmarkRevset(name)}) ~ ::${remote}`;
     const dropCopies = jj.run([
       "abandon",
-      `((::${fetched} | ::${remote}) & mutable()) ~ ::${bookmarkRevset(name)} ~ (${held})`,
+      `((::${fetched} | ::${remote}) & mutable()) ~ ::${bookmarkRevset(name)} ~ (${held}) ~ (${skipped})`,
     ]);
 
     if ((yield* commitsAt(`${remote} & ::${fetched}`)).length > 0) {

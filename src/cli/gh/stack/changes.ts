@@ -9,7 +9,7 @@ export class NotAStack extends Data.TaggedError("NotAStack")<{ readonly message:
 export const STACK_ROOTS = "roots(mutable()) & children(::trunk())";
 
 // The scratch change `jj new` and `jj commit` leave on top, or the one another workspace starts from.
-const SCRATCH = '(working_copies() & empty() & description(exact:""))';
+export const SCRATCH = '(working_copies() & empty() & description(exact:""))';
 
 // Every change connected to the revision through mutable changes. Separate stacks meet only at
 // the trunk, which is immutable, so this never reaches into another one.
@@ -27,8 +27,14 @@ export const upstackRevset = (revision: string): string =>
 /** The commits of any of the revsets. With none, no commits, where an empty union fails. */
 export const anyOf = (revsets: readonly string[]): string => ["none()", ...revsets].join(" | ");
 
+/** A jj string pattern that matches the name alone. */
+export const exactPattern = (name: string): string => `exact:${JSON.stringify(name)}`;
+
+/** The commits of a change. A change with no visible commit selects none, where its bare id fails. */
+export const changeRevset = (change: string): string => `change_id(${change})`;
+
 /** The change a bookmark is on. */
-export const bookmarkRevset = (bookmark: string): string => `bookmarks(exact:"${bookmark}")`;
+export const bookmarkRevset = (bookmark: string): string => `bookmarks(${exactPattern(bookmark)})`;
 
 export const lines = (output: string): readonly string[] =>
   output.split("\n").filter((line) => line !== "");
@@ -67,7 +73,11 @@ export const readLog = (
     ]);
   });
 
-const logLines = (revset: string, template: string, options?: ReadLogOptions) =>
+export const logLines = (
+  revset: string,
+  template: string,
+  options?: ReadLogOptions,
+): Effect.Effect<readonly string[], JjFailed, Jj> =>
   readLog(revset, template, options).pipe(Effect.map(lines));
 
 /** Each of the revset's changes as its short id and the first line of its description. */

@@ -7,13 +7,19 @@ import type { JjFailed } from "../clients/jj";
 import { fakeGitHub, inRepository } from "./fake-github";
 import type { ScratchRepository } from "./scratch-repository";
 
-/** Syncs the repository, with GitHub reporting the pull requests `squashMergeOnGitHub` merged. */
+/**
+ * Syncs the repository, with GitHub reporting the pull requests `squashMergeOnGitHub` merged.
+ * `allWorkspaces` syncs the stacks of other workspaces too.
+ */
 export const syncing = (
   repository: ScratchRepository,
+  { allWorkspaces = false } = {},
 ): Effect.Effect<void, GitHubFailed | JjFailed | NotCombined> =>
-  sync().pipe(
+  sync({ allWorkspaces, trunk: "main" }).pipe(
     inRepository(repository, fakeGitHub({}, [], { pullRequestsFrom: repository.pullRequestsFrom })),
   );
 
-export const syncIn = (repository: ScratchRepository): Promise<void> =>
-  Effect.runPromise(syncing(repository));
+export const syncIn = (
+  repository: ScratchRepository,
+  options: { readonly allWorkspaces?: boolean } = {},
+): Promise<void> => Effect.runPromise(syncing(repository, options));
