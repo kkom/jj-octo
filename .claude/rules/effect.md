@@ -7,6 +7,17 @@ paths:
 
 `effect` is the standard library here for typed errors, schemas and effectful composition.
 
+## Follow Effect's idiom before designing a pattern
+
+Before you design a pattern of your own, find how Effect solves the problem, and use that. Depart from it only where it can't do the job, and say why beside the code.
+
+That's because Effect's idioms fit its types and its other modules, and a reader who knows Effect already knows them.
+
+- ❌ A module swapped at build time, to give tests a different clock
+- ✅ `Clock` provided where the program is run, chosen from the configuration it starts with
+- ❌ The current time passed as a parameter through every function, so a test can set it
+- ✅ A function that reads `Clock`, and a test that provides its own
+
 ## Use the unstable modules too
 
 `effect/*` (http, http-api, cli, …) is in bounds. Unstable means the API may shift between releases, not that it's off limits — a version bump that breaks something shows up as type errors, and that cost is accepted.

@@ -32,6 +32,27 @@ That's because patching a module, with `vi.mock` or `unittest.mock.patch`, repla
 - ❌ `vi.mock("./mailer")` to capture sent messages
 - ✅ A fake mailer, provided through the test's layer in place of the real one
 
+## Derive a fixture's time from the run's clock
+
+Where code under test compares a fixture's time with a clock, write that time as an offset from the run's clock, read once per run, such as two weeks before it or a week after it. Write expected values from the same offsets, and format them where a test expects text. Where the code reads only a clock the test provides, a fixed date stays correct.
+
+That's because some clocks the code reads can't be faked, such as a database's `now()` or a workflow engine's start time. A fixed date passes on the day it's written, and the test starts to fail once the real clock passes that date plus the period the code checks.
+
+- ❌ `expiresAt: "2026-11-21T00:00:00.000Z"`, a week after a fixed offer date, beside code that checks expiry against the real time
+- ✅ `expiresAt` a week after the run's clock, and the expected row built from that same value
+- ❌ `"2026-11-21T00:00:00.000Z"` written into an expected message
+- ✅ The expected message with the formatted `expiresAt` interpolated
+
+## Control a test's timing through the runtime
+
+Code keeps the runtime's own timing on every path: sleeps, retries and their backoff, and event-wait timeouts. A test controls that timing by configuring or patching the runtime's local emulator. Avoid a test-only code path around the runtime's timing; where one is unavoidable, say why beside it. A test advances a test clock, and never waits in real time for a limit. Where a test hits a time or size limit, fix the contention behind it, for locks, connections, pools or memory. A test gives a limit its own value only with the reason written beside it.
+
+That's because a test-only path runs code that production doesn't, and a loosened limit hides the failure that production hits.
+
+- ❌ A `skipBackoff` flag that only tests set, with no reason beside it
+- ✅ A test clock advanced past the backoff
+- ❌ A pool timeout raised in tests until a flaky failure stops
+
 ## Assert on complete objects
 
 Compare the whole value in one equality assertion, rather than checking its fields one at a time or matching part of it.
