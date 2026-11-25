@@ -18,7 +18,7 @@ describe("submit", () => {
     await Effect.runPromise(submitIn(repository, github, { revision: "b" }));
     expect({ branches: Object.keys(repository.branches()), calls: github.calls }).toStrictEqual({
       branches: ["a", "b", "main"],
-      calls: ["open a on main as a draft", "open b on a as a draft", "create stack 99,99"],
+      calls: ["open a on main as a draft", "open b on a as a draft", "create stack 99,100"],
     });
   });
 
@@ -50,7 +50,7 @@ describe("submit", () => {
     expect(github.calls).toEqual([
       "open a on main as a draft",
       "open b on a as a draft",
-      "create stack 99,99",
+      "create stack 99,100",
     ]);
   });
 
@@ -59,7 +59,7 @@ describe("submit", () => {
     repository.stack("a", "b");
     const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github, { draft: false }));
-    expect(github.calls).toEqual(["open a on main", "open b on a", "create stack 99,99"]);
+    expect(github.calls).toEqual(["open a on main", "open b on a", "create stack 99,100"]);
   });
 
   it("marks the existing drafts ready when not drafts, and opens the missing ones ready", async () => {
@@ -108,7 +108,7 @@ describe("submit", () => {
     expect(github.calls).toEqual([
       "open a on main as a draft",
       "open b on a as a draft",
-      "create stack 99,99",
+      "create stack 99,100",
     ]);
   });
 
