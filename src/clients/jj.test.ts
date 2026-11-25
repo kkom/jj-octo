@@ -5,7 +5,7 @@ import { Effect } from "effect";
 
 import { gitClone, runIn } from "../testing/git-clone";
 import { removeScratchRepositories, scratchRepository } from "../testing/scratch-repository";
-import { type Jj, JjFailed, jjConfig } from "./jj";
+import { Jj, JjFailed, jjConfig } from "./jj";
 
 afterAll(removeScratchRepositories);
 
@@ -53,5 +53,40 @@ describe("jjConfig", () => {
       { message: "jj-octo.on is true; set it to a string" },
       { message: "jj-octo.table is a table; set it to a single value" },
     ]);
+  });
+});
+
+const dryRun = (args: readonly string[]) => Jj.use((jj) => jj.dryRun(args));
+
+describe("Jj.dryRun", () => {
+  // For the edited file, jj snapshots the working copy in an operation of its own, whose id it
+  // prints first.
+  it("leaves the repository as it is, and returns the operation that holds the result", async () => {
+    const repository = scratchRepository();
+    repository.jj("config", "set", "--repo", "ui.quiet", "true");
+    const operations = repository.jj("operation", "log", "--no-graph", "-T", "id");
+    repository.write("edited.txt", "edited\n");
+    const operation = await runIn(repository.layer, dryRun(["describe", "-m", "tried"]));
+    const description = [
+      "log",
+      "--ignore-working-copy",
+      "--no-graph",
+      "-r",
+      "@",
+      "-T",
+      "description",
+    ];
+    expect([
+      repository.jj("operation", "log", "--ignore-working-copy", "--no-graph", "-T", "id"),
+      repository.jj(...description),
+      repository.jj("--at-operation", operation, ...description),
+    ]).toStrictEqual([operations, "", "tried\n"]);
+  });
+
+  it("fails where the command changes nothing", async () => {
+    const repository = scratchRepository();
+    expect(
+      await runIn(repository.layer, Effect.flip(dryRun(["describe", "-m", ""]))),
+    ).toStrictEqual(new JjFailed({ message: "jj describe -m  made no operation" }));
   });
 });

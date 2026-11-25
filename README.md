@@ -11,7 +11,7 @@ A [jj](https://github.com/jj-vcs/jj) subcommand for GitHub that supports stacked
 
 ## Install
 
-Each [GitHub release](https://github.com/kkom/jj-octo/releases) has a standalone `jj-octo` for macOS on Apple silicon and Linux on x64 and arm64. Alternatively, run the [npm package](https://www.npmjs.com/package/jj-octo) with [Bun](https://bun.sh). Either way, `jj` must be on `PATH`.
+Each [GitHub release](https://github.com/kkom/jj-octo/releases) has a standalone `jj-octo` for macOS on Apple silicon and Linux on x64 and arm64. Alternatively, run the [npm package](https://www.npmjs.com/package/jj-octo) with [Bun](https://bun.sh). Either way, `jj` 0.41.0 or later must be on `PATH`.
 
 With [mise](https://mise.jdx.dev), add it to one repository's `mise.toml`:
 
