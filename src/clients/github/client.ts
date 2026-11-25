@@ -6,6 +6,7 @@ import type { Connection } from "./connection";
 import { failWith, GitHubFailed, urlOf } from "./failure";
 import { bodyOf } from "./openapi";
 import { everyPage } from "./pages";
+import { type PullRequestWrites, pullRequestWrites } from "./pull-request-writes";
 import { markReadyForReview } from "./ready-for-review";
 import type { Repository } from "./repository";
 import {
@@ -79,14 +80,6 @@ export class GitHub extends Context.Service<
     readonly pullRequestsFrom: (
       branch: string,
     ) => Effect.Effect<readonly ListedPullRequest[], GitHubFailed>;
-    readonly setBase: (
-      pullRequest: PullRequestNumber,
-      base: string,
-    ) => Effect.Effect<void, GitHubFailed>;
-    readonly setDescription: (
-      pullRequest: PullRequestNumber,
-      description: { readonly body: string; readonly title: string },
-    ) => Effect.Effect<void, GitHubFailed>;
     readonly stackOf: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<Option.Option<RemoteStack>, GitHubFailed>;
@@ -96,7 +89,8 @@ export class GitHub extends Context.Service<
     ) => Effect.Effect<readonly WorkflowRunId[], GitHubFailed>;
     /** Dissolves the stack. Its pull requests stay open. */
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
-  } & CheckReads
+  } & CheckReads &
+    PullRequestWrites
 >()("jj-octo/GitHub") {}
 
 export const GitHubLive = (
@@ -186,6 +180,7 @@ export const GitHubLive = (
         approvedPullRequests: (pullRequests) =>
           approvedPullRequests({ json, send }, repository, pullRequests),
         ...checkReads({ json, send }, repo),
+        ...pullRequestWrites({ json, send }, repo),
         // GitHub answers 409 for a run that has completed, as one can between listing and cancel
         cancelRun: (run) =>
           send(HttpClientRequest.post(repo(`/actions/runs/${run}/cancel`))).pipe(
@@ -266,18 +261,6 @@ export const GitHubLive = (
           everyPage(fromBranch(branch, "all"), json(AnyPullRequests)).pipe(
             Effect.map((found) => found.map((listed) => listedPullRequest(listed))),
           ),
-        setBase: (pullRequest, base) =>
-          send(
-            HttpClientRequest.patch(repo(`/pulls/${pullRequest}`)).pipe(
-              bodyOf<"pulls/update">({ base }),
-            ),
-          ).pipe(Effect.asVoid),
-        setDescription: (pullRequest, { body, title }) =>
-          send(
-            HttpClientRequest.patch(repo(`/pulls/${pullRequest}`)).pipe(
-              bodyOf<"pulls/update">({ body, title }),
-            ),
-          ).pipe(Effect.asVoid),
         stackOf,
         unfinishedRuns: (commit) =>
           everyPage(
