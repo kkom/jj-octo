@@ -47,6 +47,8 @@ export const parseDescription = (json: string): string => {
 };
 
 interface ReadLogOptions {
+  /** The operation to read the repository at, such as one that `Jj.dryRun` returned. */
+  readonly atOperation?: string;
   readonly ignoreWorkingCopy?: boolean;
 }
 
@@ -58,12 +60,13 @@ interface ReadLogOptions {
 export const readLog = (
   revset: string,
   template: string,
-  { ignoreWorkingCopy = false }: ReadLogOptions = {},
+  { atOperation, ignoreWorkingCopy = false }: ReadLogOptions = {},
 ): Effect.Effect<string, JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
     return yield* jj.read([
       "log",
+      ...(atOperation === undefined ? [] : ["--at-operation", atOperation]),
       ...(ignoreWorkingCopy ? ["--ignore-working-copy"] : []),
       "--no-graph",
       "--reversed",
@@ -130,23 +133,29 @@ export const pushedState = (
   return onOrigin === commitId ? "pushed" : "changed since push";
 };
 
-interface LoggedChange {
+export interface LoggedChange {
   /** Local bookmark names, a conflicted one ending in `?`. */
   readonly bookmarks: readonly string[];
   readonly changeId: string;
   readonly commitId: string;
   readonly conflict: boolean;
   readonly description: string;
+  /** Whether another visible commit has the same change id. */
+  readonly divergent: boolean;
   /** The short change id and the first line of the description. */
   readonly label: string;
   readonly parents: readonly string[];
 }
 
 // One line per change. The description is JSON, so a tab or a newline in it can't split a field.
-const CHANGE = String.raw`change_id.shortest(8) ++ "\t" ++ change_id ++ "\t" ++ commit_id ++ "\t" ++ parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ conflict ++ "\t" ++ local_bookmarks.map(|b| b.name() ++ if(b.conflict(), "?")).join(" ") ++ "\t" ++ description.escape_json() ++ "\n"`;
+const CHANGE = String.raw`change_id.shortest(8) ++ "\t" ++ change_id ++ "\t" ++ commit_id ++ "\t" ++ parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ conflict ++ "\t" ++ divergent ++ "\t" ++ local_bookmarks.map(|b| b.name() ++ if(b.conflict(), "?")).join(" ") ++ "\t" ++ description.escape_json() ++ "\n"`;
 
-const loggedChanges = (revset: string) =>
-  logLines(revset, CHANGE).pipe(
+/** The revset's changes, each after the changes below it. */
+export const loggedChanges = (
+  revset: string,
+  options?: ReadLogOptions,
+): Effect.Effect<readonly LoggedChange[], JjFailed, Jj> =>
+  logLines(revset, CHANGE, options).pipe(
     Effect.map((logged) =>
       logged.map((line): LoggedChange => {
         const [
@@ -155,6 +164,7 @@ const loggedChanges = (revset: string) =>
           commitId = "",
           parents = "",
           conflict,
+          divergent,
           bookmarks = "",
           json = '""',
         ] = line.split("\t");
@@ -165,6 +175,7 @@ const loggedChanges = (revset: string) =>
           commitId,
           conflict: conflict === "true",
           description,
+          divergent: divergent === "true",
           label: `${shortId} ${description.split("\n", 1)[0] ?? ""}`,
           parents: parents.split(","),
         };
