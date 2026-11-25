@@ -9,10 +9,10 @@ import type { PullRequest, PullRequestNumber } from "../../clients/github/types"
 import type { Jj } from "../../clients/jj";
 import type { PrDescriptions } from "../../clients/pr-descriptions";
 import { asUserError, revisionFlag, withHelp } from "../command";
+import { bookmarkTargets } from "./stack/bookmark-targets";
 import {
   bookmarkRevset,
   bookmarksAt,
-  bookmarkTargets,
   commitsAt,
   downstackChanges,
   withoutConflicts,

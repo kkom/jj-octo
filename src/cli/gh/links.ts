@@ -13,15 +13,8 @@ import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { ListedPullRequest, PullRequestState, StackLink } from "../../clients/github/types";
 import { type Jj, JjFailed } from "../../clients/jj";
 import { asUserError, revisionFlag, withHelp } from "../command";
-import {
-  anyOf,
-  bookmarkTargets,
-  CONFLICTED,
-  lines,
-  type NotAStack,
-  readLog,
-  stackChanges,
-} from "./stack/changes";
+import { bookmarkTargets } from "./stack/bookmark-targets";
+import { anyOf, CONFLICTED, lines, type NotAStack, readLog, stackChanges } from "./stack/changes";
 
 export class NoPullRequests extends Data.TaggedError("NoPullRequests")<{
   readonly message: string;
