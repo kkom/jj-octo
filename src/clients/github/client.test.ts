@@ -135,6 +135,31 @@ describe("cancelRun", () => {
   });
 });
 
+describe("closing a pull request", () => {
+  it("sets the pull request's state to closed, then comments on the pull request's issue", async () => {
+    const bodies: unknown[] = [];
+    const { requests } = await withGitHub(
+      ({ body }) => {
+        bodies.push(JSON.parse(body));
+        return {};
+      },
+      (github) =>
+        github
+          .closePullRequest(PullRequestNumberSchema.make(7))
+          .pipe(
+            Effect.andThen(github.commentOnPullRequest(PullRequestNumberSchema.make(7), "why")),
+          ),
+    );
+    expect({ bodies, requests }).toStrictEqual({
+      bodies: [{ state: "closed" }, { body: "why" }],
+      requests: [
+        "PATCH api.github.com/repos/owner/name/pulls/7",
+        "POST api.github.com/repos/owner/name/issues/7/comments",
+      ],
+    });
+  });
+});
+
 // Marks #7 ready for review, against a GitHub whose GraphQL API answers with `graphql`, and returns
 // the outcome or how it failed, with the body of each GraphQL request.
 const markReady = async (graphql: unknown, env: Readonly<Record<string, string>> = {}) => {

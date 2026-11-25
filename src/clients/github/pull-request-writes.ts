@@ -8,6 +8,12 @@ import type { PullRequestNumber } from "./types";
 
 /** The client's calls that change one pull request. */
 export interface PullRequestWrites {
+  /** Closes the pull request without merging it. */
+  readonly closePullRequest: (pullRequest: PullRequestNumber) => Effect.Effect<void, GitHubFailed>;
+  readonly commentOnPullRequest: (
+    pullRequest: PullRequestNumber,
+    body: string,
+  ) => Effect.Effect<void, GitHubFailed>;
   readonly setBase: (
     pullRequest: PullRequestNumber,
     base: string,
@@ -24,12 +30,25 @@ export const pullRequestWrites = (
 ): PullRequestWrites => {
   const update = (
     pullRequest: PullRequestNumber,
-    changes: { readonly base?: string; readonly body?: string; readonly title?: string },
+    changes: {
+      readonly base?: string;
+      readonly body?: string;
+      readonly state?: "closed";
+      readonly title?: string;
+    },
   ) =>
     send(
       HttpClientRequest.patch(repo(`/pulls/${pullRequest}`)).pipe(bodyOf<"pulls/update">(changes)),
     ).pipe(Effect.asVoid);
   return {
+    closePullRequest: (pullRequest) => update(pullRequest, { state: "closed" }),
+    // GitHub keeps a pull request's own comments with its issue
+    commentOnPullRequest: (pullRequest, body) =>
+      send(
+        HttpClientRequest.post(repo(`/issues/${pullRequest}/comments`)).pipe(
+          bodyOf<"issues/create-comment">({ body }),
+        ),
+      ).pipe(Effect.asVoid),
     setBase: (pullRequest, base) => update(pullRequest, { base }),
     setDescription: (pullRequest, { body, title }) => update(pullRequest, { body, title }),
   };

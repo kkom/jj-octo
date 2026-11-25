@@ -7,6 +7,7 @@ import type { PullRequest, PullRequestNumber } from "../../../clients/github/typ
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting } from "../../../settings";
+import { closeAbandoned } from "./abandoned";
 import { bookmarkTargets } from "./bookmark-targets";
 import {
   anyOf,
@@ -62,7 +63,7 @@ export type SubmitFailed = BranchesDeleted | NotCombined | PushFailed;
 /**
  * Pushes the changes' bookmarks, opens the pull requests missing, sets their bases, and registers
  * them as one stack. Each pull request's title and body are kept the same as its change's
- * description.
+ * description. Closes the pull requests of the stack whose changes were abandoned.
  */
 export const push = (
   stack: readonly StackChange[],
@@ -85,11 +86,10 @@ export const push = (
       { concurrency: "unbounded" },
     );
     // Before a description is synced, which can rewrite changes, so a failure changes nothing.
-    const existing = yield* stackContaining(
-      found.flatMap(({ pullRequest }) =>
-        Option.toArray(Option.map(pullRequest, ({ number }) => number)),
-      ),
+    const openNumbers = found.flatMap(({ pullRequest }) =>
+      Option.toArray(Option.map(pullRequest, ({ number }) => number)),
     );
+    const existing = yield* stackContaining(openNumbers);
     const targets = yield* bookmarkTargets;
     const pushedDescriptions = yield* descriptionsOf(
       bookmarks.flatMap((bookmark) => targets.get(bookmark)?.origin ?? []),
@@ -119,6 +119,16 @@ export const push = (
             }),
       });
     }
+
+    // Before the stack changes, so after a failure here the next submit finds the same stack and
+    // closes the ones still open.
+    yield* closeAbandoned(
+      Option.match(existing, {
+        onNone: () => [],
+        onSome: ({ unmerged }) => unmerged.filter((number) => !openNumbers.includes(number)),
+      }),
+      [...targets],
+    );
 
     // GitHub rejects a base change on a pull request that is in a stack, and can only add to a
     // stack's top, so a stack that doesn't fit what is wanted is dissolved first.
