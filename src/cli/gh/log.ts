@@ -7,8 +7,8 @@ import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { PullRequest } from "../../clients/github/types";
 import type { Jj, JjFailed } from "../../clients/jj";
 import { asUserError, revisionFlag, table, withHelp } from "../command";
+import { bookmarkTargets } from "./stack/bookmark-targets";
 import {
-  bookmarkTargets,
   CONFLICTED,
   type NotAStack,
   type Pushed,

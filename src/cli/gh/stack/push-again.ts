@@ -4,7 +4,8 @@ import type { Git } from "../../../clients/git";
 import type { GitHub } from "../../../clients/github/client";
 import type { Jj } from "../../../clients/jj";
 import type { PrDescriptions } from "../../../clients/pr-descriptions";
-import { bookmarkTargets, changesIn, stackChanges, stackRevset } from "./changes";
+import { bookmarkTargets } from "./bookmark-targets";
+import { changesIn, stackChanges, stackRevset } from "./changes";
 import { push, type PushFailed } from "./push";
 
 /**

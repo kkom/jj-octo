@@ -4,11 +4,11 @@ import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";
+import { bookmarkTargets } from "./bookmark-targets";
 import {
   anyOf,
   bookmarksAt,
   changeRevset,
-  bookmarkTargets,
   changeIdsAt,
   changesIn,
   commitsAt,

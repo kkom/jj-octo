@@ -1,14 +1,8 @@
 import { Console, Effect } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
-import {
-  anyOf,
-  bookmarkRevset,
-  bookmarkTargets,
-  changeRevset,
-  commitsAt,
-  logLines,
-} from "./changes";
+import { bookmarkTargets } from "./bookmark-targets";
+import { anyOf, bookmarkRevset, changeRevset, commitsAt, logLines } from "./changes";
 
 // Combines a local change with its branch on GitHub after a fetch, for `sync` and `submit`.
 

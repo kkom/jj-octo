@@ -7,13 +7,8 @@ import type { GitHubFailed } from "../../clients/github/failure";
 import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { Jj, JjFailed } from "../../clients/jj";
 import { asUserError, revisionFlag, withHelp } from "../command";
-import {
-  bookmarkTargets,
-  downstackChanges,
-  type NotAStack,
-  pushedState,
-  withoutConflicts,
-} from "./stack/changes";
+import { bookmarkTargets } from "./stack/bookmark-targets";
+import { downstackChanges, type NotAStack, pushedState, withoutConflicts } from "./stack/changes";
 
 export class NotPublishable extends Data.TaggedError("NotPublishable")<{
   readonly message: string;

@@ -7,11 +7,11 @@ import type { PullRequest, PullRequestNumber } from "../../../clients/github/typ
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting } from "../../../settings";
+import { bookmarkTargets } from "./bookmark-targets";
 import {
   anyOf,
   bookmarkRevset,
   bookmarksAt,
-  bookmarkTargets,
   downstackChanges,
   exactPattern,
   type NotAStack,
