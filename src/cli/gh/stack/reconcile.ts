@@ -21,7 +21,7 @@ import {
 import { type BookmarkBeforeFetch, combine, pushedOf } from "./combine";
 
 // A stack already on the trunk has nothing to rebase.
-export const BEHIND_ROOTS = `(${STACK_ROOTS}) ~ children(trunk())`;
+export const STACK_ROOTS_NOT_ON_TRUNK = `(${STACK_ROOTS}) ~ children(trunk())`;
 
 export class NotCombined extends Data.TaggedError("NotCombined")<{ readonly message: string }> {}
 
@@ -215,7 +215,9 @@ export const reconcile = ({
         notCombined.push(bookmark.name);
       }
     }
-    for (const root of yield* commitsAt(`((${BEHIND_ROOTS}) & (${stacks})) ~ (${skipped})`)) {
+    for (const root of yield* commitsAt(
+      `((${STACK_ROOTS_NOT_ON_TRUNK}) & (${stacks})) ~ (${skipped})`,
+    )) {
       yield* rebaseStack(root, required);
     }
     const onStacks = new Set(bookmarks);
