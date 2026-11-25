@@ -19,6 +19,7 @@ import type { ListedPullRequest } from "../clients/github/types";
 import { type Jj, jjLayer } from "../clients/jj";
 import { PrDescriptions, prDescriptionsLayer } from "../clients/pr-descriptions";
 import { pullRequest } from "./fake-github";
+import { templateOf } from "./templates";
 
 /**
  * A jj repository with `main` pushed to a bare `origin`, for tests that run the real jj. A second,
@@ -214,22 +215,7 @@ const open = (root: string): ScratchRepository => {
   };
 };
 
-// Running jj and git a dozen times per test is most of what the tests cost, so each kind of
-// repository is built once per run and copied. The two git configurations hold the path of
-// `origin.git`, which is rewritten to the copy's.
-const templates = new Map<string, string>();
-
-const templateOf = (name: string, build: (root: string) => void): string => {
-  mkdirSync(parent, { recursive: true });
-  let template = templates.get(name);
-  if (template === undefined) {
-    template = mkdtempSync(path.join(parent, `template-${name}-`));
-    templates.set(name, template);
-    build(template);
-  }
-  return template;
-};
-
+// The two git configurations hold the path of `origin.git`, which is rewritten to the copy's.
 const duplicate = (from: string, to: string): void => {
   cpSync(from, to, { preserveTimestamps: true, recursive: true });
   for (const config of ["repository/.git/config", "github/.git/config"]) {
@@ -243,12 +229,6 @@ const copyOf = (template: string): string => {
   duplicate(template, root);
   return root;
 };
-
-process.on("exit", () => {
-  for (const template of templates.values()) {
-    rmSync(template, { force: true, recursive: true });
-  }
-});
 
 const buildBase = (root: string): void => {
   writeFileSync(
@@ -271,7 +251,7 @@ const buildBase = (root: string): void => {
   });
 };
 
-const baseTemplate = (): string => templateOf("base", buildBase);
+const baseTemplate = (): string => templateOf(parent, "base", buildBase);
 
 /** A repository with only `main`, pushed. */
 export const scratchRepository = (): ScratchRepository => open(copyOf(baseTemplate()));
@@ -280,7 +260,7 @@ export const scratchRepository = (): ScratchRepository => open(copyOf(baseTempla
 export const pushedStack = (...names: readonly string[]): ScratchRepository =>
   open(
     copyOf(
-      templateOf(`pushed-${names.join("-")}`, (root) => {
+      templateOf(parent, `pushed-${names.join("-")}`, (root) => {
         duplicate(baseTemplate(), root);
         const built = open(root);
         built.stack(...names);
