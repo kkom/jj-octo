@@ -33,6 +33,8 @@ export interface FakeGitHubOptions {
   readonly approved?: readonly PullRequestNumber[];
   /** The latest result of each check of each commit. None by default. */
   readonly checks?: Readonly<Record<string, readonly Check[]>>;
+  /** GitHub answers 403 to a comment where the token can't write to issues. */
+  readonly commentForbidden?: boolean;
   /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
   readonly onMerge?: (pullRequest: PullRequestNumber) => void;
   /** The pull requests from the branch in any state, newest first. None by default. */
@@ -57,6 +59,7 @@ export const fakeGitHub = (
   {
     approved = [],
     checks = {},
+    commentForbidden = false,
     onMerge,
     pullRequestsFrom = () => [],
     required = {},
@@ -115,6 +118,22 @@ export const fakeGitHub = (
         ? Effect.succeed("finished" as const)
         : record(`cancel run ${run}`).pipe(Effect.as("cancelled" as const));
     },
+    closePullRequest: (number) =>
+      record(`close #${number}`).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            for (const [branch, pullRequest] of opened) {
+              if (pullRequest.number === number) {
+                opened.delete(branch);
+              }
+            }
+          }),
+        ),
+      ),
+    commentOnPullRequest: (number, body) =>
+      commentForbidden
+        ? rejected(`POST /issues/${number}/comments`, 403)
+        : record(`comment on #${number}: ${body}`),
     createPullRequest: ({ base, body, draft, head, title }) => {
       const number = PullRequestNumberSchema.make(FIRST_CREATED + created);
       created += 1;

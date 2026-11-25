@@ -38,6 +38,7 @@ export const submitCommand = Command.make(
     "Stops before changing anything where someone deleted a submitted change's branch on GitHub and the change doesn't count as merged: no pull request from it merged, another commit merged, or you edited the change since. It says how to push the change again or drop it.",
     "Fails before pushing anything where a submitted change has conflicts, as `jj git push` doesn't push one. That includes a conflict that the sync gives a change, by rebasing it onto the trunk. A change above the one submitted can have conflicts.",
     "Registers the pull requests as one GitHub stack, unless there is only one.",
-    "After a reorder, an insertion or a dropped change, dissolves the GitHub stack and registers it again under a new number. The pull requests stay open, including a dropped change's.",
+    "After a reorder, an insertion or a dropped change, dissolves the GitHub stack and registers it again under a new number. The pull requests stay open, including the one of a change that you moved out of the stack.",
+    "Closes the pull request of a change in the stack that you abandoned in this repository, and comments why. It closes them before it changes the stack. It needs the pull requests to be in a GitHub stack.",
   ),
 );
