@@ -43,6 +43,12 @@ export interface FakeGitHubOptions {
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
 
+/** The number of the first pull request a fake GitHub opens. The next ones count up from it. */
+const FIRST_CREATED = 99;
+
+const rejected = (request: string, status: number) =>
+  Effect.fail(new GitHubFailed({ message: `${request} returned ${status}`, status }));
+
 // A GitHub with the given open pull requests and stacks, recording every call that changes
 // something.
 export const fakeGitHub = (
@@ -58,8 +64,10 @@ export const fakeGitHub = (
   }: FakeGitHubOptions = {},
 ): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
   const calls: string[] = [];
-  // Marking a pull request ready changes what `openPullRequest` returns afterwards.
+  // Opening a pull request, marking one ready and setting a base change what `openPullRequest`
+  // returns afterwards.
   const opened = new Map(Object.entries(open));
+  let created = 0;
   let registered = stacks;
   const record = (call: string) =>
     Effect.sync(() => {
@@ -69,14 +77,10 @@ export const fakeGitHub = (
     // GitHub rejects adding to a stack that doesn't exist, or a pull request in another stack.
     addToStack: (number, pullRequests) => {
       if (!registered.some((stack) => stack.number === number)) {
-        return Effect.fail(
-          new GitHubFailed({ message: `POST /stacks/${number}/add returned 404`, status: 404 }),
-        );
+        return rejected(`POST /stacks/${number}/add`, 404);
       }
       if (registered.some(({ unmerged }) => unmerged.some((pr) => pullRequests.includes(pr)))) {
-        return Effect.fail(
-          new GitHubFailed({ message: `POST /stacks/${number}/add returned 422`, status: 422 }),
-        );
+        return rejected(`POST /stacks/${number}/add`, 422);
       }
       return record(`add ${pullRequests.join(",")} to #${number}`).pipe(
         Effect.tap(() =>
@@ -100,8 +104,7 @@ export const fakeGitHub = (
       const found = Object.values(runs)
         .flat()
         .find(({ id }) => id === run);
-      const failed = (status: number) =>
-        Effect.fail(new GitHubFailed({ message: `cancel run ${run} returned ${status}`, status }));
+      const failed = (status: number) => rejected(`cancel run ${run}`, status);
       if (found === undefined) {
         return failed(404);
       }
@@ -112,14 +115,22 @@ export const fakeGitHub = (
         ? Effect.succeed("finished" as const)
         : record(`cancel run ${run}`).pipe(Effect.as("cancelled" as const));
     },
-    createPullRequest: ({ base, draft, head }) =>
-      record(`open ${head} on ${base}${draft ? " as a draft" : ""}`).pipe(
-        Effect.as(PullRequestNumberSchema.make(99)),
-      ),
+    createPullRequest: ({ base, body, draft, head, title }) => {
+      const number = PullRequestNumberSchema.make(FIRST_CREATED + created);
+      created += 1;
+      return record(`open ${head} on ${base}${draft ? " as a draft" : ""}`).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            opened.set(head, { base, body, draft, number, title });
+          }),
+        ),
+        Effect.as(number),
+      );
+    },
     // GitHub rejects a stack with a pull request that is already in another.
     createStack: (pullRequests) => {
       if (registered.some(({ unmerged }) => unmerged.some((pr) => pullRequests.includes(pr)))) {
-        return Effect.fail(new GitHubFailed({ message: "POST /stacks returned 422", status: 422 }));
+        return rejected("POST /stacks", 422);
       }
       const number = StackNumberSchema.make(
         Math.max(7, ...registered.map((stack) => stack.number)) + 1,
@@ -138,9 +149,7 @@ export const fakeGitHub = (
     markReadyForReview: (number) => {
       const found = [...opened.entries()].find(([, pullRequest]) => pullRequest.number === number);
       if (found === undefined) {
-        return Effect.fail(
-          new GitHubFailed({ message: `GET /pulls/${number} returned 404`, status: 404 }),
-        );
+        return rejected(`GET /pulls/${number}`, 404);
       }
       const [branch, pullRequest] = found;
       return record(`publish #${number}`).pipe(
@@ -178,7 +187,18 @@ export const fakeGitHub = (
           reason: `couldn't read the rules of ${branch}: GET /branches/${branch} returned 404`,
         },
       ),
-    setBase: (number, base) => record(`base #${number} → ${base}`),
+    setBase: (number, base) =>
+      record(`base #${number} → ${base}`).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            for (const [branch, pullRequest] of opened) {
+              if (pullRequest.number === number) {
+                opened.set(branch, { ...pullRequest, base });
+              }
+            }
+          }),
+        ),
+      ),
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
     stackOf: (pullRequest) =>
       Effect.sync(() =>
@@ -199,12 +219,7 @@ export const fakeGitHub = (
               }),
             ),
           )
-        : Effect.fail(
-            new GitHubFailed({
-              message: `POST /stacks/${number}/unstack returned 404`,
-              status: 404,
-            }),
-          ),
+        : rejected(`POST /stacks/${number}/unstack`, 404),
   });
   return { calls, layer };
 };
