@@ -1,6 +1,7 @@
 import type { Effect } from "effect";
 
 import { type SubmitFailed, submit } from "../cli/gh/stack/push";
+import type { RemoteStack } from "../clients/github/types";
 import { fakeGitHub, inRepository, openPullRequest, stackOf } from "./fake-github";
 import { pushedStack, type ScratchRepository } from "./scratch-repository";
 
@@ -40,4 +41,17 @@ export const githubWith = (title: string, body: string): ReturnType<typeof fakeG
   fakeGitHub(
     { a: { ...openPullRequest("main", 1, title), body }, b: openPullRequest("a", 2, "b") },
     stackOf(1, 2),
+  );
+
+/** A fake GitHub with draft pull requests #1 for `a`, #2 for `b` and #3 for `c`, as stack #7 by default. */
+export const githubWithThree = (
+  stacks: readonly RemoteStack[] = stackOf(1, 2, 3),
+): ReturnType<typeof fakeGitHub> =>
+  fakeGitHub(
+    {
+      a: openPullRequest("main", 1, "a"),
+      b: openPullRequest("a", 2, "b"),
+      c: openPullRequest("b", 3, "c"),
+    },
+    stacks,
   );
