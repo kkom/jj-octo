@@ -19,13 +19,13 @@ import {
 } from "./stack/changes";
 import { bookmarksBeforeFetch, pushedOf } from "./stack/combine";
 import {
-  BEHIND_ROOTS,
   fetchBranches,
   type MergedChange,
   mergedOnGitHub,
   type NotCombined,
   notMerged,
   reconcile,
+  STACK_ROOTS_NOT_ON_TRUNK,
 } from "./stack/reconcile";
 import { checkedTrunk } from "./stack/trunk";
 
@@ -78,7 +78,8 @@ const syncedBranches = (skipped: string) =>
   );
 
 /** The bottom changes of the skipped stacks that sync would rebase, other than empty ones. */
-const leftBehind = (skipped: string) => changesIn(`(${BEHIND_ROOTS}) & (${skipped}) ~ ${SCRATCH}`);
+const notSynced = (skipped: string) =>
+  changesIn(`(${STACK_ROOTS_NOT_ON_TRUNK}) & (${skipped}) ~ ${SCRATCH}`);
 
 /** `--all-workspaces`, for the commands that sync. */
 export const allWorkspacesFlag: Flag.Flag<boolean> = Flag.Boolean("all-workspaces").pipe(
@@ -122,11 +123,11 @@ export const sync = ({
       ...(yield* mergedOnGitHub(before.filter(({ name }) => notMerged(known)(name)))),
     ];
     // Also where the sync fails, which can be after it rebased the stacks.
-    const reportLeftBehind = Effect.gen(function* () {
-      const behind = yield* leftBehind(skipped.revset);
-      if (behind.length > 0) {
+    const reportNotSynced = Effect.gen(function* () {
+      const stacks = yield* notSynced(skipped.revset);
+      if (stacks.length > 0) {
         yield* Console.error(
-          `didn't sync the stacks that only other workspaces' working copies are on: ${behind.map((name) => `"${name}"`).join(", ")}; \`jj gh sync --all-workspaces\` syncs them`,
+          `didn't sync the stacks that only other workspaces' working copies are on: ${stacks.map((name) => `"${name}"`).join(", ")}; \`jj gh sync --all-workspaces\` syncs them`,
         );
       }
     });
@@ -144,7 +145,7 @@ export const sync = ({
       skipped: skipped.revset,
       stacks: "all()",
     }).pipe(
-      Effect.ensuring(skipped === NONE_SKIPPED ? Effect.void : Effect.ignore(reportLeftBehind)),
+      Effect.ensuring(skipped === NONE_SKIPPED ? Effect.void : Effect.ignore(reportNotSynced)),
     );
   });
 
