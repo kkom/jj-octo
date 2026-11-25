@@ -10,6 +10,7 @@ import {
   removeScratchRepositories,
   type ScratchRepository,
 } from "../../testing/scratch-repository";
+import { githubWithThree } from "../../testing/submit";
 import { publish } from "./publish";
 
 afterAll(removeScratchRepositories);
@@ -32,21 +33,11 @@ const draftsIn = (
     ),
   ).pipe(inRepository(repository, github));
 
-const threeDrafts = () =>
-  fakeGitHub(
-    {
-      a: openPullRequest("main", 1, "a"),
-      b: openPullRequest("a", 2, "b"),
-      c: openPullRequest("b", 3, "c"),
-    },
-    stackOf(1, 2, 3),
-  );
-
 describe("publish", () => {
   it("publishes a change and the ones below it where a change above has conflicts", async () => {
     const repository = pushedStack("a", "b", "c");
     conflictWithTrunk(repository, "c", { pushed: ["a", "b"] });
-    const github = threeDrafts();
+    const github = githubWithThree();
     await Effect.runPromise(publishIn(repository, github, "b"));
     expect(github.calls).toStrictEqual(["publish #1", "publish #2"]);
   });
@@ -54,7 +45,7 @@ describe("publish", () => {
   it("fails before publishing any where the change named has conflicts", async () => {
     const repository = pushedStack("a", "b", "c");
     conflictWithTrunk(repository, "b", { pushed: ["a"] });
-    const github = threeDrafts();
+    const github = githubWithThree();
     const failure = await Effect.runPromise(Effect.flip(publishIn(repository, github, "b")));
     expect({ calls: github.calls, message: failure.message }).toStrictEqual({
       calls: [],

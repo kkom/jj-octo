@@ -4,7 +4,7 @@ import { Effect } from "effect";
 
 import { fakeGitHub, openPullRequest, stackNumbered, stackOf } from "../../../testing/fake-github";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
-import { submitIn } from "../../../testing/submit";
+import { githubWithThree, submitIn } from "../../../testing/submit";
 import { SeveralStacks } from "./stacks";
 
 afterAll(removeScratchRepositories);
@@ -27,14 +27,7 @@ describe("submit's stacks", () => {
   it("reorders by dissolving, parking on the trunk, pushing, then rebasing and registering", async () => {
     const repository = scratchRepository();
     repository.stack("a", "c", "b");
-    const github = fakeGitHub(
-      {
-        a: openPullRequest("main", 1, "a"),
-        b: openPullRequest("a", 2, "b"),
-        c: openPullRequest("b", 3, "c"),
-      },
-      stackOf(1, 2, 3),
-    );
+    const github = githubWithThree();
     await Effect.runPromise(submitIn(repository, github));
     expect(github.calls).toEqual([
       "unstack #7",
@@ -51,14 +44,7 @@ describe("submit's stacks", () => {
   it("fails without changing GitHub where the pull requests belong to several stacks", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b", "c");
-    const github = fakeGitHub(
-      {
-        a: openPullRequest("main", 1, "a"),
-        b: openPullRequest("a", 2, "b"),
-        c: openPullRequest("b", 3, "c"),
-      },
-      [stackNumbered(9, 1, 2), stackNumbered(7, 3)],
-    );
+    const github = githubWithThree([stackNumbered(9, 1, 2), stackNumbered(7, 3)]);
     const failure = await Effect.runPromise(Effect.flip(submitIn(repository, github)));
     expect(failure).toStrictEqual(
       new SeveralStacks({
@@ -72,14 +58,7 @@ describe("submit's stacks", () => {
   it("appends to the stack that's left once the other is dissolved", async () => {
     const repository = scratchRepository();
     repository.stack("a", "b", "c");
-    const github = fakeGitHub(
-      {
-        a: openPullRequest("main", 1, "a"),
-        b: openPullRequest("a", 2, "b"),
-        c: openPullRequest("b", 3, "c"),
-      },
-      [stackNumbered(9, 1, 2)],
-    );
+    const github = githubWithThree([stackNumbered(9, 1, 2)]);
     await Effect.runPromise(submitIn(repository, github));
     expect(github.calls).toStrictEqual(["add 3 to #9"]);
   });
