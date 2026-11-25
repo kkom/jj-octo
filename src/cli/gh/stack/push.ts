@@ -143,8 +143,15 @@ export const push = (
     const moved = new Set(moving.map(({ number }) => number));
 
     // Jj only creates a branch on the remote for a bookmark that tracks it.
-    for (const bookmark of bookmarks.filter((name) => targets.get(name)?.tracked !== true)) {
-      yield* jj.run(["bookmark", "track", exactPattern(bookmark), "--remote", "origin"]);
+    const untracked = bookmarks.filter((name) => targets.get(name)?.tracked !== true);
+    if (untracked.length > 0) {
+      yield* jj.run([
+        "bookmark",
+        "track",
+        ...untracked.map((bookmark) => exactPattern(bookmark)),
+        "--remote",
+        "origin",
+      ]);
     }
     yield* jj.run([
       "git",
