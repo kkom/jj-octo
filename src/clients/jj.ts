@@ -10,6 +10,14 @@ export class Jj extends Context.Service<
     readonly read: (args: readonly string[]) => Effect.Effect<string, JjFailed>;
     /** Runs a jj command that changes something, showing its output as it goes. */
     readonly run: (args: readonly string[]) => Effect.Effect<void, JjFailed>;
+    /**
+     * Runs a jj command that changes something as a dry run: jj makes the operation, and doesn't
+     * add it to the operation log. So the bookmarks, the git branches and the working copy stay as
+     * they are. The commits it makes stay in the repository, unreferenced, until jj collects them.
+     * Returns the operation's id, which `--at-operation` reads the result at. Fails where the
+     * command changed nothing.
+     */
+    readonly dryRun: (args: readonly string[]) => Effect.Effect<string, JjFailed>;
   }
 >()("jj-octo/Jj") {}
 
@@ -20,6 +28,15 @@ const failed = (args: readonly string[], detail: string): JjFailed =>
     message:
       detail.trim() === "" ? `jj ${args.join(" ")} failed` : detail.trim().replace(/^Error: /u, ""),
   });
+
+// `ui.quiet` in the user's config would keep jj from printing the operation's id.
+const DRY_RUN = ["--no-integrate-operation", "--config", "ui.quiet=false"];
+
+// What jj prints after each operation that a command run with `--no-integrate-operation` makes.
+// The command's own operation is the last one: before it, jj makes one where it snapshots the
+// working copy, and one where it imports a git `HEAD` that moved.
+const NOT_INTEGRATED =
+  /left uncommitted because --no-integrate-operation was requested: (?<operation>[0-9a-f]+)/gu;
 
 interface JjOptions {
   readonly cwd?: string;
@@ -86,7 +103,18 @@ export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
               return code === 0 ? Effect.void : Effect.fail(failed(args, stderr));
             });
 
-      return { read, run };
+      const dryRun = (args: readonly string[]): Effect.Effect<string, JjFailed> =>
+        Effect.flatMap(captured([...DRY_RUN, ...args]), ([, stderr, code]) => {
+          if (code !== 0) {
+            return Effect.fail(failed(args, stderr));
+          }
+          const operation = [...stderr.matchAll(NOT_INTEGRATED)].at(-1)?.groups?.["operation"];
+          return operation === undefined
+            ? Effect.fail(failed(args, `jj ${args.join(" ")} made no operation`))
+            : Effect.succeed(operation);
+        });
+
+      return { dryRun, read, run };
     }),
   );
 
