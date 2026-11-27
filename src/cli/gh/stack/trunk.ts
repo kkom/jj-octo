@@ -20,7 +20,7 @@ export const trunkRevset = (branch: string): string => `${JSON.stringify(branch)
 export const checkTrunk = (branch: string): Effect.Effect<void, JjFailed | TrunkMismatch, Jj> =>
   Effect.gen(function* () {
     if ((yield* commitsAt(`trunk() & present(${trunkRevset(branch)})`)).length === 0) {
-      yield* new TrunkMismatch({
+      return yield* new TrunkMismatch({
         message: `trunk() isn't ${branch}@origin, GitHub's default branch; run \`jj-octo init\``,
       });
     }

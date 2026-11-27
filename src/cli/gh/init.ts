@@ -38,7 +38,7 @@ export const init: Effect.Effect<
 > = Effect.gen(function* () {
   const { branch, problems } = yield* runSteps(fixed);
   if (problems.length > 0) {
-    yield* new NotSetUp({ message: problems.join("\n") });
+    return yield* new NotSetUp({ message: problems.join("\n") });
   }
   yield* setJjConfig(SET_UP_VERSION, manifest.version);
   yield* Console.error(`set up jj, with trunk() as ${yield* branch}@origin`);

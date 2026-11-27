@@ -26,6 +26,10 @@
     // runtime calls on an instance, over RPC, so a method there can't become
     // static or a function, whether or not it reads `this`.
     "class-methods-use-this": "off",
+    // TypeScript's return types already check what a function returns, and the
+    // rule fails on a generator that ends with `return yield*` of a failure on
+    // one path and returns nothing on another, as `missing-return-yield-star` asks.
+    "consistent-return": "off",
     "effecttsgo/abort-controller-in-effect": "error",
     "effecttsgo/acquire-release-disposable": "error",
     "effecttsgo/all-of-map-to-for-each": "error",
@@ -92,6 +96,7 @@
     "effecttsgo/missing-effect-error": "error",
     "effecttsgo/missing-effect-service-dependency": "error",
     "effecttsgo/missing-layer-context": "error",
+    "effecttsgo/missing-return-yield-star": "error",
     "effecttsgo/missing-star-in-yield-effect-gen": "error",
     "effecttsgo/multiple-catch-tag": "error",
     "effecttsgo/multiple-effect-provide": "error",
@@ -372,7 +377,6 @@
         "effecttsgo/missed-pipeable-opportunity": "off",
         "effecttsgo/missing-concurrency-option": "off",
         "effecttsgo/missing-pipeable-signature": "off",
-        "effecttsgo/missing-return-yield-star": "off",
         "effecttsgo/new-promise": "off",
         "effecttsgo/node-builtin-import": "off",
         "effecttsgo/prefer-effect-array": "off",

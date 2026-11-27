@@ -181,7 +181,7 @@ export const reconcile = ({
     // `bookmarksAt` lists conflicted bookmarks too, which `bookmarkTargets` gives no local target.
     yield* records.prune(Effect.provideService(bookmarksAt("all()"), Jj, jj));
     if (notCombined.length > 0) {
-      yield* new NotCombined({
+      return yield* new NotCombined({
         message: [
           "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
           ...notCombined,

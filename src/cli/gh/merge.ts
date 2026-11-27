@@ -87,7 +87,7 @@ const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
       `cancelled ${cancelled} workflow ${cancelled === 1 ? "run" : "runs"} of the merged pull requests`,
     );
     if (failures.length > 0) {
-      yield* new GitHubFailed({
+      return yield* new GitHubFailed({
         message: [
           `couldn't cancel ${failures.length} of the merged pull requests' workflow runs:`,
           ...failures.map(({ message }) => message),
@@ -126,7 +126,7 @@ export const merge = (
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
     );
     if (unpushed.length > 0) {
-      yield* new NotMergeable({
+      return yield* new NotMergeable({
         message: `these changes aren't pushed: ${unpushed.map(({ bookmark }) => bookmark).join(", ")}; run \`jj gh submit\` first`,
       });
     }

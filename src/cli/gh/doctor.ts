@@ -25,7 +25,7 @@ export const doctor: Effect.Effect<void, NotSetUp, FileSystem.FileSystem | Git |
   function* () {
     const found = yield* problems;
     if (found.length > 0) {
-      yield* new NotSetUp({ message: found.join("\n") });
+      return yield* new NotSetUp({ message: found.join("\n") });
     }
     yield* Console.error("set up for jj-octo");
   },

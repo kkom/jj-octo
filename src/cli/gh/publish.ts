@@ -30,7 +30,7 @@ export const publish = (
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
     );
     if (unpushed.length > 0) {
-      yield* new NotPublishable({
+      return yield* new NotPublishable({
         message: `these changes aren't pushed: ${unpushed.map(({ bookmark }) => bookmark).join(", ")}; run \`jj gh submit --publish\` instead`,
       });
     }
@@ -42,7 +42,7 @@ export const publish = (
     );
     const missing = found.filter(({ pullRequest }) => Option.isNone(pullRequest));
     if (missing.length > 0) {
-      yield* new NotPublishable({
+      return yield* new NotPublishable({
         message: `no open pull request for ${missing.map(({ bookmark }) => bookmark).join(", ")}; run \`jj gh submit --publish\` instead`,
       });
     }
