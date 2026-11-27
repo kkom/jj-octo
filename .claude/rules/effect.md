@@ -57,4 +57,4 @@ Code that still validates with another schema library keeps it until it's migrat
 
 ## Use the real type where Effect code meets other code
 
-If you're tempted to wrap a value in `Promise.resolve` or an `async` function, narrow the type instead. A genuinely asynchronous API is different: its real type is a promise. Convert it with `tryPromise` wherever the call can reject with a failure the caller can act on, and with `Effect.promise` only where every rejection is a defect, leaving the failure channel `never`.
+If you're tempted to wrap a value in `Promise.resolve`, narrow the type instead. A genuinely asynchronous API is different: its real type is a promise. Convert it with `tryPromise` wherever the call can reject with a failure the caller can act on, and with `Effect.promise` only where every rejection is a defect, leaving the failure channel `never`.
