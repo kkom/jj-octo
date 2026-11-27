@@ -104,7 +104,10 @@
           "missingEffectError": "error",
           "missingEffectServiceDependency": "error",
           "missingLayerContext": "error",
-          "missingPipeableSignature": "off", // undecided
+          // Each function already takes the form its callers use: data-last where it goes in
+          // a pipe, and data-first where it's called directly. The rule would add a dual
+          // overload to every data-first function, whether or not a caller wants it.
+          "missingPipeableSignature": "off",
           "missingReturnYieldStar": "error",
           "missingStarInYieldEffectGen": "error",
           "multipleCatchTag": "error",
