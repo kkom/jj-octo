@@ -157,7 +157,8 @@ export const throughProxy = async <A>(
       const tunnel = connect(port, "127.0.0.1", () => {
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         tunnel.write(Buffer.from(head.slice(end + 4), "latin1"));
-        client.pipe(tunnel).pipe(client);
+        client.pipe(tunnel);
+        tunnel.pipe(client);
       });
       tunnel.on("error", () => {
         client.destroy();
