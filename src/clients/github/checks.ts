@@ -89,13 +89,13 @@ const latestChecks = (
     { concurrency: "unbounded" },
   ).pipe(
     Effect.map(([runs, statuses]) => [
-      ...newestRuns(runs).map((run): Check => ({
+      ...EffectArray.map(newestRuns(runs), (run): Check => ({
         app: Option.fromNullishOr(run.app?.id),
         name: run.name,
         outcome: run.conclusion ?? run.status,
         state: checkRunState(run),
       })),
-      ...statuses.map(({ context, state }): Check => ({
+      ...EffectArray.map(statuses, ({ context, state }): Check => ({
         app: Option.none(),
         name: context,
         outcome: state,
@@ -125,17 +125,20 @@ const requiredChecks = (
   ]).pipe(
     Effect.map(([rules, branchDetails]): RequiredChecks => {
       const unread = EffectArray.dedupe(
-        rules.map(({ type }) => type).filter((type) => UNREAD_RULES.has(type)),
+        EffectArray.filter(
+          EffectArray.map(rules, ({ type }) => type),
+          (type) => UNREAD_RULES.has(type),
+        ),
       );
       if (unread.length > 0) {
         return {
           _tag: "Unknown",
-          reason: `${branch}'s rulesets also require ${unread.join(" and ")}, which aren't read as checks`,
+          reason: `${branch}'s rulesets also require ${EffectArray.join(unread, " and ")}, which aren't read as checks`,
         };
       }
-      const statusRules = rules.filter(Schema.is(StatusCheckRule));
+      const statusRules = EffectArray.filter(rules, Schema.is(StatusCheckRule));
       // GitHub documents a rule's `parameters` as optional, so one without them is unknown.
-      if (statusRules.some(({ parameters }) => parameters === undefined)) {
+      if (EffectArray.some(statusRules, ({ parameters }) => parameters === undefined)) {
         return {
           _tag: "Unknown",
           reason: `GitHub listed a rule requiring status checks on ${branch} without naming them`,
@@ -148,18 +151,22 @@ const requiredChecks = (
           reason: `GitHub listed ${branch} as protected without saying how`,
         };
       }
-      const fromRules = statusRules
-        .flatMap(({ parameters }) => parameters?.required_status_checks ?? [])
-        .map(({ context, integration_id }): RequiredCheck => ({
+      const fromRules = EffectArray.map(
+        EffectArray.flatMap(
+          statusRules,
+          ({ parameters }) => parameters?.required_status_checks ?? [],
+        ),
+        ({ context, integration_id }): RequiredCheck => ({
           app: Option.fromUndefinedOr(integration_id),
           name: context,
-        }));
+        }),
+      );
       const statusChecks = branchDetails.protection?.required_status_checks;
       // A check with a `null` app is one any source can send.
       const fromProtection =
         statusChecks === undefined || statusChecks.enforcement_level === "off"
           ? []
-          : statusChecks.checks.map(({ app_id, context }): RequiredCheck => ({
+          : EffectArray.map(statusChecks.checks, ({ app_id, context }): RequiredCheck => ({
               app: Option.fromNullOr(app_id),
               name: context,
             }));

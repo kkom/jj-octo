@@ -1,4 +1,12 @@
-import { Console, Data, Effect, Match, Option } from "effect";
+import {
+  Array as EffectArray,
+  Console,
+  Data,
+  Effect,
+  Match,
+  Option,
+  String as EffectString,
+} from "effect";
 
 import { Git, type GitFailed } from "../../../clients/git";
 import type { PullRequest } from "../../../clients/github/types";
@@ -40,14 +48,14 @@ export const descriptionsOf = (
   commits.length === 0
     ? Effect.succeed(new Map<string, string>())
     : readLog(
-        commits.join(" | "),
+        EffectArray.join(commits, " | "),
         String.raw`commit_id ++ "\t" ++ description.escape_json() ++ "\n"`,
       ).pipe(
         Effect.map(
           (output) =>
             new Map(
-              lines(output).map((line): [string, string] => {
-                const [commit = "", json = '""'] = line.split("\t");
+              EffectArray.map(lines(output), (line): [string, string] => {
+                const [commit, json = '""'] = EffectString.split(line, "\t");
                 return [commit, parseDescription(json)];
               }),
             ),
@@ -81,18 +89,19 @@ const ownHistory = (
       "-T",
       String.raw`commit.change_id() ++ "\t" ++ commit.commit_id() ++ "\t" ++ predecessors.map(|p| p.commit_id()).join(",") ++ "\t" ++ if(operation, operation.description()) ++ "\t" ++ commit.description().escape_json() ++ "\n"`,
     ]);
-    return lines(output).flatMap((line) => {
-      const [change = "", commit = "", predecessors = "", operation = "", json = '""'] =
-        line.split("\t");
+    return EffectArray.flatMap(lines(output), (line) => {
+      const [change, commit = "", predecessors = "", operation = "", json = '""'] =
+        EffectString.split(line, "\t");
       const isImported =
-        operation.startsWith("fetch from git") || operation.startsWith("import git");
+        EffectString.startsWith("fetch from git")(operation) ||
+        EffectString.startsWith("import git")(operation);
       return change === changeId
         ? [
             {
               commit,
               description: parseDescription(json),
               isImported,
-              predecessors: predecessors === "" ? [] : predecessors.split(","),
+              predecessors: predecessors === "" ? [] : EffectString.split(predecessors, ","),
             },
           ]
         : [];
@@ -105,16 +114,18 @@ const ownHistory = (
  * where one of its predecessors had it.
  */
 const isDescribedHereFrom = (history: readonly Evolution[], commit: string): boolean => {
-  const since = history.findIndex((entry) => entry.commit === commit);
-  const descriptions = new Map(history.map((entry) => [entry.commit, entry.description]));
-  return (
-    since !== -1 &&
-    history
-      .slice(0, since)
-      .every(
+  const descriptions = new Map(
+    EffectArray.map(history, (entry) => [entry.commit, entry.description]),
+  );
+  return Option.exists(
+    EffectArray.findFirstIndex(history, (entry) => entry.commit === commit),
+    (since) =>
+      EffectArray.every(
+        history.slice(0, since),
         ({ description, isImported, predecessors }) =>
-          !isImported || predecessors.some((each) => descriptions.get(each) === description),
-      )
+          !isImported ||
+          EffectArray.some(predecessors, (each) => descriptions.get(each) === description),
+      ),
   );
 };
 
@@ -164,12 +175,15 @@ export const syncDescription = (
         ? []
         : yield* ownHistory(bookmark, changeId);
     const age = (commit: string | undefined) =>
-      history.findIndex((entry) => entry.commit === commit);
+      EffectArray.findFirstIndex(history, (entry) => entry.commit === commit);
     // A pull request synced to a commit the change evolved from since the record, as another
     // clone's submit of this clone's push does, last agreed on that commit's description.
     const pushedAge = age(pushedCommit);
     const isPushedAgreedSince = (commit: string) =>
-      onGitHub === pushed && pushedAge !== -1 && pushedAge < age(commit);
+      onGitHub === pushed &&
+      Option.exists(pushedAge, (pushedIndex) =>
+        Option.exists(age(commit), (index) => pushedIndex < index),
+      );
     const recorded = record.pipe(
       Option.filter(
         ({ commit }) => isDescribedHereFrom(history, commit) && !isPushedAgreedSince(commit),
@@ -177,7 +191,8 @@ export const syncDescription = (
       Option.map(({ description: text }) => normalized(text)),
     );
     const isOwnEarlier =
-      onGitHub !== pushed && history.some((entry) => normalized(entry.description) === onGitHub);
+      onGitHub !== pushed &&
+      EffectArray.some(history, (entry) => normalized(entry.description) === onGitHub);
     const agreed = agreedDescription({ isOwnEarlier, onGitHub, pushed, recorded });
 
     return yield* Match.value(descriptionSyncFor({ agreed, local, onGitHub })).pipe(
@@ -199,13 +214,16 @@ export const syncDescription = (
           const merged = yield* git.mergeText({ base: agreed, local, remote: onGitHub });
           if (merged.conflicted) {
             return yield* new DescriptionConflict({
-              message: [
-                `the description of ${bookmark} changed here and in #${pullRequest.number}, in the same lines:`,
-                "",
-                merged.text,
-                "",
-                `Write the one to keep with \`jj describe -r ${bookmark}\`, then run \`jj gh submit --overwrite-descriptions\`.`,
-              ].join("\n"),
+              message: EffectArray.join(
+                [
+                  `the description of ${bookmark} changed here and in #${pullRequest.number}, in the same lines:`,
+                  "",
+                  merged.text,
+                  "",
+                  `Write the one to keep with \`jj describe -r ${bookmark}\`, then run \`jj gh submit --overwrite-descriptions\`.`,
+                ],
+                "\n",
+              ),
             });
           }
           yield* describe(merged.text);

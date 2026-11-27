@@ -1,3 +1,4 @@
+import { Array as EffectArray } from "effect";
 import { Command } from "effect/cli";
 
 import { ENVIRONMENT_VARIABLES, GITHUB_AUTH, SETTINGS } from "../../settings";
@@ -22,14 +23,20 @@ const setUpFirst = <const Name extends string, Input, ContextInput, E, R>(
 const settingsSection: HelpSection = {
   lines: [
     "Keys in jj's config. Set one for this repository with `jj config set --repo <key> <value>`, or for every repository with `--user` in place of `--repo`.",
-    ...SETTINGS.flatMap((setting) => [
+    ...EffectArray.flatMap(SETTINGS, (setting) => [
       "",
       setting.key,
       `  ${setting.description}`,
-      ...table(
-        setting.choices.map(({ description, value }) => [String(value), description]),
-        3,
-      ).map((row) => `  ${row}`),
+      ...EffectArray.map(
+        table(
+          EffectArray.map(setting.choices, ({ description, value }) => [
+            String(value),
+            description,
+          ]),
+          3,
+        ),
+        (row) => `  ${row}`,
+      ),
       `  Default: ${setting.default.description}`,
     ]),
   ],
@@ -38,7 +45,7 @@ const settingsSection: HelpSection = {
 
 const environmentSection: HelpSection = {
   lines: table(
-    ENVIRONMENT_VARIABLES.map(({ description, name }) => [name, description]),
+    EffectArray.map(ENVIRONMENT_VARIABLES, ({ description, name }) => [name, description]),
     3,
   ),
   title: "ENVIRONMENT",

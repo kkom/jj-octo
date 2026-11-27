@@ -1,4 +1,4 @@
-import { Effect, Layer, Option } from "effect";
+import { Array as EffectArray, Effect, Layer, Option, String as EffectString } from "effect";
 
 import { Jj } from "../jj";
 import { GitHubLive } from "./client";
@@ -12,8 +12,12 @@ export const GitHubFromOrigin = Layer.unwrap(
   Effect.gen(function* () {
     const jj = yield* Jj;
     const remotes = yield* jj.read(["git", "remote", "list"]);
-    const origin = remotes.split("\n").find((line) => line.startsWith("origin "));
-    const repository = repositoryFromUrl(origin?.slice("origin ".length) ?? "");
+    const origin = EffectArray.findFirst(EffectString.split(remotes, "\n"), (line) =>
+      EffectString.startsWith("origin ")(line),
+    );
+    const repository = Option.flatMap(origin, (line) =>
+      repositoryFromUrl(EffectString.slice("origin ".length)(line)),
+    );
     if (Option.isNone(repository)) {
       return yield* new GitHubFailed({ message: "the `origin` remote isn't a GitHub repository" });
     }

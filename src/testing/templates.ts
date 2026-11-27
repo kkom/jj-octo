@@ -1,6 +1,8 @@
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { Array as EffectArray, String as EffectString } from "effect";
+
 // Running jj and git a dozen times per test is most of what the tests cost, so each kind of
 // repository is built once per test process and copied.
 const templates = new Map<string, string>();
@@ -10,7 +12,9 @@ const STALE_AFTER_MS = 60 * 60 * 1000;
 
 // Bun doesn't run a test process's exit handlers, so a run can't remove its own templates.
 const removeStaleTemplates = (parent: string): void => {
-  for (const name of readdirSync(parent).filter((entry) => entry.startsWith("template-"))) {
+  for (const name of EffectArray.filter(readdirSync(parent), (entry) =>
+    EffectString.startsWith("template-")(entry),
+  )) {
     const template = path.join(parent, name);
     const modified = statSync(template, { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
     if (Date.now() - modified > STALE_AFTER_MS) {

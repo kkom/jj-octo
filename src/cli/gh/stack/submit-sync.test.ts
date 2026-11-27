@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect } from "effect";
+import { Array as EffectArray, Effect } from "effect";
 
 import {
   addCommitOnGitHub,
@@ -9,7 +9,8 @@ import {
   squashMergeOnGitHub,
 } from "../../../testing/branch-changes";
 import { labelsOf } from "../../../testing/conflicts";
-import { fakeGitHub, inRepository, openPullRequest } from "../../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../../testing/fake-github";
+import { openPullRequest } from "../../../testing/pull-requests";
 import {
   pushedStack,
   removeScratchRepositories,
@@ -55,11 +56,14 @@ const failureIn = (
   );
 
 const deletedFailure = (...branches: readonly string[]): string =>
-  [
-    "these branches were deleted on GitHub, so nothing was changed:",
-    ...branches,
-    "to push a change again, run `jj bookmark forget --include-remotes <name>`, then `jj bookmark create <name> -r <change>`; to drop one, run `jj abandon <change>`",
-  ].join("\n");
+  EffectArray.join(
+    [
+      "these branches were deleted on GitHub, so nothing was changed:",
+      ...branches,
+      "to push a change again, run `jj bookmark forget --include-remotes <name>`, then `jj bookmark create <name> -r <change>`; to drop one, run `jj abandon <change>`",
+    ],
+    "\n",
+  );
 
 describe("submit, where the stack changed on GitHub", () => {
   it("keeps another workspace's empty working copy on the stack GitHub rebased", async () => {

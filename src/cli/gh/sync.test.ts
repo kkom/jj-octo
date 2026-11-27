@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
-import { Effect } from "effect";
+import { Effect, String as EffectString } from "effect";
 
 import {
   addCommitOnGitHub,
@@ -25,7 +25,7 @@ const rebaseBoth = (repository: ScratchRepository): void => {
   repository.write("b-local.txt", "b, locally\n");
   repository.jj("new");
   repository.git("fetch", "--quiet");
-  const pushedA = repository.git("rev-parse", "origin/a").trim();
+  const pushedA = EffectString.trim(repository.git("rev-parse", "origin/a"));
   rebaseOnGitHub(repository, "a");
   repository.git("checkout", "--quiet", "-B", "b", "origin/b");
   repository.git("rebase", "--quiet", "--onto", "a", pushedA, "b");

@@ -1,4 +1,4 @@
-import { Config, Context, Data, Effect, Layer, Stream } from "effect";
+import { Array as EffectArray, Config, Context, Data, Effect, Layer, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { claudeCodeCloudSession, WAYLAND_DISPLAY } from "../settings";
@@ -133,12 +133,15 @@ export const clipboardLayer = ({ platform = process.platform }: ClipboardOptions
               }),
             );
           }
-          const [installed] = commands.flatMap((command) => {
+          const [installed] = EffectArray.flatMap(commands, (command) => {
             const executable = Bun.which(command.name, { PATH: path });
             return executable === null ? [] : [{ command, executable }];
           });
           if (installed === undefined) {
-            const names = commands.map(({ name }) => name).join(" or ");
+            const names = EffectArray.join(
+              EffectArray.map(commands, ({ name }) => name),
+              " or ",
+            );
             return Effect.fail(new ClipboardFailed({ message: `couldn't find ${names}` }));
           }
           const { command, executable } = installed;

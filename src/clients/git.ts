@@ -1,4 +1,15 @@
-import { Context, Data, Effect, FileSystem, Layer, Path, Stream } from "effect";
+import {
+  Array as EffectArray,
+  Context,
+  Data,
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  Record as EffectRecord,
+  Stream,
+  String as EffectString,
+} from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 export class GitFailed extends Data.TaggedError("GitFailed")<{
@@ -49,7 +60,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
               const directory = yield* fs.makeTempDirectoryScoped();
               // `git merge-file` merges lines, and treats a last line with no newline as changed.
               const written = { base: `${base}\n`, github: `${remote}\n`, local: `${local}\n` };
-              yield* Effect.forEach(Object.entries(written), ([name, text]) =>
+              yield* Effect.forEach(EffectRecord.toEntries(written), ([name, text]) =>
                 fs.writeFileString(path.join(directory, name), text),
               );
               const handle = yield* spawner.spawn(
@@ -81,9 +92,11 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
               );
               // The exit code is the number of conflicts, and 255 for a failure.
               if (code > 127) {
-                return yield* new GitFailed({ message: `git merge-file failed: ${stderr.trim()}` });
+                return yield* new GitFailed({
+                  message: `git merge-file failed: ${EffectString.trim(stderr)}`,
+                });
               }
-              return { conflicted: code > 0, text: text.trimEnd() };
+              return { conflicted: code > 0, text: EffectString.trimEnd(text) };
             }),
           ).pipe(
             Effect.catchTag("PlatformError", (error) =>
@@ -108,13 +121,15 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
                 ? stdout
                 : yield* new GitFailed({
                     exitCode: code,
-                    message: `git ${args.join(" ")} failed${stderr.trim() === "" ? "" : `: ${stderr.trim()}`}`,
+                    message: `git ${EffectArray.join(args, " ")} failed${EffectString.trim(stderr) === "" ? "" : `: ${EffectString.trim(stderr)}`}`,
                   });
             }),
           ).pipe(
             Effect.catchTag("PlatformError", (error) =>
               Effect.fail(
-                new GitFailed({ message: `git ${args.join(" ")} failed: ${error.message}` }),
+                new GitFailed({
+                  message: `git ${EffectArray.join(args, " ")} failed: ${error.message}`,
+                }),
               ),
             ),
           ),
@@ -135,7 +150,7 @@ export const gitConfig = (args: readonly string[]): Effect.Effect<string, GitFai
         () => Effect.succeed(""),
       ),
     );
-    return value.trim();
+    return EffectString.trim(value);
   });
 
 /**
@@ -148,12 +163,13 @@ export const gitDirectories: Effect.Effect<
   Git
 > = Effect.gen(function* () {
   const git = yield* Git;
-  const [topLevel = "", gitDirectory = "", commonDirectory = ""] = (yield* git.read([
+  const printed = yield* git.read([
     "rev-parse",
     "--path-format=absolute",
     "--show-toplevel",
     "--git-dir",
     "--git-common-dir",
-  ])).split("\n");
+  ]);
+  const [topLevel, gitDirectory = "", commonDirectory = ""] = EffectString.split(printed, "\n");
   return { commonDirectory, gitDirectory, topLevel };
 });

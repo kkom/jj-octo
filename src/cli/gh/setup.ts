@@ -1,4 +1,4 @@
-import { Data, Effect, FileSystem } from "effect";
+import { Array as EffectArray, Data, Effect, FileSystem } from "effect";
 
 import { Git, GitFailed, gitConfig, gitDirectories } from "../../clients/git";
 import { Jj, type JjFailed, jjConfig, readJjConfig, setJjConfig } from "../../clients/jj";
@@ -116,7 +116,7 @@ const ANONYMOUS = 'mutable() & (author_name(exact:"") | author_email(exact:""))'
 const authors: SetupStep = {
   check: Effect.gen(function* () {
     const values = yield* Effect.forEach(IDENTITY, jjConfig);
-    const hasIdentity = values.every((value) => value !== "");
+    const hasIdentity = EffectArray.every(values, (value) => value !== "");
     const isAnonymous = hasIdentity && (yield* commitsAt(ANONYMOUS)).length > 0;
     return isAnonymous ? forInit("some mutable changes have no author") : undefined;
   }),
@@ -184,7 +184,7 @@ const alias: SetupStep = {
  */
 const setup = Effect.map(Effect.cached(defaultBranch), (branch) => ({
   branch,
-  steps: [...IDENTITY.map((key) => identity(key)), authors, trunk(branch), alias],
+  steps: [...EffectArray.map(IDENTITY, (key) => identity(key)), authors, trunk(branch), alias],
 }));
 
 /**
@@ -208,6 +208,6 @@ export const runSteps = <R>(
         ? yield* Effect.forEach(steps, (step) => run(step))
         : [notColocated];
     // Steps that fail the same way, such as on a jj config that jj can't parse, report it once.
-    const problems = new Set(found.filter((problem) => problem !== undefined));
+    const problems = new Set(EffectArray.filter(found, (problem) => problem !== undefined));
     return { branch, problems: [...problems] };
   });

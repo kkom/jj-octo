@@ -1,4 +1,4 @@
-import { Console, Effect, Option } from "effect";
+import { Array as EffectArray, Console, Effect, Option } from "effect";
 
 import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
@@ -15,17 +15,20 @@ export const CLOSED_COMMENT =
 // as `jj abandon` leaves them.
 const abandonedBookmarks = (targets: readonly (readonly [string, BookmarkTarget])[]) =>
   Effect.gen(function* () {
-    const candidates = targets.flatMap(([name, { deleted, originChange, tracked }]) =>
+    const candidates = EffectArray.flatMap(targets, ([name, { deleted, originChange, tracked }]) =>
       deleted && tracked && originChange !== undefined ? [{ change: originChange, name }] : [],
     );
     if (candidates.length === 0) {
       return [];
     }
     const visibleIds = yield* changeIdsAt(
-      anyOf(candidates.map(({ change }) => changeRevset(change))),
+      anyOf(EffectArray.map(candidates, ({ change }) => changeRevset(change))),
     );
     const visible = new Set(visibleIds);
-    return candidates.filter(({ change }) => !visible.has(change)).map(({ name }) => name);
+    return EffectArray.map(
+      EffectArray.filter(candidates, ({ change }) => !visible.has(change)),
+      ({ name }) => name,
+    );
   });
 
 /**

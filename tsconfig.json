@@ -124,9 +124,9 @@
           "outdatedApi": "error",
           "overriddenSchemaConstructor": "error",
           "preferBarrelImport": "error",
-          "preferEffectArray": "off", // undecided
-          "preferEffectRecord": "off", // undecided
-          "preferEffectString": "off", // undecided
+          "preferEffectArray": "error",
+          "preferEffectRecord": "error",
+          "preferEffectString": "error",
           "preferNamespaceImport": "error",
           "preferSchemaTaggedError": "off", // undecided
           "preferSchemaTypeProperty": "error",

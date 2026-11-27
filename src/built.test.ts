@@ -2,6 +2,8 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { appendFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { Array as EffectArray, Record as EffectRecord, String as EffectString } from "effect";
+
 import manifest from "../package.json" with { type: "json" };
 import { SET_UP_VERSION } from "./cli/gh/setup";
 import { ENVIRONMENT_VARIABLES, SETTINGS } from "./settings";
@@ -30,8 +32,9 @@ const builds = [
 // The environment of the tests, without the proxy settings it may hold, which would otherwise
 // route requests past the proxy under test.
 const proxySettings = new Set(["http_proxy", "https_proxy", "no_proxy", "node_extra_ca_certs"]);
-const inherited = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !proxySettings.has(key.toLowerCase())),
+const inherited = EffectRecord.filter(
+  process.env,
+  (_, key) => !proxySettings.has(EffectString.toLowerCase(key)),
 );
 
 interface RunOptions {
@@ -52,7 +55,7 @@ const output = async (command: readonly string[], args: readonly string[], optio
     child.exited,
   ]);
   if (exitCode !== 0) {
-    throw new Error(`jj-octo ${args.join(" ")} failed:\n${stderr}`);
+    throw new Error(`jj-octo ${EffectArray.join(args, " ")} failed:\n${stderr}`);
   }
   return { stderr, stdout };
 };
@@ -114,7 +117,7 @@ const checkoutOfA = () => {
   repository.stack("a");
   repository.jj("git", "remote", "set-url", "origin", "https://github.com/owner/name");
   repository.jj("config", "set", "--repo", SET_UP_VERSION, JSON.stringify(manifest.version));
-  const cwd = repository.jj("root").trim();
+  const cwd = EffectString.trim(repository.jj("root"));
   return { cwd, env: isolatedEnv(path.dirname(cwd)), repository };
 };
 
@@ -127,17 +130,24 @@ describe.each(builds)("$name", ({ command }) => {
 
   it("documents every setting and environment variable in its help", async () => {
     const printed = await run(command, ["--help"], { cwd: process.cwd(), env: {} });
-    const help = printed.split("\n");
+    const help = EffectString.split(printed, "\n");
     expect({
-      environment: help.flatMap(
-        (line) => /^ {2}(?<name>[A-Z][\d_A-Z]+) {3}/u.exec(line)?.groups?.["name"] ?? [],
+      environment: EffectArray.filter(
+        EffectArray.map(
+          help,
+          (line) => /^ {2}(?<name>[A-Z][\d_A-Z]+) {3}/u.exec(line)?.groups?.["name"],
+        ),
+        (name) => name !== undefined,
       ),
-      sections: help.filter((line) => /^[A-Z]/u.test(line)),
-      settings: help.filter((line) => line.startsWith("  jj-octo.")).map((line) => line.trim()),
+      sections: EffectArray.filter(help, (line) => /^[A-Z]/u.test(line)),
+      settings: EffectArray.map(
+        EffectArray.filter(help, (line) => EffectString.startsWith("  jj-octo.")(line)),
+        (line) => EffectString.trim(line),
+      ),
     }).toStrictEqual({
-      environment: ENVIRONMENT_VARIABLES.map(({ name }) => name),
+      environment: EffectArray.map(ENVIRONMENT_VARIABLES, ({ name }) => name),
       sections: ["DESCRIPTION", "USAGE", "GLOBAL FLAGS", "SUBCOMMANDS", "SETTINGS", "ENVIRONMENT"],
-      settings: SETTINGS.map(({ key }) => key),
+      settings: EffectArray.map(SETTINGS, ({ key }) => key),
     });
   });
 
@@ -190,12 +200,15 @@ describe.each(builds)("$name", ({ command }) => {
     expect(received.result).toStrictEqual({
       stderr:
         "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks. They then show as links that paste into Slack.\n",
-      stdout: [
-        "-----BEGIN TEXT TO PASTE VERBATIM-----",
-        "✅ [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`",
-        "-----END TEXT TO PASTE VERBATIM-----",
-        "",
-      ].join("\n"),
+      stdout: EffectArray.join(
+        [
+          "-----BEGIN TEXT TO PASTE VERBATIM-----",
+          "✅ [#7 Add a](https://github.com/owner/name/pull/7) `+1/-0`",
+          "-----END TEXT TO PASTE VERBATIM-----",
+          "",
+        ],
+        "\n",
+      ),
     });
   });
 
@@ -208,7 +221,7 @@ describe.each(builds)("$name", ({ command }) => {
         env: { ...env, ...proxyEnv(proxy) },
       });
       // What git prints between them depends on the network, which the test doesn't control.
-      const printed = stderr.trimEnd().split("\n");
+      const printed = EffectString.split(EffectString.trimEnd(stderr), "\n");
       return {
         firstPrinted: printed.at(0),
         lastPrinted: printed.at(-1),

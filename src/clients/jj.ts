@@ -1,4 +1,12 @@
-import { Context, Data, Effect, Layer, Stream } from "effect";
+import {
+  Array as EffectArray,
+  Context,
+  Data,
+  Effect,
+  Layer,
+  Stream,
+  String as EffectString,
+} from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 export class JjFailed extends Data.TaggedError("JjFailed")<{ readonly message: string }> {}
@@ -26,7 +34,9 @@ export class Jj extends Context.Service<
 const failed = (args: readonly string[], detail: string): JjFailed =>
   new JjFailed({
     message:
-      detail.trim() === "" ? `jj ${args.join(" ")} failed` : detail.trim().replace(/^Error: /u, ""),
+      EffectString.trim(detail) === ""
+        ? `jj ${EffectArray.join(args, " ")} failed`
+        : EffectString.replace(/^Error: /u, "")(EffectString.trim(detail)),
   });
 
 // `ui.quiet` in the user's config would keep jj from printing the operation's id.
@@ -108,9 +118,11 @@ export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
           if (code !== 0) {
             return Effect.fail(failed(args, stderr));
           }
-          const operation = [...stderr.matchAll(NOT_INTEGRATED)].at(-1)?.groups?.["operation"];
+          const operation = [...EffectString.matchAll(NOT_INTEGRATED)(stderr)].at(-1)?.groups?.[
+            "operation"
+          ];
           return operation === undefined
-            ? Effect.fail(failed(args, `jj ${args.join(" ")} made no operation`))
+            ? Effect.fail(failed(args, `jj ${EffectArray.join(args, " ")} made no operation`))
             : Effect.succeed(operation);
         });
 
@@ -135,14 +147,16 @@ export const readJjConfig = (
     const jj = yield* Jj;
     const scope = repo ? ["--repo"] : [];
     const output = yield* jj.read(["config", "list", ...scope, key, "-T", ENTRY]);
-    const lines = output.split("\n").filter((line) => line !== "");
+    const lines = EffectArray.filter(EffectString.split(output, "\n"), (line) => line !== "");
     // For a table, jj lists the keys inside it.
     const prefix = `${JSON.stringify(key)} `;
-    if (lines.some((line) => !line.startsWith(prefix))) {
+    if (EffectArray.some(lines, (line) => !EffectString.startsWith(prefix)(line))) {
       return yield* new JjFailed({ message: `${key} is a table; set it to a single value` });
     }
     const [line] = lines;
-    return line === undefined ? undefined : (JSON.parse(line.slice(prefix.length)) as unknown);
+    return line === undefined
+      ? undefined
+      : (JSON.parse(EffectString.slice(prefix.length)(line)) as unknown);
   });
 
 /** A string in jj's config, or an empty string where it has none. Fails on any other value. */

@@ -1,4 +1,4 @@
-import { Console, Effect, type FileSystem, Result, SemVer } from "effect";
+import { Array as EffectArray, Console, Effect, type FileSystem, Result, SemVer } from "effect";
 import { Command } from "effect/cli";
 
 import manifest from "../../../package.json" with { type: "json" };
@@ -38,7 +38,7 @@ export const init: Effect.Effect<
 > = Effect.gen(function* () {
   const { branch, problems } = yield* runSteps(fixed);
   if (problems.length > 0) {
-    return yield* new NotSetUp({ message: problems.join("\n") });
+    return yield* new NotSetUp({ message: EffectArray.join(problems, "\n") });
   }
   yield* setJjConfig(SET_UP_VERSION, manifest.version);
   yield* Console.error(`set up jj, with trunk() as ${yield* branch}@origin`);

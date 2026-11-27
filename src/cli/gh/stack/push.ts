@@ -1,4 +1,4 @@
-import { Console, Effect, Option } from "effect";
+import { Array as EffectArray, Console, Effect, Option } from "effect";
 
 import type { Git, GitFailed } from "../../../clients/git";
 import { GitHub } from "../../../clients/github/client";
@@ -73,7 +73,7 @@ export const push = (
     const github = yield* GitHub;
     const jj = yield* Jj;
     const records = yield* PrDescriptions;
-    const bookmarks = stack.map(({ bookmark }) => bookmark);
+    const bookmarks = EffectArray.map(stack, ({ bookmark }) => bookmark);
     const bases = basesFor(bookmarks, trunk);
     const found = yield* Effect.forEach(
       stack,
@@ -86,13 +86,15 @@ export const push = (
       { concurrency: "unbounded" },
     );
     // Before a description is synced, which can rewrite changes, so a failure changes nothing.
-    const openNumbers = found.flatMap(({ pullRequest }) =>
+    const openNumbers = EffectArray.flatMap(found, ({ pullRequest }) =>
       Option.toArray(Option.map(pullRequest, ({ number }) => number)),
     );
     const existing = yield* stackContaining(openNumbers);
     const targets = yield* bookmarkTargets;
     const pushedDescriptions = yield* descriptionsOf(
-      bookmarks.flatMap((bookmark) => targets.get(bookmark)?.origin ?? []),
+      EffectArray.flatMap(bookmarks, (bookmark) =>
+        Option.toArray(Option.fromUndefinedOr(targets.get(bookmark)?.origin)),
+      ),
     );
     const ignoreClaudeCodeFooter = yield* readSetting(IGNORE_CLAUDE_CODE_FOOTER);
 
@@ -125,17 +127,18 @@ export const push = (
     yield* closeAbandoned(
       Option.match(existing, {
         onNone: () => [],
-        onSome: ({ unmerged }) => unmerged.filter((number) => !openNumbers.includes(number)),
+        onSome: ({ unmerged }) =>
+          EffectArray.filter(unmerged, (number) => !openNumbers.includes(number)),
       }),
       [...targets],
     );
 
     // GitHub rejects a base change on a pull request that is in a stack, and can only add to a
     // stack's top, so a stack that doesn't fit what is wanted is dissolved first.
-    const moving = changes.flatMap(({ base, open }) =>
+    const moving = EffectArray.flatMap(changes, ({ base, open }) =>
       Option.isSome(open) && open.value.pullRequest.base !== base ? [open.value.pullRequest] : [],
     );
-    const wanted = changes.map(({ open }) =>
+    const wanted = EffectArray.map(changes, ({ open }) =>
       Option.map(open, ({ pullRequest }) => pullRequest.number),
     );
     const dissolve = mustDissolve(existing, wanted, moving.length > 0);
@@ -147,18 +150,18 @@ export const push = (
     // GitHub closes a pull request as merged once its head is reachable from its base, and pushing
     // a pull request that moved below its old base does exactly that. Pointing it at the trunk first
     // prevents this, because its branch still has commits the trunk doesn't have.
-    for (const { number } of moving.filter(({ base }) => base !== trunk)) {
+    for (const { number } of EffectArray.filter(moving, ({ base }) => base !== trunk)) {
       yield* github.setBase(number, trunk);
     }
-    const moved = new Set(moving.map(({ number }) => number));
+    const moved = new Set(EffectArray.map(moving, ({ number }) => number));
 
     // Jj only creates a branch on the remote for a bookmark that tracks it.
-    const untracked = bookmarks.filter((name) => targets.get(name)?.tracked !== true);
+    const untracked = EffectArray.filter(bookmarks, (name) => targets.get(name)?.tracked !== true);
     if (untracked.length > 0) {
       yield* jj.run([
         "bookmark",
         "track",
-        ...untracked.map((bookmark) => exactPattern(bookmark)),
+        ...EffectArray.map(untracked, (bookmark) => exactPattern(bookmark)),
         "--remote",
         "origin",
       ]);
@@ -166,7 +169,7 @@ export const push = (
     yield* jj.run([
       "git",
       "push",
-      ...bookmarks.flatMap((bookmark) => ["--bookmark", exactPattern(bookmark)]),
+      ...EffectArray.flatMap(bookmarks, (bookmark) => ["--bookmark", exactPattern(bookmark)]),
     ]);
     // The commits pushed, which the records are agreed for.
     const pushedTargets = yield* bookmarkTargets;
@@ -241,17 +244,17 @@ export const submit = (
     // The sync can drop merged changes and replace others with GitHub's, so the stack is found
     // again by its bookmarks: the highest one left is its top.
     const left = yield* bookmarksAt(
-      anyOf(downstack.map(({ bookmark }) => bookmarkRevset(bookmark))),
+      anyOf(EffectArray.map(downstack, ({ bookmark }) => bookmarkRevset(bookmark))),
     );
-    const top = downstack.findLast(({ bookmark }) => left.includes(bookmark));
-    if (top === undefined) {
+    const top = EffectArray.findLast(downstack, ({ bookmark }) => left.includes(bookmark));
+    if (Option.isNone(top)) {
       yield* Console.error(
         `nothing left to submit: no bookmark of the stack is left after the sync`,
       );
       return;
     }
     // The sync rebases the rest of the stack even where that conflicts.
-    const synced = yield* downstackChanges(bookmarkRevset(top.bookmark)).pipe(
+    const synced = yield* downstackChanges(bookmarkRevset(top.value.bookmark)).pipe(
       Effect.flatMap(withoutConflicts),
     );
     yield* push(synced, { ...options, trunk });

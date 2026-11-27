@@ -1,4 +1,4 @@
-import { Data, Effect, Order } from "effect";
+import { Array as EffectArray, Data, Effect, Order } from "effect";
 import { HttpClientRequest } from "effect/http";
 
 import { GitHubFailed, urlOf } from "./failure";
@@ -41,7 +41,7 @@ const splitIntoBatches = (
       batches.push({ pullRequests: [pullRequest], textLength: digits });
     }
   }
-  return batches.map(({ pullRequests: batch }) => batch);
+  return EffectArray.map(batches, ({ pullRequests: batch }) => batch);
 };
 
 /** The open and approved pull requests that a search with the terms lists, from every page. */
@@ -55,7 +55,10 @@ const search = (
     HttpClientRequest.get("/search/issues", {
       urlParams: {
         order: "asc",
-        q: [`repo:${owner}/${name}`, "is:pr", "is:open", "review:approved", ...terms].join(" "),
+        q: EffectArray.join(
+          [`repo:${owner}/${name}`, "is:pr", "is:open", "review:approved", ...terms],
+          " ",
+        ),
         sort: "created",
       },
     }),
@@ -80,7 +83,7 @@ const search = (
                 }),
               );
             }
-            return Effect.succeed(items.map(({ number }) => number));
+            return Effect.succeed(EffectArray.map(items, ({ number }) => number));
           },
         ),
       ),
@@ -98,7 +101,7 @@ const searchBatch = (
   batch: readonly SearchedPullRequest[],
 ): Effect.Effect<readonly PullRequestNumber[], GitHubFailed> =>
   search(requests, repository, [
-    ...batch.map(({ number }) => String(number)),
+    ...EffectArray.map(batch, ({ number }) => String(number)),
     `created:${batch.at(0)?.createdAt}..${batch.at(-1)?.createdAt}`,
   ]).pipe(
     Effect.catchTag("TooManyResults", ({ count, url }) => {
@@ -140,12 +143,15 @@ export const approvedPullRequests = (
   // writes each time in UTC in one format, so it sorts as text.
   Effect.forEach(
     splitIntoBatches(
-      pullRequests.toSorted(Order.mapInput(Order.String, ({ createdAt }) => createdAt)),
+      EffectArray.sort(
+        pullRequests,
+        Order.mapInput(Order.String, ({ createdAt }: SearchedPullRequest) => createdAt),
+      ),
     ),
     (batch) => searchBatch(requests, repository, batch),
   ).pipe(
     Effect.map((found) => {
-      const asked = new Set(pullRequests.map(({ number }) => number));
-      return new Set(found.flat().filter((number) => asked.has(number)));
+      const asked = new Set(EffectArray.map(pullRequests, ({ number }) => number));
+      return new Set(EffectArray.filter(found.flat(), (number) => asked.has(number)));
     }),
   );

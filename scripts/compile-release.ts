@@ -2,6 +2,7 @@
 // offers. Each goes into `dist/release` as the tarball that installers such as mise expect,
 // holding one executable named `jj-octo`.
 import { $ } from "bun";
+import { pipe, String as EffectString } from "effect";
 
 // The x64 build is Bun's baseline one, which runs on CPUs without AVX2.
 const targets: readonly Bun.Build.CompileTarget[] = [
@@ -12,7 +13,11 @@ const targets: readonly Bun.Build.CompileTarget[] = [
 
 await $`rm -rf dist/compile dist/release && mkdir -p dist/release`;
 for (const target of targets) {
-  const platform = target.replace(/^bun-/u, "").replace(/-baseline$/u, "");
+  const platform = pipe(
+    target,
+    EffectString.replace(/^bun-/u, ""),
+    EffectString.replace(/-baseline$/u, ""),
+  );
   const directory = `dist/compile/${platform}`;
   // oxlint-disable-next-line no-await-in-loop -- each build downloads its runtime into Bun's shared cache
   await Bun.build({

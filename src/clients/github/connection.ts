@@ -1,4 +1,12 @@
-import { Config, Effect, FileSystem, Match, Option, Redacted } from "effect";
+import {
+  Config,
+  Effect,
+  FileSystem,
+  Match,
+  Option,
+  Redacted,
+  String as EffectString,
+} from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { GH_TOKEN, GITHUB_TOKEN, GITHUB_AUTH, readSetting } from "../../settings";
@@ -32,7 +40,9 @@ const ownToken = Effect.gen(function* () {
   }
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   // `gh` prints nothing and exits 1 when it isn't logged in, and the exit code isn't reported.
-  const stored = (yield* spawner.string(ChildProcess.make("gh", ["auth", "token"]))).trim();
+  const stored = yield* spawner
+    .string(ChildProcess.make("gh", ["auth", "token"]))
+    .pipe(Effect.map(EffectString.trim));
   return stored === "" ? yield* Effect.fail("no token") : Redacted.make(stored);
 }).pipe(
   Effect.mapError(

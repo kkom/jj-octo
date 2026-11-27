@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { Order } from "effect";
+import { Array as EffectArray, Option, Order, String as EffectString } from "effect";
 
-import { pullRequests } from "../../testing/fake-github";
 import { failureOf, searchPath, withGitHub } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
+import { pullRequests } from "../../testing/pull-requests";
 
 const CREATED = "2026-01-01T00:00:00Z";
 const LATER = "2026-02-02T00:00:00Z";
@@ -35,29 +35,38 @@ const searchOf =
   (index: readonly Indexed[], timedOut = false) =>
   ({ path }: InterceptedRequest): unknown => {
     const url = new URL(path, "https://api.github.com");
-    const terms = (url.searchParams.get("q") ?? "").split(" ");
-    const text = terms.filter((term) => !term.includes(":"));
-    if (text.join(" ").length > 256) {
+    const terms = EffectString.split(url.searchParams.get("q") ?? "", " ");
+    const text = EffectArray.filter(terms, (term) => !EffectString.includes(":")(term));
+    if (EffectArray.join(text, " ").length > 256) {
       return new Reply(422, { message: "The search is longer than 256 characters." });
     }
-    const numbers = text.filter((term) => /^\d+$/u.test(term)).map(Number);
+    const numbers = EffectArray.map(
+      EffectArray.filter(text, (term) => /^\d+$/u.test(term)),
+      Number,
+    );
     // Without `created:`, any creation time matches.
-    const [from = "", to = "~"] =
-      terms
-        .find((term) => term.startsWith("created:"))
-        ?.slice("created:".length)
-        .split("..") ?? [];
-    const found = index.filter(
+    const [from = "", to = "~"] = Option.match(
+      EffectArray.findFirst(terms, (term) => EffectString.startsWith("created:")(term)),
+      {
+        onNone: () => [],
+        onSome: (term) => EffectString.split(EffectString.slice("created:".length)(term), ".."),
+      },
+    );
+    const found = EffectArray.filter(
+      index,
       ({ createdAt, mentions, number }) =>
         createdAt >= from &&
         createdAt <= to &&
-        numbers.some((wanted) => wanted === number || mentions.includes(wanted)),
+        EffectArray.some(numbers, (wanted) => wanted === number || mentions.includes(wanted)),
     );
     // Without `sort=created&order=asc`, the index's order stands in for GitHub's best match.
     const byCreation =
       url.searchParams.get("sort") === "created" && url.searchParams.get("order") === "asc";
     const matches = byCreation
-      ? found.toSorted(Order.mapInput(Order.String, ({ createdAt }) => createdAt))
+      ? EffectArray.sort(
+          found,
+          Order.mapInput(Order.String, ({ createdAt }: Indexed) => createdAt),
+        )
       : found;
     const page = Number(url.searchParams.get("page"));
     const perPage = Number(url.searchParams.get("per_page"));
@@ -66,14 +75,19 @@ const searchOf =
     }
     return {
       incomplete_results: timedOut,
-      items: matches.slice((page - 1) * perPage, page * perPage).map(({ number }) => ({ number })),
+      items: EffectArray.map(matches.slice((page - 1) * perPage, page * perPage), ({ number }) => ({
+        number,
+      })),
       total_count: matches.length,
     };
   };
 
 // The pull requests asked about, by number, each created at the time given or `CREATED`.
 const asked = (numbers: readonly number[], createdAt: Readonly<Record<number, string>> = {}) =>
-  pullRequests(...numbers).map((number) => ({ createdAt: createdAt[number] ?? CREATED, number }));
+  EffectArray.map(pullRequests(...numbers), (number) => ({
+    createdAt: createdAt[number] ?? CREATED,
+    number,
+  }));
 
 const setOf = (numbers: readonly number[]) => new Set(pullRequests(...numbers));
 
@@ -99,14 +113,15 @@ describe("approvedPullRequests", () => {
   it("searches for more pull requests than one search's text fits in several searches", async () => {
     // 42 five-digit numbers and the spaces between them are 251 characters, and 43 are 257.
     const numbers = Array.from({ length: 50 }, (_, offset) => 10_000 + offset);
+    const terms = EffectArray.map(numbers, String);
     expect(
       await withGitHub(searchOf([indexed(10_001), indexed(10_040), indexed(10_049)]), (github) =>
         github.approvedPullRequests(asked(numbers)),
       ),
     ).toStrictEqual({
       requests: [
-        `GET api.github.com${searchPath(`${numbers.slice(0, 42).join(" ")} created:${CREATED}..${CREATED}`)}`,
-        `GET api.github.com${searchPath(`${numbers.slice(42).join(" ")} created:${CREATED}..${CREATED}`)}`,
+        `GET api.github.com${searchPath(`${EffectArray.join(terms.slice(0, 42), " ")} created:${CREATED}..${CREATED}`)}`,
+        `GET api.github.com${searchPath(`${EffectArray.join(terms.slice(42), " ")} created:${CREATED}..${CREATED}`)}`,
       ],
       result: setOf([10_001, 10_040, 10_049]),
     });

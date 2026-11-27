@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { writeFileSync } from "node:fs";
 
-import { Effect } from "effect";
+import { Array as EffectArray, Effect } from "effect";
 
 import { gitClone, runIn } from "../testing/git-clone";
 import { removeScratchRepositories, scratchRepository } from "../testing/scratch-repository";
@@ -18,17 +18,20 @@ describe("jjConfig", () => {
     const failure = await runIn(clone.layer, Effect.flip(jjConfig("jj-octo.no-such-key")));
     expect(failure).toStrictEqual(
       new JjFailed({
-        message: [
-          "Config error: Configuration cannot be parsed as TOML document",
-          "Caused by: TOML parse error at line 1, column 2",
-          "  |",
-          "1 | [",
-          "  |  ^",
-          "unquoted keys cannot be empty, expected letters, numbers, `-`, `_`",
-          "",
-          `Hint: Check the config file: ${config}`,
-          "For help, see https://docs.jj-vcs.dev/latest/config/ or use `jj help -k config`.",
-        ].join("\n"),
+        message: EffectArray.join(
+          [
+            "Config error: Configuration cannot be parsed as TOML document",
+            "Caused by: TOML parse error at line 1, column 2",
+            "  |",
+            "1 | [",
+            "  |  ^",
+            "unquoted keys cannot be empty, expected letters, numbers, `-`, `_`",
+            "",
+            `Hint: Check the config file: ${config}`,
+            "For help, see https://docs.jj-vcs.dev/latest/config/ or use `jj help -k config`.",
+          ],
+          "\n",
+        ),
       }),
     );
   });

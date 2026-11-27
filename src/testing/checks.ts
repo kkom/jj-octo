@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Array as EffectArray, Option } from "effect";
 
 import type { Check, RequiredChecks } from "../clients/github/types";
 
@@ -24,5 +24,5 @@ export const status = (name: string, outcome: string, state: Check["state"]): Ch
 /** Required checks of the names, each from any app. */
 export const requiring = (...names: readonly string[]): RequiredChecks => ({
   _tag: "Known",
-  checks: names.map((name) => ({ app: Option.none(), name })),
+  checks: EffectArray.map(names, (name) => ({ app: Option.none(), name })),
 });

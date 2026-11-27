@@ -1,4 +1,4 @@
-import { Console, Data, Effect } from "effect";
+import { Array as EffectArray, Console, Data, Effect, String as EffectString } from "effect";
 
 import { Git, type GitFailed } from "../../../clients/git";
 import type { GitHub } from "../../../clients/github/client";
@@ -55,25 +55,30 @@ const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
     }
     const git = yield* Git;
     // Jj's own git repository, which a jj workspace without a `.git` of its own also has.
-    const gitDirectory = (yield* (yield* Jj).read(["git", "root"])).trim();
+    const jj = yield* Jj;
+    const gitDirectory = yield* jj.read(["git", "root"]).pipe(Effect.map(EffectString.trim));
     const output = yield* git.read([
       "--git-dir",
       gitDirectory,
       "ls-remote",
       "origin",
-      ...pushed.map(({ name }) => `refs/heads/${name}`),
+      ...EffectArray.map(pushed, ({ name }) => `refs/heads/${name}`),
     ]);
     const onGitHub = new Map(
-      lines(output).map((line) => {
-        const [commit = "", ref = ""] = line.split("\t");
-        return [ref.replace(/^refs\/heads\//u, ""), commit];
+      EffectArray.map(lines(output), (line) => {
+        const [commit, ref = ""] = EffectString.split(line, "\t");
+        return [EffectString.replace(/^refs\/heads\//u, "")(ref), commit];
       }),
     );
     return {
-      changed: pushed
-        .filter(({ name, remote }) => onGitHub.has(name) && onGitHub.get(name) !== remote)
-        .map(({ name }) => name),
-      deleted: pushed.filter(({ name }) => !onGitHub.has(name)),
+      changed: EffectArray.map(
+        EffectArray.filter(
+          pushed,
+          ({ name, remote }) => onGitHub.has(name) && onGitHub.get(name) !== remote,
+        ),
+        ({ name }) => name,
+      ),
+      deleted: EffectArray.filter(pushed, ({ name }) => !onGitHub.has(name)),
     };
   });
 
@@ -100,30 +105,34 @@ export const syncStack = (
       concurrency: "unbounded",
     });
     const merged = yield* mergedIn(before, heads);
-    const changed = onGitHub.changed.filter(notMerged(merged));
+    const changed = EffectArray.filter(onGitHub.changed, notMerged(merged));
     // A fetch would delete the local bookmark, and the commit with it where nothing else keeps it.
     // That is right only for work that merged, which a merged pull request with another head
     // doesn't prove: GitHub may have added commits before merging, or the name may be reused.
-    const deleted = onGitHub.deleted.filter(({ name }) => notMerged(merged)(name));
+    const deleted = EffectArray.filter(onGitHub.deleted, ({ name }) => notMerged(merged)(name));
     if (deleted.length > 0) {
       return yield* new BranchesDeleted({
-        message: [
-          "these branches were deleted on GitHub, so nothing was changed:",
-          ...deleted.map(
-            (bookmark) => `${bookmark.name}: ${whyDeleted(heads[bookmark.name] ?? [], bookmark)}`,
-          ),
-          "to push a change again, run `jj bookmark forget --include-remotes <name>`, then `jj bookmark create <name> -r <change>`; to drop one, run `jj abandon <change>`",
-        ].join("\n"),
+        message: EffectArray.join(
+          [
+            "these branches were deleted on GitHub, so nothing was changed:",
+            ...EffectArray.map(
+              deleted,
+              (bookmark) => `${bookmark.name}: ${whyDeleted(heads[bookmark.name] ?? [], bookmark)}`,
+            ),
+            "to push a change again, run `jj bookmark forget --include-remotes <name>`, then `jj bookmark create <name> -r <change>`; to drop one, run `jj abandon <change>`",
+          ],
+          "\n",
+        ),
       });
     }
     const found = [
-      ...merged.map(({ bookmark }) => `${bookmark} merged`),
-      ...changed.map((name) => `${name} changed`),
+      ...EffectArray.map(merged, ({ bookmark }) => `${bookmark} merged`),
+      ...EffectArray.map(changed, (name) => `${name} changed`),
     ];
     if (found.length === 0) {
       return false;
     }
-    yield* Console.error(`on GitHub, ${found.join(", ")}; syncing the stack first`);
+    yield* Console.error(`on GitHub, ${EffectArray.join(found, ", ")}; syncing the stack first`);
     // The whole stack is rebased, so the changes above the revision keep their place on it.
     const whole = stackRevset(revision);
     const bookmarks = yield* bookmarksAt(whole);
@@ -132,12 +141,12 @@ export const syncStack = (
     yield* reconcile({
       before,
       bookmarks,
-      fetch: fetchBranches([trunk, ...pushedOf(before).map(({ name }) => name)]),
+      fetch: fetchBranches([trunk, ...EffectArray.map(pushedOf(before), ({ name }) => name)]),
       merged,
       skipped: "none()",
       stacks: `::(${anyOf([
-        ...bookmarks.map((name) => bookmarkRevset(name)),
-        ...unnamed.map((change) => changeRevset(change)),
+        ...EffectArray.map(bookmarks, (name) => bookmarkRevset(name)),
+        ...EffectArray.map(unnamed, (change) => changeRevset(change)),
       ])})`,
     });
     return true;

@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, type FileSystem, Layer } from "effect";
+import { Effect, type FileSystem, Layer, String as EffectString } from "effect";
 
 import type { Git } from "../clients/git";
 import type { Jj } from "../clients/jj";
@@ -36,7 +36,7 @@ export const gitClone = (
   writeFileSync(jjConfigFile, "");
   const execute = executor(env);
   const checkout = path.join(root, "checkout");
-  const origin = repository.git("remote", "get-url", "origin").trim();
+  const origin = EffectString.trim(repository.git("remote", "get-url", "origin"));
   execute(root, ["git", "clone", "--quiet", origin, checkout]);
   execute(checkout, ["git", "config", "user.name", name]);
   execute(checkout, ["git", "config", "user.email", "cloner@example.com"]);

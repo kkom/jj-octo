@@ -5,8 +5,9 @@ import { Effect } from "effect";
 import { moveTrunkOnGitHub, squashMergeOnGitHub } from "../../testing/branch-changes";
 import { conflictWithTrunk, labelsOf } from "../../testing/conflicts";
 import { fakeConsole } from "../../testing/fake-console";
-import { fakeGitHub, openPullRequest, stackOf } from "../../testing/fake-github";
+import { fakeGitHub } from "../../testing/fake-github";
 import { mergeIn, mergingIn } from "../../testing/merge";
+import { openPullRequest, stackOf } from "../../testing/pull-requests";
 import { pushedStack, removeScratchRepositories } from "../../testing/scratch-repository";
 
 afterAll(removeScratchRepositories);

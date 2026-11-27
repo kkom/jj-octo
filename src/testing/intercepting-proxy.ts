@@ -4,6 +4,8 @@ import { createServer as createHttpsServer } from "node:https";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 
+import { Array as EffectArray, Option, String as EffectString } from "effect";
+
 import { scratchDirectory } from "./scratch-repository";
 
 /**
@@ -145,18 +147,21 @@ export const throughProxy = async <A>(
     });
     const onData = (chunk: Buffer) => {
       head += chunk.toString("latin1");
-      const end = head.indexOf("\r\n\r\n");
-      if (end === -1) {
+      const end = EffectString.indexOf("\r\n\r\n")(head);
+      if (Option.isNone(end)) {
         return;
       }
       // Paused until `pipe` resumes it, so no bytes go by while the tunnel connects.
       client.pause();
       client.off("data", onData);
-      const [method, target] = head.slice(0, head.indexOf("\r\n")).split(" ");
+      const [method, target] = EffectString.split(
+        EffectArray.headNonEmpty(EffectString.split(head, "\r\n")),
+        " ",
+      );
       log.push(`${method} ${target}`);
       const tunnel = connect(port, "127.0.0.1", () => {
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        tunnel.write(Buffer.from(head.slice(end + 4), "latin1"));
+        tunnel.write(Buffer.from(EffectString.slice(end.value + 4)(head), "latin1"));
         client.pipe(tunnel);
         tunnel.pipe(client);
       });

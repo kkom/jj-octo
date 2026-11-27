@@ -1,4 +1,4 @@
-import { Console, Effect } from "effect";
+import { Array as EffectArray, Console, Effect, String as EffectString } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { bookmarkTargets } from "./bookmark-targets";
@@ -23,7 +23,8 @@ export interface BookmarkBeforeFetch {
 /** The bookmarks that were pushed, and so have a branch on GitHub. */
 export const pushedOf = (
   bookmarks: readonly BookmarkBeforeFetch[],
-): readonly BookmarkBeforeFetch[] => bookmarks.filter(({ remote }) => remote !== undefined);
+): readonly BookmarkBeforeFetch[] =>
+  EffectArray.filter(bookmarks, ({ remote }) => remote !== undefined);
 
 // Top first, because folding GitHub's commits into a change rewrites everything above it. Done
 // bottom first, a commit GitHub added higher up would be rewritten too, and left behind as a
@@ -38,26 +39,31 @@ export const bookmarksBeforeFetch = (
       bookmarked,
       String.raw`commit_id ++ "\t" ++ change_id ++ "\t" ++ current_working_copy ++ "\n"`,
     );
-    const children = (yield* logLines(
+    const childLines = yield* logLines(
       `children(${bookmarked})`,
       String.raw`parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ change_id ++ "\n"`,
-    )).map((line) => line.split("\t"));
-    return bottomFirst.toReversed().flatMap((line): readonly BookmarkBeforeFetch[] => {
-      const [commit = "", change = "", workingCopy] = line.split("\t");
-      const above = children.flatMap(([parents = "", child = ""]) =>
-        parents.split(",").includes(commit) ? [child] : [],
-      );
-      return targets
-        .filter(([, { local }]) => local === commit)
-        .map(([name, { origin }]) => ({
-          above,
-          change,
-          editing: workingCopy === "true",
-          local: commit,
-          name,
-          remote: origin,
-        }));
-    });
+    );
+    const children = EffectArray.map(childLines, (line) => EffectString.split(line, "\t"));
+    return EffectArray.flatMap(
+      EffectArray.reverse(bottomFirst),
+      (line): readonly BookmarkBeforeFetch[] => {
+        const [commit, change = "", workingCopy] = EffectString.split(line, "\t");
+        const above = EffectArray.flatMap(children, ([parents, child = ""]) =>
+          EffectString.split(parents, ",").includes(commit) ? [child] : [],
+        );
+        return EffectArray.map(
+          EffectArray.filter(targets, ([, { local }]) => local === commit),
+          ([name, { origin }]) => ({
+            above,
+            change,
+            editing: workingCopy === "true",
+            local: commit,
+            name,
+            remote: origin,
+          }),
+        );
+      },
+    );
   });
 
 /**
@@ -69,7 +75,7 @@ export const bookmarksBeforeFetch = (
 const localCommit = (change: string, remote: string, fetched: string) =>
   Effect.gen(function* () {
     const commits = yield* commitsAt(changeRevset(change));
-    const local = commits.filter((commit) => commit !== remote && commit !== fetched);
+    const local = EffectArray.filter(commits, (commit) => commit !== remote && commit !== fetched);
     if (local.length === 0) {
       return commits.includes(remote) ? [remote] : [];
     }
@@ -105,7 +111,7 @@ export const combine = (
         yield* jj.run(["edit", fetched]);
       }
       // GitHub's own copies can carry the ids too, and are already on its commit.
-      const moved = `(${anyOf(above.map((child) => changeRevset(child)))}) ~ (${skipped}) ~ children(${fetched})`;
+      const moved = `(${anyOf(EffectArray.map(above, (child) => changeRevset(child)))}) ~ (${skipped}) ~ children(${fetched})`;
       if ((yield* commitsAt(moved)).length > 0) {
         yield* jj.run(["rebase", "--source", moved, "--destination", fetched]);
         yield* Console.error(`took GitHub's rewritten ${name}, and moved what was on it there`);
@@ -152,7 +158,7 @@ export const combine = (
       return true;
     }
     const added = yield* jj.read(["interdiff", "--from", remote, "--to", fetched, "--summary"]);
-    if (added.trim() === "") {
+    if (EffectString.trim(added) === "") {
       yield* keepLocal;
       yield* dropCopies;
       yield* Console.error(`kept the local ${name}, which GitHub had only rebased`);

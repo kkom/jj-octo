@@ -1,4 +1,4 @@
-import { Console, Effect, Option } from "effect";
+import { Array as EffectArray, Console, Effect, Option } from "effect";
 import { Command } from "effect/cli";
 
 import { GitHub } from "../../clients/github/client";
@@ -25,15 +25,18 @@ interface LogEntry {
 
 /** One line per change, top first, with the columns aligned. */
 const logLines = (entries: readonly LogEntry[]): readonly string[] => {
-  const rows = entries.toReversed().map(({ bookmark, conflict, pullRequest, pushed }) => [
-    bookmark,
-    Option.match(pullRequest, {
-      onNone: () => "no pull request",
-      onSome: ({ draft, number }) => `#${number} ${draft ? "draft" : "ready"}`,
-    }),
-    pushed,
-    ...(conflict ? [CONFLICTED] : []),
-  ]);
+  const rows = EffectArray.map(
+    EffectArray.reverse(entries),
+    ({ bookmark, conflict, pullRequest, pushed }) => [
+      bookmark,
+      Option.match(pullRequest, {
+        onNone: () => "no pull request",
+        onSome: ({ draft, number }) => `#${number} ${draft ? "draft" : "ready"}`,
+      }),
+      pushed,
+      ...(conflict ? [CONFLICTED] : []),
+    ],
+  );
   return table(rows, 2);
 };
 
@@ -51,7 +54,7 @@ export const log = (
       { concurrency: "unbounded" },
     );
     return logLines(
-      stack.map((change, index) => ({
+      EffectArray.map(stack, (change, index) => ({
         bookmark: change.bookmark,
         conflict: change.conflict,
         pullRequest: pullRequests[index] ?? Option.none(),
@@ -65,7 +68,7 @@ export const logCommand = Command.make(
   { revision: revisionFlag("A change of the stack to show") },
   ({ revision }) =>
     asUserError(log(revision).pipe(Effect.provide(GitHubFromOrigin))).pipe(
-      Effect.flatMap((printed) => Console.log(printed.join("\n"))),
+      Effect.flatMap((printed) => Console.log(EffectArray.join(printed, "\n"))),
     ),
 ).pipe(
   withHelp(

@@ -1,4 +1,4 @@
-import { Console, Data, Effect, Exit, Option } from "effect";
+import { Array as EffectArray, Console, Data, Effect, Exit, Option } from "effect";
 import { Command, Flag } from "effect/cli";
 
 import type { Git } from "../../clients/git";
@@ -31,7 +31,10 @@ export class NotMergeable extends Data.TaggedError("NotMergeable")<{
 }> {}
 
 const numbered = (pullRequests: readonly PullRequestNumber[]): string =>
-  pullRequests.map((number) => `#${number}`).join(", ");
+  EffectArray.join(
+    EffectArray.map(pullRequests, (number) => `#${number}`),
+    ", ",
+  );
 
 const openPullRequestOf = (bookmark: string) =>
   Effect.gen(function* () {
@@ -82,16 +85,19 @@ const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
     const [outcomes, failures] = yield* Effect.partition(runs, (run) => github.cancelRun(run), {
       concurrency: 4,
     });
-    const cancelled = outcomes.filter((outcome) => outcome === "cancelled").length;
+    const cancelled = EffectArray.filter(outcomes, (outcome) => outcome === "cancelled").length;
     yield* Console.error(
       `cancelled ${cancelled} workflow ${cancelled === 1 ? "run" : "runs"} of the merged pull requests`,
     );
     if (failures.length > 0) {
       return yield* new GitHubFailed({
-        message: [
-          `couldn't cancel ${failures.length} of the merged pull requests' workflow runs:`,
-          ...failures.map(({ message }) => message),
-        ].join("\n"),
+        message: EffectArray.join(
+          [
+            `couldn't cancel ${failures.length} of the merged pull requests' workflow runs:`,
+            ...EffectArray.map(failures, ({ message }) => message),
+          ],
+          "\n",
+        ),
       });
     }
   });
@@ -122,12 +128,16 @@ export const merge = (
     // GitHub merges what was pushed, so an edit made since would be left behind on a change
     // whose branch is gone.
     const targets = yield* bookmarkTargets;
-    const unpushed = changes.filter(
+    const unpushed = EffectArray.filter(
+      changes,
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
     );
     if (unpushed.length > 0) {
       return yield* new NotMergeable({
-        message: `these changes aren't pushed: ${unpushed.map(({ bookmark }) => bookmark).join(", ")}; run \`jj gh submit\` first`,
+        message: `these changes aren't pushed: ${EffectArray.join(
+          EffectArray.map(unpushed, ({ bookmark }) => bookmark),
+          ", ",
+        )}; run \`jj gh submit\` first`,
       });
     }
     const pullRequest = yield* openPullRequestOf(top);

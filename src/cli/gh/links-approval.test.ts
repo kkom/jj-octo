@@ -3,8 +3,9 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 
 import type { ListedPullRequest } from "../../clients/github/types";
-import { fakeGitHub, inRepository, pullRequest, pullRequests } from "../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../testing/fake-github";
 import { linked } from "../../testing/links";
+import { pullRequest, pullRequests } from "../../testing/pull-requests";
 import {
   removeScratchRepositories,
   type ScratchRepository,

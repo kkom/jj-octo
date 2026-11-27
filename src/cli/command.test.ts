@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { Context } from "effect";
+import { Array as EffectArray, Context } from "effect";
 import type { HelpDoc } from "effect/cli";
 
 import { helpFormatter, HelpSections, table } from "./command";
@@ -44,29 +44,32 @@ describe("helpFormatter", () => {
       },
     ]);
     expect(formatter.formatHelpDoc(doc(sections))).toBe(
-      [
-        "DESCRIPTION",
-        "  Does things",
-        "",
-        "USAGE",
-        "  tool [flags]",
-        "",
-        "ONE",
-        "  first",
-        "",
-        "  second",
-        "",
-        "TWO",
-        "  a        short",
-        "  longer   wide",
-      ].join("\n"),
+      EffectArray.join(
+        [
+          "DESCRIPTION",
+          "  Does things",
+          "",
+          "USAGE",
+          "  tool [flags]",
+          "",
+          "ONE",
+          "  first",
+          "",
+          "  second",
+          "",
+          "TWO",
+          "  a        short",
+          "  longer   wide",
+        ],
+        "\n",
+      ),
     );
   });
 
   it("shows only the generated sections for a command without any", () => {
     const formatter = helpFormatter(false);
     expect(formatter.formatHelpDoc(doc(Context.empty()))).toBe(
-      ["DESCRIPTION", "  Does things", "", "USAGE", "  tool [flags]"].join("\n"),
+      EffectArray.join(["DESCRIPTION", "  Does things", "", "USAGE", "  tool [flags]"], "\n"),
     );
   });
 });

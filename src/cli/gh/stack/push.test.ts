@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect } from "effect";
+import { Effect, Record as EffectRecord } from "effect";
 
 import { conflictWithTrunk, labelsOf } from "../../../testing/conflicts";
-import { fakeGitHub, openPullRequest, stackOf } from "../../../testing/fake-github";
+import { fakeGitHub } from "../../../testing/fake-github";
+import { openPullRequest, stackOf } from "../../../testing/pull-requests";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
 import { description, githubWith, pushed, submitIn } from "../../../testing/submit";
 
@@ -16,7 +17,10 @@ describe("submit", () => {
     conflictWithTrunk(repository, "c");
     const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github, { revision: "b" }));
-    expect({ branches: Object.keys(repository.branches()), calls: github.calls }).toStrictEqual({
+    expect({
+      branches: EffectRecord.keys(repository.branches()),
+      calls: github.calls,
+    }).toStrictEqual({
       branches: ["a", "b", "main"],
       calls: ["open a on main as a draft", "open b on a as a draft", "create stack 99,100"],
     });
@@ -31,7 +35,7 @@ describe("submit", () => {
       Effect.flip(submitIn(repository, github, { revision: "b" })),
     );
     expect({
-      branches: Object.keys(repository.branches()),
+      branches: EffectRecord.keys(repository.branches()),
       calls: github.calls,
       message: failure.message,
     }).toStrictEqual({
@@ -46,7 +50,7 @@ describe("submit", () => {
     repository.stack("a", "b");
     const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github));
-    expect(Object.keys(repository.branches())).toEqual(["a", "b", "main"]);
+    expect(EffectRecord.keys(repository.branches())).toEqual(["a", "b", "main"]);
     expect(github.calls).toEqual([
       "open a on main as a draft",
       "open b on a as a draft",
@@ -104,7 +108,7 @@ describe("submit", () => {
     repository.jj("new", "main", "-m", "d");
     const github = fakeGitHub({}, []);
     await Effect.runPromise(submitIn(repository, github, { revision: "b" }));
-    expect(Object.keys(repository.branches())).toEqual(["a", "b", "main"]);
+    expect(EffectRecord.keys(repository.branches())).toEqual(["a", "b", "main"]);
     expect(github.calls).toEqual([
       "open a on main as a draft",
       "open b on a as a draft",

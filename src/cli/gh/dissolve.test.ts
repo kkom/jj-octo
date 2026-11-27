@@ -4,7 +4,8 @@ import { Effect, Option } from "effect";
 
 import { GitHub } from "../../clients/github/client";
 import { PullRequestNumberSchema, StackNumberSchema } from "../../clients/github/types";
-import { fakeGitHub, stackNumbered } from "../../testing/fake-github";
+import { fakeGitHub } from "../../testing/fake-github";
+import { stackNumbered } from "../../testing/pull-requests";
 import { dissolve, NoSuchStack } from "./dissolve";
 
 describe("dissolve", () => {

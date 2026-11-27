@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { Effect } from "effect";
+import { Array as EffectArray, Effect } from "effect";
 
-import { pullRequest } from "../../testing/fake-github";
 import { failureOf, withGitHub } from "../../testing/github-client";
 import { Reply } from "../../testing/intercepting-proxy";
+import { pullRequest } from "../../testing/pull-requests";
 import { MarkReadyForReview } from "./documents";
 import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
 
@@ -75,8 +75,8 @@ describe("pullRequestsFrom", () => {
       ...Array.from({ length: 100 }, (_, index) => listed(100 - index, "closed")),
     ];
     const pages: Readonly<Record<string, unknown>> = {
-      [pullsPath(1)]: all.slice(0, 100).map(({ github }) => github),
-      [pullsPath(2)]: all.slice(100).map(({ github }) => github),
+      [pullsPath(1)]: EffectArray.map(all.slice(0, 100), ({ github }) => github),
+      [pullsPath(2)]: EffectArray.map(all.slice(100), ({ github }) => github),
     };
     expect(
       await withGitHub(
@@ -85,7 +85,7 @@ describe("pullRequestsFrom", () => {
       ),
     ).toStrictEqual({
       requests: [`GET api.github.com${pullsPath(1)}`, `GET api.github.com${pullsPath(2)}`],
-      result: all.map(({ read }) => read),
+      result: EffectArray.map(all, ({ read }) => read),
     });
   });
 });

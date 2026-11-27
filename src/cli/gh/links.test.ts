@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Exit, Layer } from "effect";
+import { Array as EffectArray, Effect, Exit, Layer } from "effect";
 
 import {
   Clipboard,
@@ -11,8 +11,9 @@ import {
 import type { ListedPullRequest } from "../../clients/github/types";
 import { conflictWithTrunk } from "../../testing/conflicts";
 import { fakeConsole } from "../../testing/fake-console";
-import { fakeGitHub, inRepository, pullRequest } from "../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../testing/fake-github";
 import { inStack, linked } from "../../testing/links";
+import { pullRequest } from "../../testing/pull-requests";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import { htmlLinks, links, markdownLinks, NoPullRequests, stackPullRequests } from "./links";
 
@@ -103,11 +104,14 @@ describe("links", () => {
     ["copied", markdownLinks([draft]), "copied the links to the clipboard"],
     [
       "unreachable",
-      [
-        "-----BEGIN TEXT TO PASTE VERBATIM-----",
-        markdownLinks([draft]),
-        "-----END TEXT TO PASTE VERBATIM-----",
-      ].join("\n"),
+      EffectArray.join(
+        [
+          "-----BEGIN TEXT TO PASTE VERBATIM-----",
+          markdownLinks([draft]),
+          "-----END TEXT TO PASTE VERBATIM-----",
+        ],
+        "\n",
+      ),
       "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks. They then show as links that paste into Slack.",
     ],
   ] as const)(
@@ -195,11 +199,14 @@ describe("links", () => {
     expect(console.printed).toStrictEqual([
       {
         stream: "stdout",
-        text: [
-          "📚 Current stack: [#5](https://github.com/kkom/jj-octo/stack/5)",
-          "👀 [#2 Pull request 2](https://github.com/kkom/jj-octo/pull/2) `+1/-0`",
-          "👀 [#1 Pull request 1](https://github.com/kkom/jj-octo/pull/1) `+1/-0`",
-        ].join("\n"),
+        text: EffectArray.join(
+          [
+            "📚 Current stack: [#5](https://github.com/kkom/jj-octo/stack/5)",
+            "👀 [#2 Pull request 2](https://github.com/kkom/jj-octo/pull/2) `+1/-0`",
+            "👀 [#1 Pull request 1](https://github.com/kkom/jj-octo/pull/1) `+1/-0`",
+          ],
+          "\n",
+        ),
       },
     ]);
   });
