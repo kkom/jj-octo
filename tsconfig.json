@@ -99,7 +99,7 @@
           "matchEffectToMatch": "error",
           "matchToResultOrOption": "error",
           "missedPipeableOpportunity": "error",
-          "missingConcurrencyOption": "off", // undecided
+          "missingConcurrencyOption": "error",
           "missingEffectContext": "error",
           "missingEffectError": "error",
           "missingEffectServiceDependency": "error",

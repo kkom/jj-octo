@@ -111,8 +111,11 @@ const searchBatch = (
         );
       }
       const half = Math.ceil(batch.length / 2);
-      return Effect.forEach([batch.slice(0, half), batch.slice(half)], (part) =>
-        searchBatch(requests, repository, part),
+      // In turn, as GitHub asks of search requests to stay under its secondary rate limits.
+      return Effect.forEach(
+        [batch.slice(0, half), batch.slice(half)],
+        (part) => searchBatch(requests, repository, part),
+        { concurrency: 1 },
       ).pipe(Effect.map((found) => found.flat()));
     }),
   );
@@ -143,6 +146,8 @@ export const approvedPullRequests = (
       pullRequests.toSorted(Order.mapInput(Order.String, ({ createdAt }) => createdAt)),
     ),
     (batch) => searchBatch(requests, repository, batch),
+    // In turn, as GitHub asks of search requests (above).
+    { concurrency: 1 },
   ).pipe(
     Effect.map((found) => {
       const asked = new Set(pullRequests.map(({ number }) => number));

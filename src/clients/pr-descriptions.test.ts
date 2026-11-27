@@ -58,10 +58,10 @@ describe("PrDescriptions", () => {
     const repository = scratchRepository();
     const other = PullRequestNumberSchema.make(8);
     await repository.records((store) =>
-      Effect.all([
-        store.write(record),
-        store.write({ ...record, bookmark: "b", pullRequest: other }),
-      ]),
+      Effect.all(
+        [store.write(record), store.write({ ...record, bookmark: "b", pullRequest: other })],
+        { concurrency: "unbounded" },
+      ),
     );
     writeFileSync(path.join(recordsDirectory(repository), "9"), "not json");
     await repository.records((store) => store.prune(Effect.succeed(["a"])));

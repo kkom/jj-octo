@@ -64,16 +64,22 @@ export const mergedIn = (
 ): Effect.Effect<readonly MergedChange[], JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
-    const merged = yield* Effect.forEach(bookmarks, ({ change, local, name, remote }) =>
-      Effect.gen(function* () {
-        const merges = heads[name] ?? [];
-        const rebasedOnly =
-          remote !== undefined &&
-          merges.includes(remote) &&
-          (yield* jj.read(["interdiff", "--from", remote, "--to", local, "--summary"])).trim() ===
-            "";
-        return merges.includes(local) || rebasedOnly ? [{ bookmark: name, changeId: change }] : [];
-      }),
+    // In turn, since each jj command snapshots the working copy and records an operation.
+    const merged = yield* Effect.forEach(
+      bookmarks,
+      ({ change, local, name, remote }) =>
+        Effect.gen(function* () {
+          const merges = heads[name] ?? [];
+          const rebasedOnly =
+            remote !== undefined &&
+            merges.includes(remote) &&
+            (yield* jj.read(["interdiff", "--from", remote, "--to", local, "--summary"])).trim() ===
+              "";
+          return merges.includes(local) || rebasedOnly
+            ? [{ bookmark: name, changeId: change }]
+            : [];
+        }),
+      { concurrency: 1 },
     );
     return merged.flat();
   });

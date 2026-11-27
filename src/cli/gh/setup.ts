@@ -114,7 +114,8 @@ const ANONYMOUS = 'mutable() & (author_name(exact:"") | author_email(exact:""))'
 /** Gives those changes jj's identity, which the identity step reports where jj has none. */
 const authors: SetupStep = {
   check: Effect.gen(function* () {
-    const values = yield* Effect.forEach(IDENTITY, jjConfig);
+    // In turn, since each jj command snapshots the working copy and records an operation.
+    const values = yield* Effect.forEach(IDENTITY, jjConfig, { concurrency: 1 });
     const hasIdentity = values.every((value) => value !== "");
     const isAnonymous = hasIdentity && (yield* commitsAt(ANONYMOUS)).length > 0;
     return isAnonymous ? forInit("some mutable changes have no author") : undefined;
@@ -202,9 +203,11 @@ export const runSteps = <R>(
   Effect.gen(function* () {
     const { branch, steps } = yield* setup;
     const notColocated = yield* run(colocated);
+    // The steps run in turn, since each runs jj, and each jj command snapshots the working copy
+    // and records an operation.
     const found =
       notColocated === undefined
-        ? yield* Effect.forEach(steps, (step) => run(step))
+        ? yield* Effect.forEach(steps, (step) => run(step), { concurrency: 1 })
         : [notColocated];
     // Steps that fail the same way, such as on a jj config that jj can't parse, report it once.
     const problems = new Set(found.filter((problem) => problem !== undefined));
