@@ -133,8 +133,9 @@ export const GitHubLive = (
           Effect.catchTag("HttpClientError", (error) =>
             Effect.fail(new GitHubFailed({ message: error.message })),
           ),
-          Effect.flatMap((response) =>
-            response.status < 400 ? Effect.succeed(response) : failWith(request, response),
+          Effect.filterOrElse(
+            (response) => response.status < 400,
+            (response) => failWith(request, response),
           ),
         );
 
