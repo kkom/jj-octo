@@ -1,4 +1,4 @@
-import { Effect, Option, Redacted } from "effect";
+import { Effect, Layer, Option, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 
 import { GitHub, GitHubLive } from "../clients/github/client";
@@ -20,10 +20,9 @@ export const withGitHub = async <A>(
       { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
     );
     return Effect.runPromise(
-      GitHub.use(use).pipe(
-        Effect.provide(live),
-        Effect.provide(FetchHttpClient.layer),
-        Effect.provide(environment(env)),
+      Effect.provide(
+        GitHub.use(use),
+        live.pipe(Layer.provideMerge(FetchHttpClient.layer), Layer.provideMerge(environment(env))),
       ),
     );
   });
