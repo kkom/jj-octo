@@ -31,7 +31,7 @@
     "release:major": "bun pm version major --no-git-tag-version",
     "release:minor": "bun pm version minor --no-git-tag-version",
     "release:patch": "bun pm version patch --no-git-tag-version",
-    "test": "bun run build && bun run compile && bun test --parallel=4 --no-isolate ./src"
+    "test": "bun run build && bun run compile && bun test --parallel=4 --no-isolate ./scripts ./src"
   },
   "devDependencies": {
     "@effect/platform-bun": "4.1.5",

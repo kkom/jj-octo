@@ -1,0 +1,4 @@
+{
+  "oxc.path.oxlint": "scripts/effect-tsgo-oxlint.sh",
+  "oxc.typeAware": true
+}
