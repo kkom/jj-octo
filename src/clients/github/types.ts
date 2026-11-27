@@ -1,9 +1,9 @@
 import { type Option, Schema } from "effect";
 
-export const PullRequestNumberSchema = Schema.Number.pipe(Schema.brand("PullRequestNumber"));
+export const PullRequestNumberSchema = Schema.Finite.pipe(Schema.brand("PullRequestNumber"));
 export type PullRequestNumber = typeof PullRequestNumberSchema.Type;
 
-export const StackNumberSchema = Schema.Number.pipe(Schema.brand("StackNumber"));
+export const StackNumberSchema = Schema.Finite.pipe(Schema.brand("StackNumber"));
 export type StackNumber = typeof StackNumberSchema.Type;
 
 /** A workflow run's id, as the URLs of the run's endpoints write it. */

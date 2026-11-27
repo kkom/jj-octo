@@ -59,7 +59,7 @@ export const FoundPullRequests = responseOf<"search/issues-and-pull-requests">()
   Schema.Struct({
     incomplete_results: Schema.Boolean,
     items: Schema.Array(Schema.Struct({ number: PullRequestNumberSchema })),
-    total_count: Schema.Number,
+    total_count: Schema.Finite,
   }),
 );
 export const RepositoryDetails = responseOf<"repos/get">()(
@@ -79,7 +79,7 @@ export const WorkflowRuns = responseOf<"actions/list-workflow-runs-for-repo">()(
   Schema.Struct({
     workflow_runs: Schema.Array(
       Schema.Struct({
-        id: Schema.Union([Schema.Number, Schema.BigInt]),
+        id: Schema.Union([Schema.Finite, Schema.BigInt]),
         status: Schema.NullOr(Schema.String),
       }),
     ),
@@ -88,9 +88,9 @@ export const WorkflowRuns = responseOf<"actions/list-workflow-runs-for-repo">()(
 
 // A check run's id is an int64 too.
 const CheckRun = Schema.Struct({
-  app: Schema.NullOr(Schema.Struct({ id: Schema.Number })),
+  app: Schema.NullOr(Schema.Struct({ id: Schema.Finite })),
   conclusion: Schema.NullOr(Schema.String),
-  id: Schema.Union([Schema.Number, Schema.BigInt]),
+  id: Schema.Union([Schema.Finite, Schema.BigInt]),
   name: Schema.String,
   status: Schema.String,
 });
@@ -106,7 +106,7 @@ export const CombinedStatus = responseOf<"repos/get-combined-status-for-ref">()(
 // response fails to decode rather than the rule going unread.
 const StatusCheck = Schema.Struct({
   context: Schema.String,
-  integration_id: Schema.optionalKey(Schema.Number),
+  integration_id: Schema.optionalKey(Schema.Finite),
 });
 export const StatusCheckRule = Schema.Struct({
   parameters: Schema.optionalKey(
@@ -126,7 +126,7 @@ export const BranchRules = responseOf<"repos/get-branch-rules">()(
   Schema.Array(Schema.Union([StatusCheckRule, OtherRule])),
 );
 const ProtectionCheck = Schema.Struct({
-  app_id: Schema.NullOr(Schema.Number),
+  app_id: Schema.NullOr(Schema.Finite),
   context: Schema.String,
 });
 const RequiredStatusChecks = Schema.Struct({
