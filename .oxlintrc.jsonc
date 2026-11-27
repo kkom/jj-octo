@@ -125,6 +125,7 @@
     "effecttsgo/unnecessary-arrow-block": "error",
     "effecttsgo/unnecessary-effect-gen": "error",
     "effecttsgo/unnecessary-pipe": "error",
+    "effecttsgo/unnecessary-pipe-chain": "error",
     "effecttsgo/unnecessary-typeof-type": "error",
     "explicit-function-return-type": "off",
     // Effect.gen takes an anonymous generator.
@@ -382,7 +383,6 @@
         "effecttsgo/try-catch-in-effect-gen": "off",
         "effecttsgo/unknown-in-effect-catch": "off",
         "effecttsgo/unnecessary-fail-yieldable-error": "off",
-        "effecttsgo/unnecessary-pipe-chain": "off",
         "effecttsgo/unsafe-effect-type-assertion": "off",
         "effecttsgo/unstable-api-usage": "off",
         "effecttsgo/yield-in-call-argument": "off",
