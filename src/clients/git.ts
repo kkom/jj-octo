@@ -130,7 +130,10 @@ export const gitConfig = (args: readonly string[]): Effect.Effect<string, GitFai
     const git = yield* Git;
     const value = yield* git.read(["config", ...args]).pipe(
       // Git exits 1 for a key it has no value for, and 128 for a config file it can't parse.
-      Effect.catch((error) => (error.exitCode === 1 ? Effect.succeed("") : Effect.fail(error))),
+      Effect.catchIf(
+        (error) => error.exitCode === 1,
+        () => Effect.succeed(""),
+      ),
     );
     return value.trim();
   });
