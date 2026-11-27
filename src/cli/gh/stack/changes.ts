@@ -1,6 +1,7 @@
-import { Array as EffectArray, Data, Effect, String as EffectString } from "effect";
+import { Array as EffectArray, Data, Effect, Result, Schema, String as EffectString } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
+import { formatJson } from "../../../json";
 import type { BookmarkTarget } from "./bookmark-targets";
 
 export class NotAStack extends Data.TaggedError("NotAStack")<{ readonly message: string }> {}
@@ -30,7 +31,7 @@ export const anyOf = (revsets: readonly string[]): string =>
   EffectArray.join(["none()", ...revsets], " | ");
 
 /** A jj string pattern that matches the name alone. */
-export const exactPattern = (name: string): string => `exact:${JSON.stringify(name)}`;
+export const exactPattern = (name: string): string => `exact:${formatJson(name)}`;
 
 /** The commits of a change. A change with no visible commit selects none, where its bare id fails. */
 export const changeRevset = (change: string): string => `change_id(${change})`;
@@ -41,9 +42,11 @@ export const bookmarkRevset = (bookmark: string): string => `bookmarks(${exactPa
 export const lines = (output: string): readonly string[] =>
   EffectArray.filter(EffectString.split(output, "\n"), (line) => line !== "");
 
+const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
+
 /** A description that a template printed with `escape_json()`. */
 export const parseDescription = (json: string): string => {
-  const parsed: unknown = JSON.parse(json);
+  const parsed = Result.getOrThrow(decodeJson(json));
   return typeof parsed === "string" ? parsed : "";
 };
 

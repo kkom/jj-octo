@@ -3,6 +3,7 @@ import { Data, Effect } from "effect";
 import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
 import type { Jj, JjFailed } from "../../../clients/jj";
+import { formatJson } from "../../../json";
 import { commitsAt } from "./changes";
 
 export class TrunkMismatch extends Data.TaggedError("TrunkMismatch")<{
@@ -10,7 +11,7 @@ export class TrunkMismatch extends Data.TaggedError("TrunkMismatch")<{
 }> {}
 
 /** The default branch as `origin` has it, quoted so that any branch name parses. */
-export const trunkRevset = (branch: string): string => `${JSON.stringify(branch)}@origin`;
+export const trunkRevset = (branch: string): string => `${formatJson(branch)}@origin`;
 
 /**
  * Fails unless `trunk()` is the commit of GitHub's default branch. jj's own `trunk()` guesses

@@ -4,10 +4,15 @@ import {
   Data,
   Effect,
   Layer,
+  Schema,
   Stream,
   String as EffectString,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+
+import { formatJson } from "../json";
+
+const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
 export class JjFailed extends Data.TaggedError("JjFailed")<{ readonly message: string }> {}
 
@@ -149,14 +154,15 @@ export const readJjConfig = (
     const output = yield* jj.read(["config", "list", ...scope, key, "-T", ENTRY]);
     const lines = EffectArray.filter(EffectString.split(output, "\n"), (line) => line !== "");
     // For a table, jj lists the keys inside it.
-    const prefix = `${JSON.stringify(key)} `;
+    const prefix = `${formatJson(key)} `;
     if (EffectArray.some(lines, (line) => !EffectString.startsWith(prefix)(line))) {
       return yield* new JjFailed({ message: `${key} is a table; set it to a single value` });
     }
     const [line] = lines;
+    // Jj writes each value as JSON, so one it doesn't is a defect
     return line === undefined
       ? undefined
-      : (JSON.parse(EffectString.slice(prefix.length)(line)) as unknown);
+      : yield* Effect.orDie(decodeJson(EffectString.slice(prefix.length)(line)));
   });
 
 /** A string in jj's config, or an empty string where it has none. Fails on any other value. */
@@ -167,7 +173,7 @@ export const jjConfig = (key: string): Effect.Effect<string, JjFailed, Jj> =>
       return value ?? "";
     }
     return yield* new JjFailed({
-      message: `${key} is ${JSON.stringify(value)}; set it to a string`,
+      message: `${key} is ${formatJson(value)}; set it to a string`,
     });
   });
 
@@ -181,5 +187,5 @@ export const setJjConfig = (
 ): Effect.Effect<void, JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
-    yield* jj.run(["config", "set", "--repo", key, JSON.stringify(value)]);
+    yield* jj.run(["config", "set", "--repo", key, formatJson(value)]);
   });

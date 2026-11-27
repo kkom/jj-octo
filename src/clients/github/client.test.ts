@@ -1,12 +1,14 @@
 import { describe, expect, it } from "bun:test";
 
-import { Array as EffectArray, Effect } from "effect";
+import { Array as EffectArray, Effect, Result, Schema } from "effect";
 
 import { failureOf, withGitHub } from "../../testing/github-client";
 import { Reply } from "../../testing/intercepting-proxy";
 import { pullRequest } from "../../testing/pull-requests";
 import { MarkReadyForReview } from "./documents";
 import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
+
+const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
 
 const runsPath = (page: number) =>
   `/repos/owner/name/actions/runs?head_sha=abc&per_page=100&page=${page}`;
@@ -140,7 +142,7 @@ describe("closing a pull request", () => {
     const bodies: unknown[] = [];
     const { requests } = await withGitHub(
       ({ body }) => {
-        bodies.push(JSON.parse(body));
+        bodies.push(Result.getOrThrow(decodeJson(body)));
         return {};
       },
       (github) =>
@@ -167,7 +169,7 @@ const markReady = async (graphql: unknown, env: Readonly<Record<string, string>>
   const outcome = await withGitHub(
     ({ body, path }) => {
       if (path === "/graphql") {
-        bodies.push(JSON.parse(body));
+        bodies.push(Result.getOrThrow(decodeJson(body)));
         return graphql;
       }
       return path === "/repos/owner/name/pulls/7" ? { node_id: "PR_seven" } : {};

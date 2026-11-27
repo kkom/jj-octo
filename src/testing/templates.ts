@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
-import { Array as EffectArray, String as EffectString } from "effect";
+import { Array as EffectArray, DateTime, String as EffectString } from "effect";
 
 // Running jj and git a dozen times per test is most of what the tests cost, so each kind of
 // repository is built once per test process and copied.
@@ -16,8 +16,9 @@ const removeStaleTemplates = (parent: string): void => {
     EffectString.startsWith("template-")(entry),
   )) {
     const template = path.join(parent, name);
-    const modified = statSync(template, { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
-    if (Date.now() - modified > STALE_AFTER_MS) {
+    const now = DateTime.toEpochMillis(DateTime.nowUnsafe());
+    const modified = statSync(template, { throwIfNoEntry: false })?.mtimeMs ?? now;
+    if (now - modified > STALE_AFTER_MS) {
       rmSync(template, { force: true, recursive: true });
     }
   }

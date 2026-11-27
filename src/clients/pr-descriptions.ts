@@ -1,5 +1,6 @@
 import {
   Array as EffectArray,
+  Clock,
   Console,
   Context,
   Effect,
@@ -10,6 +11,7 @@ import {
   Schema,
   String as EffectString,
 } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import type { PullRequestNumber } from "./github/types";
 import { Jj } from "./jj";
@@ -59,6 +61,7 @@ const StoredRecord = Schema.Struct({
   description: Schema.String,
 });
 const decode = Schema.decodeUnknownOption(Schema.fromJsonString(StoredRecord));
+const encode = Schema.encodeEffect(Schema.fromJsonString(StoredRecord));
 
 // A record's file is named by its pull request's number. A write goes to a file named by the
 // number and a random id first, which is renamed into place.
@@ -120,11 +123,13 @@ export const prDescriptionsLayer: Layer.Layer<
               yield* remove(file, name);
             }
           }
-          const now = Date.now();
+          const now = yield* Clock.currentTimeMillis;
           for (const name of EffectArray.filter(names, (file) => PARTIAL.test(file))) {
             const file = path.join(records, name);
             const modified = yield* fs.stat(file).pipe(
-              Effect.map(({ mtime }) => Option.getOrElse(mtime, () => new Date(0)).getTime()),
+              Effect.map(({ mtime }) =>
+                Option.match(mtime, { onNone: () => 0, onSome: (time) => time.getTime() }),
+              ),
               Effect.orElseSucceed(() => now),
             );
             if (now - modified > STOPPED_AFTER_MS) {
@@ -144,13 +149,17 @@ export const prDescriptionsLayer: Layer.Layer<
           yield* fs.makeDirectory(records, { recursive: true });
           const record = path.join(records, String(pullRequest));
           // Renamed into place, so a run stopped halfway leaves the record whole or as it was.
-          const partial = `${record}.${crypto.randomUUID()}.partial`;
-          yield* fs
-            .writeFileString(partial, JSON.stringify({ bookmark, commit, description }))
-            .pipe(
-              Effect.andThen(fs.rename(partial, record)),
-              Effect.tapError(() => fs.remove(partial, { force: true }).pipe(Effect.ignore)),
-            );
+          const unique = yield* SecureRandom.SecureRandom.pipe(
+            Effect.flatMap((random) => random.uuidV4()),
+            Effect.provide(SecureRandom.layerWebCrypto),
+          );
+          const partial = `${record}.${unique}.partial`;
+          // Three strings always encode
+          const text = yield* Effect.orDie(encode({ bookmark, commit, description }));
+          yield* fs.writeFileString(partial, text).pipe(
+            Effect.andThen(fs.rename(partial, record)),
+            Effect.tapError(() => fs.remove(partial, { force: true }).pipe(Effect.ignore)),
+          );
         }).pipe(Effect.catch(warn("record"))),
     };
   }),

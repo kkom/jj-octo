@@ -43,7 +43,7 @@ Yield a `Context.Service` rather than threading a first parameter, so adding a d
 
 ## Send outbound HTTP through `HttpClient`
 
-From `effect/http`, with `FetchHttpClient.layer` provided at the entry point. ❌ Not bare `fetch`.
+From `effect/http`, with `FetchHttpClient.layer` provided at the entry point.
 
 ## Build a CLI with `Command`
 
