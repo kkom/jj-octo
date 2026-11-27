@@ -45,8 +45,9 @@ export const log = (
     const github = yield* GitHub;
     const stack = yield* stackChanges(revision);
     const targets = yield* bookmarkTargets;
-    const pullRequests = yield* Effect.all(
-      stack.map(({ bookmark }) => github.openPullRequest(bookmark)),
+    const pullRequests = yield* Effect.forEach(
+      stack,
+      ({ bookmark }) => github.openPullRequest(bookmark),
       { concurrency: "unbounded" },
     );
     return logLines(
