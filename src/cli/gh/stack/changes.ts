@@ -101,7 +101,8 @@ export const bookmarksAt = (revset: string): Effect.Effect<readonly string[], Jj
     // `jj bookmark list` also prints a bookmark's remote copy where it points elsewhere, as a
     // merged branch's does, so the template keeps the local one alone.
     const template = String.raw`if(!remote, name ++ "\n")`;
-    return lines(yield* jj.read(["bookmark", "list", "-r", revset, "-T", template]));
+    const listed = yield* jj.read(["bookmark", "list", "-r", revset, "-T", template]);
+    return lines(listed);
   });
 
 /** What the commands that show a stack print beside a change with conflicts. */

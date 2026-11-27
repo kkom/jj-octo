@@ -176,7 +176,7 @@
           "unsafeEffectTypeAssertion": "error",
           // jj-octo builds on Effect's unstable modules on purpose, such as `effect/cli`.
           "unstableApiUsage": "off",
-          "yieldInCallArgument": "off" // undecided
+          "yieldInCallArgument": "error"
         },
         // A pipe reads better than nesting only from three steps. At two, the rule also
         // pipes a call whose argument is a key rather than the value that flows through,

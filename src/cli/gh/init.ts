@@ -64,7 +64,8 @@ export const setUpOnUpgrade: Effect.Effect<
   GitFailed | JjFailed,
   FileSystem.FileSystem | Git | Jj
 > = Effect.gen(function* () {
-  if (!isOlder(yield* readSetUpVersion)) {
+  const setUpVersion = yield* readSetUpVersion;
+  if (!isOlder(setUpVersion)) {
     return;
   }
   yield* Console.error(`setting this checkout up for jj-octo ${manifest.version}`);

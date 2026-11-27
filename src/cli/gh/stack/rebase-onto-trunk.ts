@@ -59,7 +59,8 @@ const rebaseStacks = (stacks: readonly Stack[], required: readonly string[]) =>
       return;
     }
     const jj = yield* Jj;
-    const conflictedCommits = new Set(yield* commitsAt("conflicts() & mutable()"));
+    const conflictedCommitIds = yield* commitsAt("conflicts() & mutable()");
+    const conflictedCommits = new Set(conflictedCommitIds);
     const conflictedChanges = new Set(
       stacks.flatMap((stack) =>
         stack.filter(({ conflict }) => conflict).map(({ changeId }) => changeId),
@@ -107,8 +108,9 @@ export const rebaseOntoTrunk = (
   required: readonly string[],
 ): Effect.Effect<void, JjFailed, Jj> =>
   Effect.gen(function* () {
+    const logged = yield* loggedChanges(`(${roots})::`);
     const [alone, together] = EffectArray.partition(
-      stacksOf(yield* loggedChanges(`(${roots})::`)),
+      stacksOf(logged),
       Filter.fromPredicate(isDivergent),
     );
     for (const stacks of [together, ...alone.map((stack) => [stack])]) {

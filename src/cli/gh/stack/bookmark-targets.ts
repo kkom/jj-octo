@@ -24,7 +24,8 @@ export const bookmarkTargets: Effect.Effect<
   const jj = yield* Jj;
   const template = String.raw`name ++ "\t" ++ remote ++ "\t" ++ tracked ++ "\t" ++ present ++ "\t" ++ if(normal_target, normal_target.commit_id() ++ "\t" ++ normal_target.change_id()) ++ "\n"`;
   const targets = new Map<string, BookmarkTarget>();
-  for (const line of lines(yield* jj.read(["bookmark", "list", "--all-remotes", "-T", template]))) {
+  const listed = yield* jj.read(["bookmark", "list", "--all-remotes", "-T", template]);
+  for (const line of lines(listed)) {
     const [name = "", remote, tracked, present, commit, change] = line.split("\t");
     const known = targets.get(name) ?? {
       deleted: false,
