@@ -289,4 +289,4 @@ export const inRepository =
     env: Readonly<Record<string, string>> = {},
   ) =>
   <A, E>(program: Effect.Effect<A, E, Git | GitHub | Jj | PrDescriptions>): Effect.Effect<A, E> =>
-    program.pipe(Effect.provide(Layer.mergeAll(repository.layer, github.layer, environment(env))));
+    program.pipe(Effect.provide([repository.layer, github.layer, environment(env)]));
