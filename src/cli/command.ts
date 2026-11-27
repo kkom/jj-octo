@@ -2,7 +2,7 @@ import { Context, Effect, Option } from "effect";
 import { CliError, CliOutput, Command, Flag } from "effect/cli";
 
 const userError = (message: string): CliError.UserError =>
-  new CliError.UserError({ cause: message, userMessage: message });
+  CliError.UserError.make({ cause: message, userMessage: message });
 
 // Every failure the commands raise is one a person can act on, so each is shown as a message
 // rather than a stack trace.
