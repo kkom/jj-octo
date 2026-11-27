@@ -42,6 +42,13 @@ const listing =
     return new Reply(404, { message: "Not Found" });
   };
 
+// The checks of commit `abc` against a GitHub that answers as `respond` does, with the requests
+// it received sorted, since the check runs and the statuses are read at once.
+const readLatestChecks = async (respond: (request: InterceptedRequest) => unknown) => {
+  const { requests, result } = await withGitHub(respond, (github) => github.latestChecks("abc"));
+  return { requests: requests.toSorted(), result };
+};
+
 // A check run's result from GitHub Actions.
 const check = (name: string, outcome: string, state: Check["state"]): Check => ({
   app: Option.some(ACTIONS),
@@ -53,7 +60,7 @@ const check = (name: string, outcome: string, state: Check["state"]): Check => (
 describe("latestChecks", () => {
   it("counts only the newest run of each check", async () => {
     expect(
-      await withGitHub(
+      await readLatestChecks(
         listing(
           [
             // Listed newest first, as GitHub lists them, with a re-run of each check.
@@ -67,7 +74,6 @@ describe("latestChecks", () => {
           ],
           [],
         ),
-        (github) => github.latestChecks("abc"),
       ),
     ).toStrictEqual({
       requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
@@ -92,14 +98,13 @@ describe("latestChecks", () => {
       "stale",
     ];
     expect(
-      await withGitHub(
+      await readLatestChecks(
         listing(
           conclusions.map((conclusion, index) =>
             checkRun({ conclusion, id: index, name: conclusion }),
           ),
           [],
         ),
-        (github) => github.latestChecks("abc"),
       ),
     ).toStrictEqual({
       requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
@@ -118,7 +123,7 @@ describe("latestChecks", () => {
 
   it("reads each commit status, with no app", async () => {
     expect(
-      await withGitHub(
+      await readLatestChecks(
         listing(
           [],
           ["success", "pending", "failure", "error"].map((state) => ({
@@ -126,7 +131,6 @@ describe("latestChecks", () => {
             state,
           })),
         ),
-        (github) => github.latestChecks("abc"),
       ),
     ).toStrictEqual({
       requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
