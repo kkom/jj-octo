@@ -75,14 +75,14 @@ export const push = (
     const records = yield* PrDescriptions;
     const bookmarks = stack.map(({ bookmark }) => bookmark);
     const bases = basesFor(bookmarks, trunk);
-    const found = yield* Effect.all(
-      stack.map((change, index) =>
+    const found = yield* Effect.forEach(
+      stack,
+      (change, index) =>
         github
           .openPullRequest(change.bookmark)
           .pipe(
             Effect.map((pullRequest) => ({ base: bases[index] ?? trunk, change, pullRequest })),
           ),
-      ),
       { concurrency: "unbounded" },
     );
     // Before a description is synced, which can rewrite changes, so a failure changes nothing.

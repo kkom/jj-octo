@@ -28,6 +28,7 @@
     "class-methods-use-this": "off",
     "effecttsgo/abort-controller-in-effect": "error",
     "effecttsgo/acquire-release-disposable": "error",
+    "effecttsgo/all-of-map-to-for-each": "error",
     "effecttsgo/catch-all-tag-dispatch-to-catch-tag": "error",
     "effecttsgo/catch-all-to-map-error": "error",
     "effecttsgo/catch-chain-to-first-success-of": "error",
@@ -334,7 +335,6 @@
       // off with its reason, and moves it out of this block.
       "files": ["**/*"],
       "rules": {
-        "effecttsgo/all-of-map-to-for-each": "off",
         "effecttsgo/any-unknown-in-error-context": "off",
         "effecttsgo/api-stability-leak": "off",
         "effecttsgo/async-function": "off",

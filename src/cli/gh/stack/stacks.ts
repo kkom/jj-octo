@@ -19,8 +19,9 @@ export const stackContaining = (
 ): Effect.Effect<Option.Option<RemoteStack>, GitHubFailed | SeveralStacks, GitHub> =>
   Effect.gen(function* () {
     const github = yield* GitHub;
-    const found = yield* Effect.all(
-      pullRequests.map((pullRequest) => github.stackOf(pullRequest)),
+    const found = yield* Effect.forEach(
+      pullRequests,
+      (pullRequest) => github.stackOf(pullRequest),
       { concurrency: "unbounded" },
     );
     const stacks = EffectArray.dedupeWith(
