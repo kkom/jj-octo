@@ -120,16 +120,16 @@
       // 7.0.2001 is TypeScript 7.0.2, tsgolint patch 1. Bumping one alone leaves the type-aware
       // lint rules answering about a compiler `tsc` no longer runs.
       //
-      // The lint scripts run oxlint through @effect/tsgo, which fails on an oxlint or an
-      // oxlint-tsgolint version that its release has no build for. So it moves with them, and
-      // this group and oxc's are one group, under one name. This rule comes after effect's,
-      // so @effect/tsgo joins this group rather than that one.
+      // `check:types` runs `tsc` through @effect/tsgo, which runs its own build of the installed
+      // TypeScript. Where its release has none, it runs the latest version it has, with no
+      // warning, so it moves with TypeScript. This rule comes after effect's, so @effect/tsgo
+      // joins this group rather than that one.
       matchPackageNames: ["@effect/tsgo", "oxlint-tsgolint", "typescript"],
-      groupName: "TypeScript and oxc",
+      groupName: "TypeScript",
     },
     {
       matchSourceUrls: ["https://github.com/oxc-project/oxc"],
-      groupName: "TypeScript and oxc",
+      groupName: "oxc",
     },
   ],
 }

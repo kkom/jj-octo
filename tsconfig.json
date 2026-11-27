@@ -7,7 +7,173 @@
     "erasableSyntaxOnly": true,
     "noUncheckedSideEffectImports": true,
     "verbatimModuleSyntax": true,
-    "noEmit": true
+    "noEmit": true,
+    // Effect's diagnostics, which `effect-tsgo tsc` reports in the type check. Every rule is
+    // set here, since a rule left out takes the plugin's default. A rule marked "undecided" is
+    // off until a decision fixes what it finds, or gives the reason it stays off.
+    // `scripts/effect-diagnostics.test.ts` holds this to the plugin's rules.
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "abortControllerInEffect": "error",
+          "acquireReleaseDisposable": "error",
+          "allOfMapToForEach": "error",
+          "anyUnknownInErrorContext": "off", // undecided
+          "apiStabilityLeak": "off", // undecided
+          "asyncFunction": "off", // undecided
+          "catchAllTagDispatchToCatchTag": "error",
+          "catchAllToMapError": "error",
+          "catchChainToFirstSuccessOf": "error",
+          "catchConditionalRefailToCatchIf": "error",
+          "catchDieToOrDie": "error",
+          "catchIfTagToCatchTag": "error",
+          "catchRefailToTapError": "error",
+          "catchTagToCatchReason": "error",
+          "catchToIgnore": "error",
+          "catchToOrElseSucceed": "error",
+          "catchUnfailableEffect": "error",
+          "classSelfMismatch": "error",
+          "cryptoRandomUUID": "off", // undecided
+          "cryptoRandomUUIDInEffect": "off", // undecided
+          "deterministicKeys": "off", // undecided
+          "duplicatePackage": "error",
+          "effectDoNotation": "error",
+          "effectFnIife": "error",
+          "effectFnImplicitAny": "error",
+          "effectFnOpportunity": "error",
+          "effectGenUsesAdapter": "error",
+          "effectInFailure": "error",
+          "effectInVoidSuccess": "error",
+          "effectMapFlatten": "error",
+          "effectMapVoid": "error",
+          "effectSleepZeroToYieldNow": "error",
+          "effectSucceedWithUndefined": "error",
+          "effectSucceedWithVoid": "error",
+          "effectTryWithoutCatch": "error",
+          "errorPayloadShadowsName": "error",
+          // Its analysis can make the type check report circular instantiations (TS2615, TS5115),
+          // which stock TypeScript doesn't.
+          "experimentalApiUsage": "off",
+          "extendsNativeError": "off", // undecided
+          "failCauseToConstructor": "error",
+          "flatMapConditionalToFilterOrFail": "error",
+          "flatMapIdentityToFlatten": "error",
+          "flatMapIgnoredParamToAndThen": "error",
+          "flatMapMapToZipWith": "error",
+          "flatMapProvideServiceToProvideServiceEffect": "error",
+          "flatMapToMap": "error",
+          "flatMapToTap": "error",
+          "floatingEffect": "error",
+          "floatingEffectInVitest": "error",
+          "forLoopPushToForEach": "error",
+          "genericEffectServices": "error",
+          "globalConsole": "off", // undecided
+          "globalConsoleInEffect": "error",
+          "globalDate": "off", // undecided
+          "globalDateInEffect": "off", // undecided
+          "globalErrorInEffectCatch": "error",
+          "globalErrorInEffectFailure": "error",
+          "globalFetch": "off", // undecided
+          "globalFetchInEffect": "error",
+          "globalJson": "off", // undecided
+          "globalJsonInEffect": "off", // undecided
+          "globalRandom": "off", // undecided
+          "globalRandomInEffect": "error",
+          "globalTimers": "off", // undecided
+          "globalTimersInEffect": "error",
+          "instanceOfSchema": "error",
+          "layerMergeAllWithDependencies": "error",
+          "lazyEffect": "off", // undecided
+          "lazyPromiseInEffectSync": "error",
+          "leakingRequirements": "error",
+          "manualMetricTapToTrack": "error",
+          "mapConstToAs": "error",
+          "mapMapErrorToMapBoth": "error",
+          "mapSomeCatchNoSuchElement": "error",
+          "mapSomeToAsSome": "error",
+          "matchBooleanToIsSuccess": "error",
+          "matchEffectToMapBoth": "error",
+          "matchEffectToMatch": "error",
+          "matchToResultOrOption": "error",
+          "missedPipeableOpportunity": "off", // undecided
+          "missingConcurrencyOption": "off", // undecided
+          "missingEffectContext": "error",
+          "missingEffectError": "error",
+          "missingEffectServiceDependency": "error",
+          "missingLayerContext": "error",
+          "missingPipeableSignature": "off", // undecided
+          "missingReturnYieldStar": "error",
+          "missingStarInYieldEffectGen": "error",
+          "multipleCatchTag": "error",
+          "multipleEffectProvide": "error",
+          "nestedEffectGenYield": "error",
+          "newPromise": "off", // undecided
+          "newSchemaClass": "error",
+          "nodeBuiltinImport": "off", // undecided
+          "nonObjectEffectServiceType": "error",
+          "obsoleteMatchImport": "error",
+          "obsoleteSchemaImport": "error",
+          "onExitFailureToOnError": "error",
+          "optionMatchToFromOption": "error",
+          "outdatedApi": "error",
+          "overriddenSchemaConstructor": "error",
+          "preferBarrelImport": "error",
+          "preferEffectArray": "off", // undecided
+          "preferEffectRecord": "off", // undecided
+          "preferEffectString": "off", // undecided
+          "preferNamespaceImport": "error",
+          "preferSchemaTaggedError": "off", // undecided
+          "preferSchemaTypeProperty": "error",
+          "preferSucceedSomeOrNone": "error",
+          "preferTypedSchemaDecoder": "error",
+          "preferUnsafeConstructor": "error",
+          "processEnv": "off", // undecided
+          "processEnvInEffect": "off", // undecided
+          "promiseAllInEffect": "error",
+          "promiseInEffectSuccess": "error",
+          "promiseRaceInEffect": "error",
+          "provideLayerSucceedToProvideService": "error",
+          "provideMergeAllToArray": "error",
+          "raceFirstWithSleepToTimeout": "error",
+          "redundantMapError": "error",
+          "redundantOrDie": "error",
+          "redundantSchemaTagIdentifier": "error",
+          "resultMatchToFromResult": "error",
+          "returnEffectInGen": "error",
+          "runEffectInsideEffect": "error",
+          "runOfExitToRunExit": "error",
+          "schemaClassMissingBrand": "error",
+          "schemaClassObjectLiteral": "error",
+          "schemaLiteralNonFinite": "error",
+          "schemaNumber": "error",
+          "schemaOpaqueInstanceMember": "error",
+          "schemaStructWithTag": "error",
+          "schemaSync": "off", // undecided
+          "schemaSyncInEffect": "error",
+          "schemaUnionOfLiterals": "error",
+          "scopeInLayerEffect": "error",
+          "serviceNotAsClass": "error",
+          "strictBooleanExpressions": "error",
+          "strictEffectProvide": "off", // undecided
+          "suspendFailToFailSync": "error",
+          "syncToSucceed": "error",
+          "timeoutCatchTagToTimeoutOrElse": "error",
+          "tryCatchInEffectGen": "error",
+          "typeUnionToSchemaUnion": "error",
+          "unknownInEffectCatch": "error",
+          "unnecessaryArrowBlock": "error",
+          "unnecessaryEffectGen": "error",
+          "unnecessaryFailYieldableError": "error",
+          "unnecessaryPipe": "error",
+          "unnecessaryPipeChain": "error",
+          "unnecessaryTypeofType": "error",
+          "unsafeEffectTypeAssertion": "error",
+          "unstableApiUsage": "off", // undecided
+          "yieldInCallArgument": "off" // undecided
+        }
+      }
+    ]
   },
   "include": ["scripts", "src"]
 }
