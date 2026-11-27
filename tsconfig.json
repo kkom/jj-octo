@@ -149,7 +149,7 @@
           "schemaNumber": "error",
           "schemaOpaqueInstanceMember": "error",
           "schemaStructWithTag": "error",
-          "schemaSync": "off", // undecided
+          "schemaSync": "error",
           "schemaSyncInEffect": "error",
           "schemaUnionOfLiterals": "error",
           "scopeInLayerEffect": "error",

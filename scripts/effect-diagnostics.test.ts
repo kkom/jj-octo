@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import path from "node:path";
 
-import { Schema } from "effect";
+import { Result, Schema } from "effect";
 
 const root = path.join(import.meta.dirname, "..");
 
@@ -30,8 +30,10 @@ const PluginSchema = Schema.Struct({
 });
 
 const listConfiguredRules = async () => {
-  const tsconfig = Schema.decodeUnknownSync(Tsconfig)(
-    Bun.JSONC.parse(await Bun.file(path.join(root, "tsconfig.json")).text()),
+  const tsconfig = Result.getOrThrow(
+    Schema.decodeUnknownResult(Tsconfig)(
+      Bun.JSONC.parse(await Bun.file(path.join(root, "tsconfig.json")).text()),
+    ),
   );
   const entry = tsconfig.compilerOptions.plugins.find(
     ({ name }) => name === "@effect/language-service",
@@ -43,8 +45,10 @@ const listConfiguredRules = async () => {
 // kept only for configs that still name it.
 const listCurrentPluginRules = async () => {
   const manifest = Bun.resolveSync("@effect/tsgo/package.json", root);
-  const schema = Schema.decodeUnknownSync(PluginSchema)(
-    await Bun.file(path.join(path.dirname(manifest), "schema.json")).json(),
+  const schema = Result.getOrThrow(
+    Schema.decodeUnknownResult(PluginSchema)(
+      await Bun.file(path.join(path.dirname(manifest), "schema.json")).json(),
+    ),
   );
   return Object.entries(
     schema.definitions.effectLanguageServicePluginDiagnosticSeverityDefinition.properties,
