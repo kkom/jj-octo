@@ -1,3 +1,5 @@
+import { Array as EffectArray } from "effect";
+
 import { moveTrunkOnGitHub } from "./branch-changes";
 import type { ScratchRepository } from "./scratch-repository";
 
@@ -16,14 +18,18 @@ export const conflictWithTrunk = (
   repository.jj("git", "fetch");
   repository.jj("rebase", "-b", "@", "-d", "main");
   if (pushed.length > 0) {
-    repository.jj("git", "push", ...pushed.flatMap((bookmark) => ["--bookmark", bookmark]));
+    repository.jj(
+      "git",
+      "push",
+      ...EffectArray.flatMap(pushed, (bookmark) => ["--bookmark", bookmark]),
+    );
   }
 };
 
 /** The change of each bookmark as a command lists it: its short id and its description's first line. */
 export const labelsOf = (repository: ScratchRepository, ...bookmarks: readonly string[]): string =>
-  bookmarks
-    .map((bookmark) =>
+  EffectArray.join(
+    EffectArray.map(bookmarks, (bookmark) =>
       repository.jj(
         "log",
         "--no-graph",
@@ -32,5 +38,6 @@ export const labelsOf = (repository: ScratchRepository, ...bookmarks: readonly s
         "-T",
         'change_id.shortest(8) ++ " " ++ description.first_line()',
       ),
-    )
-    .join("\n");
+    ),
+    "\n",
+  );

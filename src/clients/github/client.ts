@@ -1,4 +1,12 @@
-import { Context, Effect, Layer, Option, Schedule, type Schema } from "effect";
+import {
+  Array as EffectArray,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Schedule,
+  type Schema,
+} from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { type CheckReads, checkReads } from "./checks";
@@ -260,7 +268,7 @@ export const GitHubLive = (
           ),
         pullRequestsFrom: (branch) =>
           everyPage(fromBranch(branch, "all"), json(AnyPullRequests)).pipe(
-            Effect.map((found) => found.map((listed) => listedPullRequest(listed))),
+            Effect.map((found) => EffectArray.map(found, (listed) => listedPullRequest(listed))),
           ),
         stackOf,
         unfinishedRuns: (commit) =>
@@ -270,9 +278,10 @@ export const GitHubLive = (
               json(WorkflowRuns)(request).pipe(Effect.map(({ workflow_runs }) => workflow_runs)),
           ).pipe(
             Effect.map((runs) =>
-              runs
-                .filter(({ status }) => status !== "completed")
-                .map(({ id }) => WorkflowRunIdSchema.make(String(id))),
+              EffectArray.map(
+                EffectArray.filter(runs, ({ status }) => status !== "completed"),
+                ({ id }) => WorkflowRunIdSchema.make(String(id)),
+              ),
             ),
           ),
         unstack: (stack) =>

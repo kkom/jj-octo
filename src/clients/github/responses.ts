@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Array as EffectArray, Option, Schema } from "effect";
 
 import { responseOf } from "./openapi";
 import {
@@ -202,7 +202,8 @@ export const remoteStack = ({
   pull_requests,
 }: (typeof Stacks.Type)[number]): RemoteStack => ({
   number,
-  unmerged: pull_requests
-    .filter(({ merged_at }) => merged_at === null)
-    .map((pullRequest) => pullRequest.number),
+  unmerged: EffectArray.map(
+    EffectArray.filter(pull_requests, ({ merged_at }) => merged_at === null),
+    (pullRequest) => pullRequest.number,
+  ),
 });

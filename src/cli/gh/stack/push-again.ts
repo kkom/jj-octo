@@ -1,4 +1,4 @@
-import { Console, Effect } from "effect";
+import { Array as EffectArray, Console, Effect, Option } from "effect";
 
 import type { Git } from "../../../clients/git";
 import type { GitHub } from "../../../clients/github/client";
@@ -24,18 +24,26 @@ export const pushAgain = (
     }
     const stack = yield* stackChanges(revision);
     const targets = yield* bookmarkTargets;
-    const pushed = stack.slice(
-      0,
-      stack.findLastIndex(({ bookmark }) => targets.get(bookmark)?.origin !== undefined) + 1,
+    const pushed = Option.match(
+      EffectArray.findLastIndex(
+        stack,
+        ({ bookmark }) => targets.get(bookmark)?.origin !== undefined,
+      ),
+      { onNone: () => [], onSome: (highest) => stack.slice(0, highest + 1) },
     );
-    const conflicted = pushed.findIndex(({ conflict }) => conflict);
-    const left = conflicted === -1 ? [] : pushed.slice(conflicted);
+    const left = Option.match(
+      EffectArray.findFirstIndex(pushed, ({ conflict }) => conflict),
+      { onNone: () => [], onSome: (conflicted) => pushed.slice(conflicted) },
+    );
     if (left.length > 0) {
       yield* Console.error(
-        [
-          "left these changes local, since they or a change below them have conflicts:",
-          ...left.map(({ label }) => label),
-        ].join("\n"),
+        EffectArray.join(
+          [
+            "left these changes local, since they or a change below them have conflicts:",
+            ...EffectArray.map(left, ({ label }) => label),
+          ],
+          "\n",
+        ),
       );
     }
     const pushing = pushed.slice(0, pushed.length - left.length);

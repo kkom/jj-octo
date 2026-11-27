@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Array as EffectArray, Option, String as EffectString } from "effect";
 
 import type { PullRequestNumber, RemoteStack, StackNumber } from "../../../clients/github/types";
 
@@ -44,7 +44,10 @@ export const mustDissolve = (
   const shorter = Math.min(unmerged.length, wanted.length);
   const agree =
     shorter > 0 &&
-    Array.from({ length: shorter }, (_, index) => index).every((index) => matches(index));
+    EffectArray.every(
+      Array.from({ length: shorter }, (_, index) => index),
+      (index) => matches(index),
+    );
   return basesMove || !agree;
 };
 
@@ -73,8 +76,8 @@ export const registrationFor = (
 export const titleAndBody = (
   description: string,
 ): { readonly body: string; readonly title: string } => {
-  const [title = "", ...rest] = description.trimEnd().split("\n");
-  return { body: rest.join("\n").replace(/^\s*\n/u, ""), title };
+  const [title, ...rest] = EffectString.split(EffectString.trimEnd(description), "\n");
+  return { body: EffectString.replace(/^\s*\n/u, "")(EffectArray.join(rest, "\n")), title };
 };
 
 /** A title and body as one description, with a blank line between, as jj and GitHub both show it. */
@@ -103,9 +106,9 @@ export const normalizedDescription = (
   description: string,
   { ignoreClaudeCodeFooter }: { readonly ignoreClaudeCodeFooter: boolean },
 ): string => {
-  const text = description.replaceAll("\r\n", "\n");
+  const text = EffectString.replaceAll("\r\n", "\n")(description);
   return descriptionFrom(
-    titleAndBody(ignoreClaudeCodeFooter ? text.replace(claudeCodeFooter, "") : text),
+    titleAndBody(ignoreClaudeCodeFooter ? EffectString.replace(claudeCodeFooter, "")(text) : text),
   );
 };
 

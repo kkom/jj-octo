@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Array as EffectArray, Effect, Option } from "effect";
 
 import { PullRequestNumberSchema } from "../../clients/github/types";
 import { squashMergeOnGitHub } from "../../testing/branch-changes";
@@ -31,7 +31,7 @@ const left = (repository: ScratchRepository) =>
   repository.records((store) =>
     Effect.all([store.read(one, "a"), store.read(two, "b")]).pipe(
       Effect.map((records) =>
-        records.map((record) => Option.map(record, ({ description }) => description)),
+        EffectArray.map(records, (record) => Option.map(record, ({ description }) => description)),
       ),
     ),
   );

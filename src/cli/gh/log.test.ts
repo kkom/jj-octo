@@ -3,7 +3,8 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 
 import { conflictWithTrunk } from "../../testing/conflicts";
-import { fakeGitHub, inRepository, openPullRequest } from "../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../testing/fake-github";
+import { openPullRequest } from "../../testing/pull-requests";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import { log } from "./log";
 

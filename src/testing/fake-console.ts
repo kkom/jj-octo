@@ -1,4 +1,4 @@
-import { Console, Effect } from "effect";
+import { Array as EffectArray, Console, Effect } from "effect";
 
 /** What a fake console printed, in order, with the stream each line went to. */
 export interface Printed {
@@ -18,10 +18,10 @@ export const fakeConsole = (): FakeConsole => {
   const console: Console.Console = {
     ...globalThis.console,
     error: (...args) => {
-      printed.push({ stream: "stderr", text: args.join(" ") });
+      printed.push({ stream: "stderr", text: EffectArray.join(args, " ") });
     },
     log: (...args) => {
-      printed.push({ stream: "stdout", text: args.join(" ") });
+      printed.push({ stream: "stdout", text: EffectArray.join(args, " ") });
     },
   };
   return {

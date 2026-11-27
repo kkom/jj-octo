@@ -25,16 +25,24 @@ export const stackContaining = (
       { concurrency: "unbounded" },
     );
     const stacks = EffectArray.dedupeWith(
-      found.flatMap((stack) => Option.toArray(stack)),
+      EffectArray.getSomes(found),
       (a, b) => a.number === b.number,
     );
     const [bottom, ...others] = stacks;
     if (bottom !== undefined && others.length > 0) {
-      const listed = stacks.map(
-        ({ number, unmerged }) => `#${number} (${unmerged.map((pr) => `#${pr}`).join(", ")})`,
+      const listed = EffectArray.map(
+        stacks,
+        ({ number, unmerged }) =>
+          `#${number} (${EffectArray.join(
+            EffectArray.map(unmerged, (pr) => `#${pr}`),
+            ", ",
+          )})`,
       );
       return yield* new SeveralStacks({
-        message: `the pull requests are in GitHub stacks ${listed.join(", ")}, and submit won't take a pull request out of another stack; to keep #${bottom.number}, which holds the bottom one, run ${others.map(({ number }) => `\`jj gh dissolve ${number}\``).join(" and ")}, then submit again`,
+        message: `the pull requests are in GitHub stacks ${EffectArray.join(listed, ", ")}, and submit won't take a pull request out of another stack; to keep #${bottom.number}, which holds the bottom one, run ${EffectArray.join(
+          EffectArray.map(others, ({ number }) => `\`jj gh dissolve ${number}\``),
+          " and ",
+        )}, then submit again`,
       });
     }
     return Option.fromNullishOr(stacks[0]);
@@ -52,7 +60,13 @@ export const register = (
       Match.tag("Append", ({ pullRequests: added, stack }) =>
         github
           .addToStack(stack, added)
-          .pipe(Effect.andThen(Console.error(`added ${added.join(", ")} to stack #${stack}`))),
+          .pipe(
+            Effect.andThen(
+              Console.error(
+                `added ${EffectArray.join(EffectArray.map(added, String), ", ")} to stack #${stack}`,
+              ),
+            ),
+          ),
       ),
       Match.tag("Create", ({ pullRequests: all }) =>
         github

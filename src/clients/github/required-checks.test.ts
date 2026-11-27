@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { Option } from "effect";
+import { Array as EffectArray, Option, Order } from "effect";
 
 import { failureOf, withGitHub } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
@@ -70,7 +70,7 @@ describe("requiredChecks", () => {
       ),
       (github) => github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests,
       result: {
         _tag: "Known",
@@ -88,7 +88,7 @@ describe("requiredChecks", () => {
       protectedBy([], unprotected),
       (github) => github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests,
       result: { _tag: "Known", checks: [] },
     });
@@ -102,7 +102,7 @@ describe("requiredChecks", () => {
           : protectedBy([], unprotected)(request),
       (github) => github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests: [`GET api.github.com${rulesPath}`],
       result: {
         _tag: "Unknown",
@@ -119,7 +119,7 @@ describe("requiredChecks", () => {
           : protectedBy([], unprotected)(request),
       (github) => github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests,
       result: {
         _tag: "Unknown",
@@ -132,7 +132,7 @@ describe("requiredChecks", () => {
     const { requests: received, result } = await withGitHub(protectedBy([]), (github) =>
       github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests,
       result: { _tag: "Unknown", reason: "GitHub listed main as protected without saying how" },
     });
@@ -150,7 +150,7 @@ describe("requiredChecks", () => {
       ),
       (github) => github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests,
       result: {
         _tag: "Unknown",
@@ -165,7 +165,7 @@ describe("requiredChecks", () => {
       protectedBy([{ type: "required_status_checks" }], unprotected),
       (github) => github.requiredChecks("main"),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests,
       result: {
         _tag: "Unknown",
@@ -182,15 +182,18 @@ describe("requiredChecks", () => {
       ),
       (github) => failureOf(github.requiredChecks("main")),
     );
-    expect({ requests: received.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
       requests: [`GET api.github.com${rulesPath}`],
       result: {
-        message: [
-          `unexpected response to ${rulesPath}: Missing key`,
-          '  at [0]["parameters"]["required_status_checks"]',
-          "a type other than required_status_checks",
-          '  at [0]["type"]',
-        ].join("\n"),
+        message: EffectArray.join(
+          [
+            `unexpected response to ${rulesPath}: Missing key`,
+            '  at [0]["parameters"]["required_status_checks"]',
+            "a type other than required_status_checks",
+            '  at [0]["type"]',
+          ],
+          "\n",
+        ),
         status: undefined,
       },
     });

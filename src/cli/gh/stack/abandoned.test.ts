@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 
 import { GitHubFailed } from "../../../clients/github/failure";
-import { stackOf } from "../../../testing/fake-github";
+import { stackOf } from "../../../testing/pull-requests";
 import { pushedStack, removeScratchRepositories } from "../../../testing/scratch-repository";
 import { githubWithThree, submitIn } from "../../../testing/submit";
 import { CLOSED_COMMENT } from "./abandoned";

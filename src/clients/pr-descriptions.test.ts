@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { existsSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { Effect, Option } from "effect";
+import { Effect, Option, String as EffectString } from "effect";
 
 import {
   removeScratchRepositories,
@@ -18,13 +18,19 @@ const pullRequest = PullRequestNumberSchema.make(7);
 const record = { bookmark: "a", commit: "abc", description: "a\n\nbody", pullRequest };
 
 const recordsDirectory = (repository: ScratchRepository): string =>
-  path.join(repository.jj("workspace", "root").trim(), ".jj", "repo", "jj-octo", "pr-descriptions");
+  path.join(
+    EffectString.trim(repository.jj("workspace", "root")),
+    ".jj",
+    "repo",
+    "jj-octo",
+    "pr-descriptions",
+  );
 
 describe("PrDescriptions", () => {
   it("shares its records with a workspace added to the repository", async () => {
     const repository = scratchRepository();
     const workspace = path.join(
-      path.dirname(repository.jj("workspace", "root").trim()),
+      path.dirname(EffectString.trim(repository.jj("workspace", "root"))),
       "workspace",
     );
     repository.jj("workspace", "add", "--quiet", workspace);

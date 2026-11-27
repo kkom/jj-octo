@@ -1,4 +1,4 @@
-import { Console, Data, Effect, Option } from "effect";
+import { Array as EffectArray, Console, Data, Effect, Option } from "effect";
 import { Command } from "effect/cli";
 
 import type { Git } from "../../clients/git";
@@ -26,12 +26,16 @@ export const publish = (
     const github = yield* GitHub;
     const changes = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
     const targets = yield* bookmarkTargets;
-    const unpushed = changes.filter(
+    const unpushed = EffectArray.filter(
+      changes,
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
     );
     if (unpushed.length > 0) {
       return yield* new NotPublishable({
-        message: `these changes aren't pushed: ${unpushed.map(({ bookmark }) => bookmark).join(", ")}; run \`jj gh submit --publish\` instead`,
+        message: `these changes aren't pushed: ${EffectArray.join(
+          EffectArray.map(unpushed, ({ bookmark }) => bookmark),
+          ", ",
+        )}; run \`jj gh submit --publish\` instead`,
       });
     }
     const found = yield* Effect.forEach(
@@ -40,13 +44,16 @@ export const publish = (
         Effect.map(github.openPullRequest(bookmark), (pullRequest) => ({ bookmark, pullRequest })),
       { concurrency: "unbounded" },
     );
-    const missing = found.filter(({ pullRequest }) => Option.isNone(pullRequest));
+    const missing = EffectArray.filter(found, ({ pullRequest }) => Option.isNone(pullRequest));
     if (missing.length > 0) {
       return yield* new NotPublishable({
-        message: `no open pull request for ${missing.map(({ bookmark }) => bookmark).join(", ")}; run \`jj gh submit --publish\` instead`,
+        message: `no open pull request for ${EffectArray.join(
+          EffectArray.map(missing, ({ bookmark }) => bookmark),
+          ", ",
+        )}; run \`jj gh submit --publish\` instead`,
       });
     }
-    const drafts = found.flatMap(({ pullRequest }) =>
+    const drafts = EffectArray.flatMap(found, ({ pullRequest }) =>
       Option.toArray(Option.filter(pullRequest, ({ draft }) => draft)),
     );
     if (drafts.length === 0) {

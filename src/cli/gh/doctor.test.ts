@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import path from "node:path";
 
-import { Effect } from "effect";
+import { Array as EffectArray, Effect } from "effect";
 
 import { gitClone, runIn } from "../../testing/git-clone";
 import {
@@ -58,7 +58,7 @@ describe("problems", () => {
       "neither jj nor git has user.email; set it with `jj config set --user user.email`",
     ];
     expect(await runIn(clone.layer, Effect.flip(init))).toStrictEqual(
-      new NotSetUp({ message: identity.join("\n") }),
+      new NotSetUp({ message: EffectArray.join(identity, "\n") }),
     );
     expect(await runIn(clone.layer, problems)).toStrictEqual(identity);
   });
@@ -77,13 +77,16 @@ describe("problems", () => {
     await runIn(clone.layer, init);
     clone.git("remote", "set-url", "origin", "/nonexistent");
     expect(await runIn(clone.layer, problems)).toStrictEqual([
-      [
-        "could not check: git ls-remote --symref origin HEAD failed: fatal: '/nonexistent' does not appear to be a git repository",
-        "fatal: Could not read from remote repository.",
-        "",
-        "Please make sure you have the correct access rights",
-        "and the repository exists.",
-      ].join("\n"),
+      EffectArray.join(
+        [
+          "could not check: git ls-remote --symref origin HEAD failed: fatal: '/nonexistent' does not appear to be a git repository",
+          "fatal: Could not read from remote repository.",
+          "",
+          "Please make sure you have the correct access rights",
+          "and the repository exists.",
+        ],
+        "\n",
+      ),
     ]);
   });
 });

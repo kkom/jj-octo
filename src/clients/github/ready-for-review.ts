@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Array as EffectArray, Effect, Schema } from "effect";
 import { HttpClientRequest } from "effect/http";
 
 import { claudeCodeCloudSession } from "../../settings";
@@ -41,7 +41,10 @@ const checkMarkedReady = (
   if (errors.length > 0) {
     return Effect.fail(
       new GitHubFailed({
-        message: `marking #${pullRequest} ready for review failed: ${errors.map(({ message }) => message).join("; ")}`,
+        message: `marking #${pullRequest} ready for review failed: ${EffectArray.join(
+          EffectArray.map(errors, ({ message }) => message),
+          "; ",
+        )}`,
       }),
     );
   }

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, String as EffectString } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { lines } from "./changes";
@@ -26,7 +26,7 @@ export const bookmarkTargets: Effect.Effect<
   const targets = new Map<string, BookmarkTarget>();
   const listed = yield* jj.read(["bookmark", "list", "--all-remotes", "-T", template]);
   for (const line of lines(listed)) {
-    const [name = "", remote, tracked, present, commit, change] = line.split("\t");
+    const [name, remote, tracked, present, commit, change] = EffectString.split(line, "\t");
     const known = targets.get(name) ?? {
       deleted: false,
       local: undefined,

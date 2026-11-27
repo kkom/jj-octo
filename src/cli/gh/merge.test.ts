@@ -3,8 +3,9 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 
 import { moveTrunkOnGitHub, squashMergeOnGitHub } from "../../testing/branch-changes";
-import { fakeGitHub, inRepository, openPullRequest, stackOf } from "../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../testing/fake-github";
 import { mergeIn, mergingIn } from "../../testing/merge";
+import { openPullRequest, stackOf } from "../../testing/pull-requests";
 import { pushedStack, removeScratchRepositories } from "../../testing/scratch-repository";
 import { addWorkspace } from "../../testing/workspace";
 import { merge } from "./merge";

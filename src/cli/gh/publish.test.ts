@@ -4,7 +4,8 @@ import { Effect, Option } from "effect";
 
 import { GitHub } from "../../clients/github/client";
 import { conflictWithTrunk, labelsOf } from "../../testing/conflicts";
-import { fakeGitHub, inRepository, openPullRequest, stackOf } from "../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../testing/fake-github";
+import { openPullRequest, stackOf } from "../../testing/pull-requests";
 import {
   pushedStack,
   removeScratchRepositories,

@@ -2,7 +2,8 @@ import { afterAll, describe, expect, it } from "bun:test";
 
 import { Effect } from "effect";
 
-import { fakeGitHub, openPullRequest, stackNumbered, stackOf } from "../../../testing/fake-github";
+import { fakeGitHub } from "../../../testing/fake-github";
+import { openPullRequest, stackNumbered, stackOf } from "../../../testing/pull-requests";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
 import { githubWithThree, submitIn } from "../../../testing/submit";
 import { SeveralStacks } from "./stacks";

@@ -1,4 +1,4 @@
-import { Config, Effect } from "effect";
+import { Array as EffectArray, Config, Effect, Option } from "effect";
 
 import { type Jj, JjFailed, readJjConfig } from "./clients/jj";
 
@@ -133,12 +133,15 @@ export const readSetting = <A extends boolean | string>(
     if (value === undefined) {
       return yield* setting.default.value;
     }
-    const choice = setting.choices.find((candidate) => candidate.value === value);
-    if (choice === undefined) {
-      const values = setting.choices.map((candidate) => String(candidate.value)).join(" or ");
+    const choice = EffectArray.findFirst(setting.choices, (candidate) => candidate.value === value);
+    if (Option.isNone(choice)) {
+      const values = EffectArray.join(
+        EffectArray.map(setting.choices, (candidate) => String(candidate.value)),
+        " or ",
+      );
       return yield* new JjFailed({
         message: `${setting.key} is ${JSON.stringify(value)}; set it to ${values}`,
       });
     }
-    return choice.value;
+    return choice.value.value;
   });

@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Array as EffectArray, Data, Effect, String as EffectString } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
 import type { BookmarkTarget } from "./bookmark-targets";
@@ -26,7 +26,8 @@ export const upstackRevset = (revision: string): string =>
   `(${revision})+:: & (${stackRevset(revision)})`;
 
 /** The commits of any of the revsets. With none, no commits, where an empty union fails. */
-export const anyOf = (revsets: readonly string[]): string => ["none()", ...revsets].join(" | ");
+export const anyOf = (revsets: readonly string[]): string =>
+  EffectArray.join(["none()", ...revsets], " | ");
 
 /** A jj string pattern that matches the name alone. */
 export const exactPattern = (name: string): string => `exact:${JSON.stringify(name)}`;
@@ -38,7 +39,7 @@ export const changeRevset = (change: string): string => `change_id(${change})`;
 export const bookmarkRevset = (bookmark: string): string => `bookmarks(${exactPattern(bookmark)})`;
 
 export const lines = (output: string): readonly string[] =>
-  output.split("\n").filter((line) => line !== "");
+  EffectArray.filter(EffectString.split(output, "\n"), (line) => line !== "");
 
 /** A description that a template printed with `escape_json()`. */
 export const parseDescription = (json: string): string => {
@@ -158,9 +159,9 @@ export const loggedChanges = (
 ): Effect.Effect<readonly LoggedChange[], JjFailed, Jj> =>
   logLines(revset, CHANGE, options).pipe(
     Effect.map((logged) =>
-      logged.map((line): LoggedChange => {
+      EffectArray.map(logged, (line): LoggedChange => {
         const [
-          shortId = "",
+          shortId,
           changeId = "",
           commitId = "",
           parents = "",
@@ -168,27 +169,27 @@ export const loggedChanges = (
           divergent,
           bookmarks = "",
           json = '""',
-        ] = line.split("\t");
+        ] = EffectString.split(line, "\t");
         const description = parseDescription(json);
         return {
-          bookmarks: bookmarks === "" ? [] : bookmarks.split(" "),
+          bookmarks: bookmarks === "" ? [] : EffectString.split(bookmarks, " "),
           changeId,
           commitId,
           conflict: conflict === "true",
           description,
           divergent: divergent === "true",
-          label: `${shortId} ${description.split("\n", 1)[0] ?? ""}`,
-          parents: parents.split(","),
+          label: `${shortId} ${EffectArray.headNonEmpty(EffectString.split(description, "\n"))}`,
+          parents: EffectString.split(parents, ","),
         };
       }),
     ),
   );
 
 const notAStack = (message: string, changes: readonly string[]) =>
-  Effect.fail(new NotAStack({ message: [message, ...changes].join("\n") }));
+  Effect.fail(new NotAStack({ message: EffectArray.join([message, ...changes], "\n") }));
 
 const labels = (changes: readonly LoggedChange[]): readonly string[] =>
-  changes.map(({ label }) => label);
+  EffectArray.map(changes, ({ label }) => label);
 
 /**
  * The changes of the revset, bottom to top, each with its bookmark. A GitHub stack must be a
@@ -208,8 +209,9 @@ const chain = (
         [],
       );
     }
-    const heads = changes.filter(
-      ({ commitId }) => !changes.some(({ parents }) => parents.includes(commitId)),
+    const heads = EffectArray.filter(
+      changes,
+      ({ commitId }) => !EffectArray.some(changes, ({ parents }) => parents.includes(commitId)),
     );
     if (heads.length !== 1) {
       return yield* notAStack(
@@ -217,19 +219,22 @@ const chain = (
         labels(heads),
       );
     }
-    const merges = changes.filter(({ parents }) => parents.length > 1);
+    const merges = EffectArray.filter(changes, ({ parents }) => parents.length > 1);
     if (merges.length > 0) {
       return yield* notAStack("merge commits can't be pull requests in a stack:", labels(merges));
     }
-    const unnamed = changes.filter(({ bookmarks }) => bookmarks.length === 0);
+    const unnamed = EffectArray.filter(changes, ({ bookmarks }) => bookmarks.length === 0);
     if (unnamed.length > 0) {
       return yield* notAStack(
         "every change needs a bookmark naming its branch; these have none:",
         labels(unnamed),
       );
     }
-    const conflicted = changes.flatMap(({ bookmarks }) =>
-      bookmarks.filter((name) => name.endsWith("?")).map((name) => name.slice(0, -1)),
+    const conflicted = EffectArray.flatMap(changes, ({ bookmarks }) =>
+      EffectArray.map(
+        EffectArray.filter(bookmarks, (name) => EffectString.endsWith("?")(name)),
+        (name) => EffectString.slice(0, -1)(name),
+      ),
     );
     if (conflicted.length > 0) {
       return yield* notAStack(
@@ -237,21 +242,24 @@ const chain = (
         conflicted,
       );
     }
-    const several = changes.filter(({ bookmarks }) => bookmarks.length > 1);
+    const several = EffectArray.filter(changes, ({ bookmarks }) => bookmarks.length > 1);
     if (several.length > 0) {
       return yield* notAStack(
         "a pull request has one branch, and these changes have several bookmarks:",
-        several.map(({ bookmarks }) => bookmarks.join(" ")),
+        EffectArray.map(several, ({ bookmarks }) => EffectArray.join(bookmarks, " ")),
       );
     }
-    return changes.map(({ bookmarks, changeId, commitId, conflict, description, label }) => ({
-      bookmark: bookmarks[0] ?? "",
-      changeId,
-      commitId,
-      conflict,
-      description,
-      label,
-    }));
+    return EffectArray.map(
+      changes,
+      ({ bookmarks, changeId, commitId, conflict, description, label }) => ({
+        bookmark: bookmarks[0] ?? "",
+        changeId,
+        commitId,
+        conflict,
+        description,
+        label,
+      }),
+    );
   });
 
 /** The whole stack containing the revision, bottom to top. */
@@ -273,11 +281,11 @@ export const downstackChanges = (
 export const withoutConflicts = (
   changes: readonly StackChange[],
 ): Effect.Effect<readonly StackChange[], NotAStack> => {
-  const conflicted = changes.filter(({ conflict }) => conflict);
+  const conflicted = EffectArray.filter(changes, ({ conflict }) => conflict);
   return conflicted.length > 0
     ? notAStack(
         "resolve the conflicts first:",
-        conflicted.map(({ label }) => label),
+        EffectArray.map(conflicted, ({ label }) => label),
       )
     : Effect.succeed(changes);
 };

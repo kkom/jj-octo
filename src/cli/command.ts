@@ -1,4 +1,4 @@
-import { Context, Effect, Option } from "effect";
+import { Array as EffectArray, Context, Effect, Option, String as EffectString } from "effect";
 import { CliError, CliOutput, Command, Flag } from "effect/cli";
 
 const userError = (message: string): CliError.UserError =>
@@ -20,7 +20,7 @@ export const withHelp =
   ): Command.Command<Name, Input, ContextInput, E, R> =>
     command.pipe(
       Command.withShortDescription(summary),
-      Command.withDescription([summary, ...paragraphs].join("\n\n  ")),
+      Command.withDescription(EffectArray.join([summary, ...paragraphs], "\n\n  ")),
     );
 
 /** A section that a command's help shows after the ones Effect generates. */
@@ -45,12 +45,18 @@ export const withSections =
 /** Rows of cells, each column lined up `gap` spaces past the widest cell of the one before it. */
 export const table = (rows: readonly (readonly string[])[], gap: number): readonly string[] => {
   const width = (column: number): number =>
-    Math.max(0, ...rows.map((row) => CliOutput.displayWidth(row[column] ?? "")));
-  return rows.map((row) =>
-    row
-      .map((cell, column) => `${cell}${" ".repeat(width(column) - CliOutput.displayWidth(cell))}`)
-      .join(" ".repeat(gap))
-      .trimEnd(),
+    Math.max(0, ...EffectArray.map(rows, (row) => CliOutput.displayWidth(row[column] ?? "")));
+  return EffectArray.map(rows, (row) =>
+    EffectString.trimEnd(
+      EffectArray.join(
+        EffectArray.map(
+          row,
+          (cell, column) =>
+            `${cell}${EffectString.repeat(width(column) - CliOutput.displayWidth(cell))(" ")}`,
+        ),
+        EffectString.repeat(gap)(" "),
+      ),
+    ),
   );
 };
 
@@ -64,12 +70,18 @@ export const helpFormatter = (colors: boolean): CliOutput.Formatter => {
     formatErrors: base.formatErrors,
     formatHelpDoc: (doc) => {
       const sections = Option.getOrElse(Context.getOption(doc.annotations, HelpSections), () => []);
-      return [
-        base.formatHelpDoc(doc),
-        ...sections.map(({ lines, title }) =>
-          [bold(title), ...lines.map((line) => (line === "" ? "" : `  ${line}`))].join("\n"),
-        ),
-      ].join("\n\n");
+      return EffectArray.join(
+        [
+          base.formatHelpDoc(doc),
+          ...EffectArray.map(sections, ({ lines, title }) =>
+            EffectArray.join(
+              [bold(title), ...EffectArray.map(lines, (line) => (line === "" ? "" : `  ${line}`))],
+              "\n",
+            ),
+          ),
+        ],
+        "\n\n",
+      );
     },
     formatVersion: base.formatVersion,
   };

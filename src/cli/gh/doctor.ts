@@ -1,4 +1,4 @@
-import { Console, Effect, type FileSystem } from "effect";
+import { Array as EffectArray, Console, Effect, type FileSystem } from "effect";
 import { Command } from "effect/cli";
 
 import type { Git } from "../../clients/git";
@@ -25,7 +25,7 @@ export const doctor: Effect.Effect<void, NotSetUp, FileSystem.FileSystem | Git |
   function* () {
     const found = yield* problems;
     if (found.length > 0) {
-      return yield* new NotSetUp({ message: found.join("\n") });
+      return yield* new NotSetUp({ message: EffectArray.join(found, "\n") });
     }
     yield* Console.error("set up for jj-octo");
   },

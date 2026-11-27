@@ -14,7 +14,7 @@ const stacksOf = (changes: readonly LoggedChange[]): readonly Stack[] => {
   const stackOf = new Map<string, LoggedChange[]>();
   for (const change of changes) {
     const [stack = [], ...joined] = new Set(
-      change.parents.flatMap((parent) => {
+      EffectArray.flatMap(change.parents, (parent) => {
         const below = stackOf.get(parent);
         return below === undefined ? [] : [below];
       }),
@@ -28,16 +28,20 @@ const stacksOf = (changes: readonly LoggedChange[]): readonly Stack[] => {
 };
 
 const bottomChanges = (stack: Stack): readonly LoggedChange[] => {
-  const commits = new Set(stack.map(({ commitId }) => commitId));
-  return stack.filter(({ parents }) => !parents.some((parent) => commits.has(parent)));
+  const commits = new Set(EffectArray.map(stack, ({ commitId }) => commitId));
+  return EffectArray.filter(
+    stack,
+    ({ parents }) => !EffectArray.some(parents, (parent) => commits.has(parent)),
+  );
 };
 
 // With no stacks, the command would rebase the working copy's change.
 const rebaseCommand = (stacks: readonly Stack[]): readonly string[] => [
   "rebase",
-  ...stacks
-    .flatMap((stack) => bottomChanges(stack))
-    .flatMap(({ commitId }) => ["--source", commitId]),
+  ...EffectArray.flatMap(
+    EffectArray.flatMap(stacks, (stack) => bottomChanges(stack)),
+    ({ commitId }: LoggedChange) => ["--source", commitId],
+  ),
   "--destination",
   "trunk()",
   "--skip-emptied",
@@ -62,40 +66,47 @@ const rebaseStacks = (stacks: readonly Stack[], required: readonly string[]) =>
     const conflictedCommitIds = yield* commitsAt("conflicts() & mutable()");
     const conflictedCommits = new Set(conflictedCommitIds);
     const conflictedChanges = new Set(
-      stacks.flatMap((stack) =>
-        stack.filter(({ conflict }) => conflict).map(({ changeId }) => changeId),
+      EffectArray.flatMap(stacks, (stack) =>
+        EffectArray.map(
+          EffectArray.filter(stack, ({ conflict }) => conflict),
+          ({ changeId }) => changeId,
+        ),
       ),
     );
     const dryRun = yield* jj.dryRun(rebaseCommand(stacks));
     // The rebase didn't cause a conflict that the change already had. Nor one of a commit from
     // before the rebase, which is a divergent change's other commit, in a stack that stayed.
+    const conflictedNow = yield* loggedChanges("conflicts() & mutable()", { atOperation: dryRun });
     const conflictedByRebase = new Set(
-      (yield* loggedChanges("conflicts() & mutable()", { atOperation: dryRun }))
-        .filter(
+      EffectArray.map(
+        EffectArray.filter(
+          conflictedNow,
           ({ changeId, commitId }) =>
             !conflictedChanges.has(changeId) && !conflictedCommits.has(commitId),
-        )
-        .map(({ changeId }) => changeId),
+        ),
+        ({ changeId }) => changeId,
+      ),
     );
     const [left, rebased] = EffectArray.partition(
       stacks,
       Filter.fromPredicate(
         (stack: Stack) =>
-          !stack.some(({ changeId }) => required.includes(changeId)) &&
-          stack.some(({ changeId }) => conflictedByRebase.has(changeId)),
+          !EffectArray.some(stack, ({ changeId }) => required.includes(changeId)) &&
+          EffectArray.some(stack, ({ changeId }) => conflictedByRebase.has(changeId)),
       ),
     );
     if (rebased.length > 0) {
       yield* jj.run(rebaseCommand(rebased));
     }
-    for (const { label } of left.flatMap((stack) => bottomChanges(stack))) {
+    for (const { label } of EffectArray.flatMap(left, (stack) => bottomChanges(stack))) {
       yield* Console.error(
         `left "${label}" and the changes on it where they were: they conflict with the trunk`,
       );
     }
   });
 
-const isDivergent = (stack: Stack): boolean => stack.some(({ divergent }) => divergent);
+const isDivergent = (stack: Stack): boolean =>
+  EffectArray.some(stack, ({ divergent }) => divergent);
 
 /**
  * Rebases the stacks whose bottom changes the revset holds, as `rebaseStacks` does. A change that
@@ -113,7 +124,7 @@ export const rebaseOntoTrunk = (
       stacksOf(logged),
       Filter.fromPredicate(isDivergent),
     );
-    for (const stacks of [together, ...alone.map((stack) => [stack])]) {
+    for (const stacks of [together, ...EffectArray.map(alone, (stack) => [stack])]) {
       yield* rebaseStacks(stacks, required);
     }
   });

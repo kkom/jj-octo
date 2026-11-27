@@ -1,4 +1,11 @@
-import { Array as EffectArray, Console, Data, Effect, Option } from "effect";
+import {
+  Array as EffectArray,
+  Console,
+  Data,
+  Effect,
+  Option,
+  String as EffectString,
+} from "effect";
 import { Command, Flag } from "effect/cli";
 
 import {
@@ -48,18 +55,22 @@ const OPEN: Readonly<Record<LinkState, boolean>> = {
 /** What `--copy` reports after the links, for each outcome of the clipboard's `write`. */
 const COPY_REPORT: Readonly<Record<ClipboardWrite, string>> = {
   copied: "copied the links to the clipboard",
-  unreachable: [
-    "This Claude Code cloud session can't reach the user's clipboard.",
-    "Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks.",
-    "They then show as links that paste into Slack.",
-  ].join(" "),
+  unreachable: EffectArray.join(
+    [
+      "This Claude Code cloud session can't reach the user's clipboard.",
+      "Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks.",
+      "They then show as links that paste into Slack.",
+    ],
+    " ",
+  ),
 };
 
 /** What `--copy` prints of the links, for each outcome of the clipboard's `write`. */
 const COPY_PRINT: Readonly<Record<ClipboardWrite, (text: string) => string>> = {
   copied: (text) => text,
   unreachable: (text) =>
-    ["-----BEGIN TEXT TO PASTE VERBATIM-----", text, "-----END TEXT TO PASTE VERBATIM-----"].join(
+    EffectArray.join(
+      ["-----BEGIN TEXT TO PASTE VERBATIM-----", text, "-----END TEXT TO PASTE VERBATIM-----"],
       "\n",
     ),
 };
@@ -86,8 +97,8 @@ const lineCountsAt = (
     Effect.map(
       (logged) =>
         new Map(
-          lines(logged).flatMap((line) => {
-            const [commitId = "", added = "", removed = ""] = line.split("\t");
+          EffectArray.flatMap(lines(logged), (line) => {
+            const [commitId, added = "", removed = ""] = EffectString.split(line, "\t");
             return /^\d+$/u.test(added) && /^\d+$/u.test(removed)
               ? [[commitId, { added: Number(added), removed: Number(removed) }] as const]
               : [];
@@ -129,10 +140,12 @@ const linkLines = (
   pullRequests: readonly LinkedPullRequest[],
   { code, link }: LinkFormat,
 ): readonly string[] => [
-  ...Option.toArray(currentStack(pullRequests)).map(
+  ...EffectArray.map(
+    Option.toArray(currentStack(pullRequests)),
     ({ number, url }) => `${STACK_EMOJI} Current stack: ${link(`#${number}`, url)}`,
   ),
-  ...pullRequests.map(
+  ...EffectArray.map(
+    pullRequests,
     (pullRequest) =>
       `${EMOJI[pullRequest.state]} ${link(`#${pullRequest.number} ${pullRequest.title}`, pullRequest.url)} ${code(lineCounts(pullRequest))}${pullRequest.conflict ? ` ${CONFLICTED}` : ""}`,
   ),
@@ -150,14 +163,14 @@ const HTML: LinkFormat = {
 
 /** The links as Markdown, one per line. */
 export const markdownLinks = (pullRequests: readonly LinkedPullRequest[]): string =>
-  linkLines(pullRequests, MARKDOWN).join("\n");
+  EffectArray.join(linkLines(pullRequests, MARKDOWN), "\n");
 
 /**
  * The same lines as HTML, which apps such as Slack paste as links. The charset keeps the emoji
  * intact where the app reads the HTML without one.
  */
 export const htmlLinks = (pullRequests: readonly LinkedPullRequest[]): string =>
-  `<meta charset="utf-8">${linkLines(pullRequests, HTML).join("<br>")}`;
+  `<meta charset="utf-8">${EffectArray.join(linkLines(pullRequests, HTML), "<br>")}`;
 
 /**
  * The change's pull request: the open one from its branch, or else the newest closed one whose
@@ -169,9 +182,9 @@ const pullRequestOf = (
   commitId: string,
   pushed: string | undefined,
 ): Option.Option<ListedPullRequest> =>
-  Option.fromNullishOr(
-    pullRequests.find(({ state }) => OPEN[state]) ??
-      pullRequests.find(({ head }) => head === commitId || head === pushed),
+  Option.orElse(
+    EffectArray.findFirst(pullRequests, ({ state }) => OPEN[state]),
+    () => EffectArray.findFirst(pullRequests, ({ head }) => head === commitId || head === pushed),
   );
 
 /** The pull request of each change of the revision's stack, top first. */
@@ -184,7 +197,7 @@ export const stackPullRequests = (
     const [targets, counts, found] = yield* Effect.all(
       [
         bookmarkTargets,
-        lineCountsAt(stack.map(({ commitId }) => commitId)),
+        lineCountsAt(EffectArray.map(stack, ({ commitId }) => commitId)),
         Effect.forEach(stack, ({ bookmark }) => github.pullRequestsFrom(bookmark), {
           concurrency: "unbounded",
         }),
@@ -207,13 +220,11 @@ export const stackPullRequests = (
       }
     }
     const approved = yield* github.approvedPullRequests(
-      counted.filter(({ state }) => state === "ready"),
+      EffectArray.filter(counted, ({ state }) => state === "ready"),
     );
-    return counted
-      .toReversed()
-      .map((pullRequest): LinkedPullRequest =>
-        approved.has(pullRequest.number) ? { ...pullRequest, state: "approved" } : pullRequest,
-      );
+    return EffectArray.map(EffectArray.reverse(counted), (pullRequest): LinkedPullRequest =>
+      approved.has(pullRequest.number) ? { ...pullRequest, state: "approved" } : pullRequest,
+    );
   });
 
 /** Prints the links to the stack's pull requests, and writes them to the clipboard if asked. */

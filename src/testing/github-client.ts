@@ -1,4 +1,11 @@
-import { Effect, Layer, Option, Redacted } from "effect";
+import {
+  Array as EffectArray,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  String as EffectString,
+} from "effect";
 import { FetchHttpClient } from "effect/http";
 
 import { GitHub, GitHubLive } from "../clients/github/client";
@@ -26,7 +33,10 @@ export const withGitHub = async <A>(
       ),
     );
   });
-  return { requests: log.filter((line) => !line.startsWith("CONNECT ")), result };
+  return {
+    requests: EffectArray.filter(log, (line) => !EffectString.startsWith("CONNECT ")(line)),
+    result,
+  };
 };
 
 // The effect's result, or the message and status it failed with.

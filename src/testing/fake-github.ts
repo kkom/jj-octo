@@ -1,4 +1,4 @@
-import { Effect, Layer, Option } from "effect";
+import { Array as EffectArray, Effect, Layer, Option, Record as EffectRecord } from "effect";
 
 import type { Git } from "../clients/git";
 import { GitHub } from "../clients/github/client";
@@ -9,7 +9,6 @@ import {
   type ListedPullRequest,
   type PullRequestNumber,
   PullRequestNumberSchema,
-  type PullRequestState,
   type RemoteStack,
   type RequiredChecks,
   StackNumberSchema,
@@ -69,7 +68,7 @@ export const fakeGitHub = (
   const calls: string[] = [];
   // Opening a pull request, marking one ready and setting a base change what `openPullRequest`
   // returns afterwards.
-  const opened = new Map(Object.entries(open));
+  const opened = new Map(EffectRecord.toEntries(open));
   let created = 0;
   let registered = stacks;
   const record = (call: string) =>
@@ -79,16 +78,22 @@ export const fakeGitHub = (
   const layer = Layer.succeed(GitHub, {
     // GitHub rejects adding to a stack that doesn't exist, or a pull request in another stack.
     addToStack: (number, pullRequests) => {
-      if (!registered.some((stack) => stack.number === number)) {
+      if (!EffectArray.some(registered, (stack) => stack.number === number)) {
         return rejected(`POST /stacks/${number}/add`, 404);
       }
-      if (registered.some(({ unmerged }) => unmerged.some((pr) => pullRequests.includes(pr)))) {
+      if (
+        EffectArray.some(registered, ({ unmerged }) =>
+          EffectArray.some(unmerged, (pr) => pullRequests.includes(pr)),
+        )
+      ) {
         return rejected(`POST /stacks/${number}/add`, 422);
       }
-      return record(`add ${pullRequests.join(",")} to #${number}`).pipe(
+      return record(
+        `add ${EffectArray.join(EffectArray.map(pullRequests, String), ",")} to #${number}`,
+      ).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
-            registered = registered.map((stack) =>
+            registered = EffectArray.map(registered, (stack) =>
               stack.number === number
                 ? { ...stack, unmerged: [...stack.unmerged, ...pullRequests] }
                 : stack,
@@ -100,21 +105,22 @@ export const fakeGitHub = (
     approvedPullRequests: (pullRequests) =>
       Effect.succeed(
         new Set(
-          pullRequests.map(({ number }) => number).filter((number) => approved.includes(number)),
+          EffectArray.filter(
+            EffectArray.map(pullRequests, ({ number }) => number),
+            (number) => approved.includes(number),
+          ),
         ),
       ),
     cancelRun: (run) => {
-      const found = Object.values(runs)
-        .flat()
-        .find(({ id }) => id === run);
+      const found = EffectArray.findFirst(EffectRecord.values(runs).flat(), ({ id }) => id === run);
       const failed = (status: number) => rejected(`cancel run ${run}`, status);
-      if (found === undefined) {
+      if (Option.isNone(found)) {
         return failed(404);
       }
-      if (found.cancelForbidden === true) {
+      if (found.value.cancelForbidden === true) {
         return failed(403);
       }
-      return found.completed
+      return found.value.completed
         ? Effect.succeed("finished" as const)
         : record(`cancel run ${run}`).pipe(Effect.as("cancelled" as const));
     },
@@ -148,13 +154,19 @@ export const fakeGitHub = (
     },
     // GitHub rejects a stack with a pull request that is already in another.
     createStack: (pullRequests) => {
-      if (registered.some(({ unmerged }) => unmerged.some((pr) => pullRequests.includes(pr)))) {
+      if (
+        EffectArray.some(registered, ({ unmerged }) =>
+          EffectArray.some(unmerged, (pr) => pullRequests.includes(pr)),
+        )
+      ) {
         return rejected("POST /stacks", 422);
       }
       const number = StackNumberSchema.make(
-        Math.max(7, ...registered.map((stack) => stack.number)) + 1,
+        Math.max(7, ...EffectArray.map(registered, (stack) => stack.number)) + 1,
       );
-      return record(`create stack ${pullRequests.join(",")}`).pipe(
+      return record(
+        `create stack ${EffectArray.join(EffectArray.map(pullRequests, String), ",")}`,
+      ).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
             registered = [...registered, { number, unmerged: pullRequests }];
@@ -166,11 +178,14 @@ export const fakeGitHub = (
     defaultBranch: Effect.succeed("main"),
     latestChecks: (commit) => Effect.succeed(checks[commit] ?? []),
     markReadyForReview: (number) => {
-      const found = [...opened.entries()].find(([, pullRequest]) => pullRequest.number === number);
-      if (found === undefined) {
+      const found = EffectArray.findFirst(
+        [...opened.entries()],
+        ([, pullRequest]) => pullRequest.number === number,
+      );
+      if (Option.isNone(found)) {
         return rejected(`GET /pulls/${number}`, 404);
       }
-      const [branch, pullRequest] = found;
+      const [branch, pullRequest] = found.value;
       return record(`publish #${number}`).pipe(
         Effect.tap(() =>
           Effect.sync(() => {
@@ -221,20 +236,21 @@ export const fakeGitHub = (
     setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
     stackOf: (pullRequest) =>
       Effect.sync(() =>
-        Option.fromNullishOr(registered.find(({ unmerged }) => unmerged.includes(pullRequest))),
+        EffectArray.findFirst(registered, ({ unmerged }) => unmerged.includes(pullRequest)),
       ),
     unfinishedRuns: (commit) =>
       Effect.succeed(
-        (runs[commit] ?? [])
-          .filter((run) => !run.completed)
-          .map(({ id }) => WorkflowRunIdSchema.make(id)),
+        EffectArray.map(
+          EffectArray.filter(runs[commit] ?? [], (run) => !run.completed),
+          ({ id }) => WorkflowRunIdSchema.make(id),
+        ),
       ),
     unstack: (number) =>
-      registered.some((stack) => stack.number === number)
+      EffectArray.some(registered, (stack) => stack.number === number)
         ? record(`unstack #${number}`).pipe(
             Effect.tap(() =>
               Effect.sync(() => {
-                registered = registered.filter((stack) => stack.number !== number);
+                registered = EffectArray.filter(registered, (stack) => stack.number !== number);
               }),
             ),
           )
@@ -242,44 +258,6 @@ export const fakeGitHub = (
   });
   return { calls, layer };
 };
-
-export const pullRequests = (...numbers: readonly number[]): readonly PullRequestNumber[] =>
-  numbers.map((number) => PullRequestNumberSchema.make(number));
-
-/** A stack, with the given pull requests that haven't merged. */
-export const stackNumbered = (number: number, ...unmerged: readonly number[]): RemoteStack => ({
-  number: StackNumberSchema.make(number),
-  unmerged: pullRequests(...unmerged),
-});
-
-/** Stack #7 alone, with the given pull requests that haven't merged. */
-export const stackOf = (...unmerged: readonly number[]): readonly RemoteStack[] => [
-  stackNumbered(7, ...unmerged),
-];
-
-/** An open draft pull request with a title and no body. */
-export const openPullRequest = (base: string, number: number, title: string): PullRequest => ({
-  base,
-  body: "",
-  draft: true,
-  number: PullRequestNumberSchema.make(number),
-  title,
-});
-
-/** Pull request `number` of this repository as a listing shows it, in the state and with the head given. */
-export const pullRequest = (
-  number: number,
-  state: PullRequestState,
-  head: string,
-): ListedPullRequest => ({
-  createdAt: "2026-01-01T00:00:00Z",
-  head,
-  number: PullRequestNumberSchema.make(number),
-  stack: Option.none(),
-  state,
-  title: `Pull request ${number}`,
-  url: `https://github.com/kkom/jj-octo/pull/${number}`,
-});
 
 /** Runs a program against the scratch repository and the fake GitHub, with `env` as its environment. */
 export const inRepository =

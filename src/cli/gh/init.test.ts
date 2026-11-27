@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { Effect, type Layer } from "effect";
+import { Array as EffectArray, Effect, type Layer, String as EffectString } from "effect";
 
 import manifest from "../../../package.json" with { type: "json" };
 import type { Git } from "../../clients/git";
@@ -29,7 +29,7 @@ const defaultToDevelop = (repository: ScratchRepository): void => {
   repository.write("develop.txt", "develop\n");
   repository.jj("bookmark", "create", "develop", "-r", "@");
   repository.jj("git", "push", "--bookmark", "develop");
-  const origin = repository.git("remote", "get-url", "origin").trim();
+  const origin = EffectString.trim(repository.git("remote", "get-url", "origin"));
   repository.git("--git-dir", origin, "symbolic-ref", "HEAD", "refs/heads/develop");
 };
 
@@ -89,13 +89,16 @@ describe("init", () => {
     clone.git("remote", "set-url", "origin", "/nonexistent");
     expect(await runIn(clone.layer, Effect.flip(init))).toStrictEqual(
       new NotSetUp({
-        message: [
-          "git ls-remote --symref origin HEAD failed: fatal: '/nonexistent' does not appear to be a git repository",
-          "fatal: Could not read from remote repository.",
-          "",
-          "Please make sure you have the correct access rights",
-          "and the repository exists.",
-        ].join("\n"),
+        message: EffectArray.join(
+          [
+            "git ls-remote --symref origin HEAD failed: fatal: '/nonexistent' does not appear to be a git repository",
+            "fatal: Could not read from remote repository.",
+            "",
+            "Please make sure you have the correct access rights",
+            "and the repository exists.",
+          ],
+          "\n",
+        ),
       }),
     );
     expect(clone.jj("config", "list", "--repo", "aliases.gh")).toBe(
@@ -157,7 +160,7 @@ describe("init", () => {
     clone.jj("git", "init", "--colocate");
     repository.jj("bookmark", "create", "develop", "-r", "main");
     repository.jj("git", "push", "--bookmark", "develop");
-    const origin = repository.git("remote", "get-url", "origin").trim();
+    const origin = EffectString.trim(repository.git("remote", "get-url", "origin"));
     repository.git("--git-dir", origin, "symbolic-ref", "HEAD", "refs/heads/develop");
     await initIn(clone.layer);
     expect(clone.jj("config", "get", 'revset-aliases."trunk()"')).toBe('"develop"@origin\n');

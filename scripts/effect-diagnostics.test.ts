@@ -1,7 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import path from "node:path";
 
-import { Result, Schema } from "effect";
+import {
+  Array as EffectArray,
+  Option,
+  Order,
+  Record as EffectRecord,
+  Result,
+  Schema,
+  String as EffectString,
+} from "effect";
 
 const root = path.join(import.meta.dirname, "..");
 
@@ -35,10 +43,14 @@ const listConfiguredRules = async () => {
       Bun.JSONC.parse(await Bun.file(path.join(root, "tsconfig.json")).text()),
     ),
   );
-  const entry = tsconfig.compilerOptions.plugins.find(
+  const severities = EffectArray.findFirst(
+    tsconfig.compilerOptions.plugins,
     ({ name }) => name === "@effect/language-service",
+  ).pipe(
+    Option.flatMapNullishOr(({ diagnosticSeverity }) => diagnosticSeverity),
+    Option.getOrElse(() => ({})),
   );
-  return Object.keys(entry?.diagnosticSeverity ?? {}).toSorted();
+  return EffectArray.sort(EffectRecord.keys(severities), Order.String);
 };
 
 // The plugin's rules but the deprecated ones. A rule whose description opens with "Deprecated" is
@@ -50,12 +62,17 @@ const listCurrentPluginRules = async () => {
       await Bun.file(path.join(path.dirname(manifest), "schema.json")).json(),
     ),
   );
-  return Object.entries(
-    schema.definitions.effectLanguageServicePluginDiagnosticSeverityDefinition.properties,
-  )
-    .filter(([, { description }]) => description?.startsWith("Deprecated") !== true)
-    .map(([name]) => name)
-    .toSorted();
+  const current = EffectArray.filter(
+    EffectRecord.toEntries(
+      schema.definitions.effectLanguageServicePluginDiagnosticSeverityDefinition.properties,
+    ),
+    ([, { description }]) =>
+      description === undefined || !EffectString.startsWith("Deprecated")(description),
+  );
+  return EffectArray.sort(
+    EffectArray.map(current, ([name]) => name),
+    Order.String,
+  );
 };
 
 describe("tsconfig.json's Effect diagnostics", () => {

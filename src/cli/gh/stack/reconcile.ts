@@ -1,4 +1,11 @@
-import { Console, Data, Effect } from "effect";
+import {
+  Array as EffectArray,
+  Console,
+  Data,
+  Effect,
+  Record as EffectRecord,
+  String as EffectString,
+} from "effect";
 
 import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
@@ -24,7 +31,7 @@ export class NotCombined extends Data.TaggedError("NotCombined")<{ readonly mess
 
 /** The `jj git fetch` options that fetch only the branches. */
 export const fetchBranches = (branches: readonly string[]): string[] =>
-  [...new Set(branches)].flatMap((name) => ["--branch", exactPattern(name)]);
+  EffectArray.flatMap([...new Set(branches)], (name) => ["--branch", exactPattern(name)]);
 
 /** A change whose pull request merged, with the bookmark that names its branch. */
 export type MergedChange = Pick<StackChange, "bookmark" | "changeId">;
@@ -33,7 +40,7 @@ export type MergedChange = Pick<StackChange, "bookmark" | "changeId">;
 export const notMerged =
   (merged: readonly MergedChange[]) =>
   (name: string): boolean =>
-    merged.every(({ bookmark }) => bookmark !== name);
+    EffectArray.every(merged, ({ bookmark }) => bookmark !== name);
 
 /** The head commit of each merged pull request from each pushed bookmark's branch. */
 export const mergedHeadsOf = (
@@ -45,16 +52,22 @@ export const mergedHeadsOf = (
     const heads = yield* Effect.forEach(
       pushed,
       ({ name }) =>
-        github
-          .pullRequestsFrom(name)
-          .pipe(
-            Effect.map((pullRequests) =>
-              pullRequests.filter(({ state }) => state === "merged").map(({ head }) => head),
+        github.pullRequestsFrom(name).pipe(
+          Effect.map((pullRequests) =>
+            EffectArray.map(
+              EffectArray.filter(pullRequests, ({ state }) => state === "merged"),
+              ({ head }) => head,
             ),
           ),
+        ),
       { concurrency: "unbounded" },
     );
-    return Object.fromEntries(pushed.map(({ name }, index) => [name, heads[index] ?? []]));
+    return EffectRecord.fromEntries(
+      EffectArray.map(pushed, ({ name }, index): readonly [string, readonly string[]] => [
+        name,
+        heads[index] ?? [],
+      ]),
+    );
   });
 
 /** `mergedOnGitHub`, from merged heads already read. */
@@ -70,8 +83,9 @@ export const mergedIn = (
         const rebasedOnly =
           remote !== undefined &&
           merges.includes(remote) &&
-          (yield* jj.read(["interdiff", "--from", remote, "--to", local, "--summary"])).trim() ===
-            "";
+          (yield* jj
+            .read(["interdiff", "--from", remote, "--to", local, "--summary"])
+            .pipe(Effect.map(EffectString.trim))) === "";
         return merges.includes(local) || rebasedOnly ? [{ bookmark: name, changeId: change }] : [];
       }),
     );
@@ -97,14 +111,14 @@ export const mergedOnGitHub = (
 const forget = (names: readonly string[]) =>
   Effect.gen(function* () {
     const listed = yield* bookmarkTargets;
-    const present = names.filter((name) => listed.has(name));
+    const present = EffectArray.filter(names, (name) => listed.has(name));
     if (present.length > 0) {
       const jj = yield* Jj;
       yield* jj.run([
         "bookmark",
         "forget",
         "--include-remotes",
-        ...present.map((name) => exactPattern(name)),
+        ...EffectArray.map(present, (name) => exactPattern(name)),
       ]);
     }
   });
@@ -155,18 +169,21 @@ export const reconcile = ({
     const jj = yield* Jj;
     yield* jj.run(["git", "fetch", ...fetch]);
     // After the fetch, so it can't bring a branch GitHub hasn't deleted yet back as a bookmark.
-    yield* forget(merged.map(({ bookmark }) => bookmark));
-    const mergedRevset = `(${anyOf(merged.map(({ changeId }) => changeRevset(changeId)))}) & mutable() ~ (${skipped})`;
+    yield* forget(EffectArray.map(merged, ({ bookmark }) => bookmark));
+    const mergedRevset = `(${anyOf(EffectArray.map(merged, ({ changeId }) => changeRevset(changeId)))}) & mutable() ~ (${skipped})`;
     const required = yield* changeIdsAt(`(${mergedRevset}):: ~ (${mergedRevset})`);
     if (merged.length > 0) {
       yield* jj.run(["abandon", mergedRevset]);
       yield* Console.error(
-        `abandoned the changes whose pull requests merged: ${merged.map(({ bookmark }) => bookmark).join(", ")}`,
+        `abandoned the changes whose pull requests merged: ${EffectArray.join(
+          EffectArray.map(merged, ({ bookmark }) => bookmark),
+          ", ",
+        )}`,
       );
     }
     const fetched = yield* bookmarkTargets;
     const notCombined: string[] = [];
-    for (const bookmark of before.filter(({ name }) => notMerged(merged)(name))) {
+    for (const bookmark of EffectArray.filter(before, ({ name }) => notMerged(merged)(name))) {
       if (!(yield* combine(bookmark, fetched.get(bookmark.name)?.origin, skipped))) {
         notCombined.push(bookmark.name);
       }
@@ -176,17 +193,21 @@ export const reconcile = ({
       required,
     );
     const onStacks = new Set(bookmarks);
-    yield* forget((yield* bookmarksAt("::trunk()")).filter((name) => onStacks.has(name)));
+    const onTrunk = yield* bookmarksAt("::trunk()");
+    yield* forget(EffectArray.filter(onTrunk, (name) => onStacks.has(name)));
     const records = yield* PrDescriptions;
     // `bookmarksAt` lists conflicted bookmarks too, which `bookmarkTargets` gives no local target.
     yield* records.prune(Effect.provideService(bookmarksAt("all()"), Jj, jj));
     if (notCombined.length > 0) {
       return yield* new NotCombined({
-        message: [
-          "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
-          ...notCombined,
-          "`jj bookmark list <name>` shows both sides, and `jj bookmark set <name> -r <revision>` keeps one",
-        ].join("\n"),
+        message: EffectArray.join(
+          [
+            "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
+            ...notCombined,
+            "`jj bookmark list <name>` shows both sides, and `jj bookmark set <name> -r <revision>` keeps one",
+          ],
+          "\n",
+        ),
       });
     }
   });

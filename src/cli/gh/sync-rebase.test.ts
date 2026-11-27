@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
+import { Array as EffectArray, String as EffectString } from "effect";
+
 import { moveTrunkOnGitHub } from "../../testing/branch-changes";
 import { pushedStack, removeScratchRepositories } from "../../testing/scratch-repository";
 import { syncIn } from "../../testing/sync";
@@ -27,10 +29,12 @@ describe("sync, with several stacks to rebase", () => {
     const before = lines(repository.jj("operation", "log", "--no-graph", "-T", OPERATION));
     await syncIn(repository);
     const after = lines(repository.jj("operation", "log", "--no-graph", "-T", OPERATION));
-    expect(after.slice(0, after.length - before.length).map((line) => line.split(" ")[0])).toEqual([
-      "rebase",
-      "fetch",
-    ]);
+    expect(
+      EffectArray.map(
+        after.slice(0, after.length - before.length),
+        (line) => EffectString.split(line, " ")[0],
+      ),
+    ).toEqual(["rebase", "fetch"]);
     expect([repository.files("b"), repository.files("d")]).toStrictEqual([
       ["a.txt", "b.txt", "base.txt", "trunk.txt"],
       ["base.txt", "trunk.txt"],

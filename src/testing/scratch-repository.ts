@@ -11,14 +11,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer } from "effect";
+import {
+  Array as EffectArray,
+  Effect,
+  Layer,
+  Record as EffectRecord,
+  String as EffectString,
+} from "effect";
 
 import { lines } from "../cli/gh/stack/changes";
 import { type Git, gitLayer } from "../clients/git";
 import type { ListedPullRequest } from "../clients/github/types";
 import { type Jj, jjLayer } from "../clients/jj";
 import { PrDescriptions, prDescriptionsLayer } from "../clients/pr-descriptions";
-import { pullRequest } from "./fake-github";
+import { pullRequest } from "./pull-requests";
 import { templateOf } from "./templates";
 
 /**
@@ -100,7 +106,7 @@ export const executor =
   (cwd: string, command: readonly string[]): string => {
     const result = Bun.spawnSync([...command], { cwd, env: { ...Bun.env, ...env } });
     if (result.exitCode !== 0) {
-      throw new Error(`${command.join(" ")} failed:\n${result.stderr.toString()}`);
+      throw new Error(`${EffectArray.join(command, " ")} failed:\n${result.stderr.toString()}`);
     }
     return result.stdout.toString();
   };
@@ -157,11 +163,14 @@ const open = (root: string): ScratchRepository => {
 
   return {
     branches: () =>
-      Object.fromEntries(
-        lines(git("ls-remote", "--heads", "origin")).map((line) => {
-          const [commit = "", ref = ""] = line.split("\t");
-          return [ref.replace("refs/heads/", ""), commit];
-        }),
+      EffectRecord.fromEntries(
+        EffectArray.map(
+          lines(git("ls-remote", "--heads", "origin")),
+          (line): readonly [string, string] => {
+            const [commit, ref = ""] = EffectString.split(line, "\t");
+            return [EffectString.replace("refs/heads/", "")(ref), commit];
+          },
+        ),
       ),
     elsewhere,
     files: (revision) => lines(jj("file", "list", "-r", revision)),
@@ -188,11 +197,12 @@ const open = (root: string): ScratchRepository => {
         pullRequest: { ...pullRequest(number, "merged", head), title: branch },
       });
     },
-    printed: () => printed.join(""),
+    printed: () => EffectArray.join(printed, ""),
     pullRequestsFrom: (branch) =>
-      merged
-        .filter((recorded) => recorded.branch === branch)
-        .map((recorded) => recorded.pullRequest),
+      EffectArray.map(
+        EffectArray.filter(merged, (recorded) => recorded.branch === branch),
+        (recorded) => recorded.pullRequest,
+      ),
     records: (effect) =>
       Effect.runPromise(Effect.flatMap(PrDescriptions, effect).pipe(Effect.provide(layer))),
     stack: (...names) => {
@@ -220,7 +230,7 @@ const duplicate = (from: string, to: string): void => {
   cpSync(from, to, { preserveTimestamps: true, recursive: true });
   for (const config of ["repository/.git/config", "github/.git/config"]) {
     const file = path.join(to, config);
-    writeFileSync(file, readFileSync(file, "utf8").replaceAll(from, to));
+    writeFileSync(file, EffectString.replaceAll(from, to)(readFileSync(file, "utf8")));
   }
 };
 
@@ -260,11 +270,11 @@ export const scratchRepository = (): ScratchRepository => open(copyOf(baseTempla
 export const pushedStack = (...names: readonly string[]): ScratchRepository =>
   open(
     copyOf(
-      templateOf(parent, `pushed-${names.join("-")}`, (root) => {
+      templateOf(parent, `pushed-${EffectArray.join(names, "-")}`, (root) => {
         duplicate(baseTemplate(), root);
         const built = open(root);
         built.stack(...names);
-        built.jj("git", "push", ...names.flatMap((name) => ["--bookmark", name]));
+        built.jj("git", "push", ...EffectArray.flatMap(names, (name) => ["--bookmark", name]));
       }),
     ),
   );

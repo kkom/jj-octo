@@ -1,4 +1,4 @@
-import { Console, Effect } from "effect";
+import { Array as EffectArray, Console, Effect } from "effect";
 import { Command, Flag } from "effect/cli";
 
 import type { GitHub } from "../../clients/github/client";
@@ -63,7 +63,7 @@ const skippedStacks = (revisions: readonly string[]) =>
     const branched = yield* commitsAt(`(${others}) & (bookmarks() | ${ORIGIN_BRANCHES})`);
     return {
       hasBranches: branched.length > 0,
-      revset: `((${anyOf(roots.map((root) => changeRevset(root)))}):: & mutable()) ~ (${synced})`,
+      revset: `((${anyOf(EffectArray.map(roots, (root) => changeRevset(root)))}):: & mutable()) ~ (${synced})`,
     };
   });
 
@@ -116,28 +116,31 @@ export const sync = ({
     // By commit, since a merged change can be divergent with a copy in another workspace's stack.
     const skipped = allWorkspaces
       ? NONE_SKIPPED
-      : yield* skippedStacks(known.map(({ commitId }) => commitId));
+      : yield* skippedStacks(EffectArray.map(known, ({ commitId }) => commitId));
     const before = yield* bookmarksBeforeFetch(`mutable() ~ (${skipped.revset})`);
     const merged = [
       ...known,
-      ...(yield* mergedOnGitHub(before.filter(({ name }) => notMerged(known)(name)))),
+      ...(yield* mergedOnGitHub(EffectArray.filter(before, ({ name }) => notMerged(known)(name)))),
     ];
     // Also where the sync fails, which can be after it rebased the stacks.
     const reportNotSynced = Effect.gen(function* () {
       const stacks = yield* notSynced(skipped.revset);
       if (stacks.length > 0) {
         yield* Console.error(
-          `didn't sync the stacks that only other workspaces' working copies are on: ${stacks.map((name) => `"${name}"`).join(", ")}; \`jj gh sync --all-workspaces\` syncs them`,
+          `didn't sync the stacks that only other workspaces' working copies are on: ${EffectArray.join(
+            EffectArray.map(stacks, (name) => `"${name}"`),
+            ", ",
+          )}; \`jj gh sync --all-workspaces\` syncs them`,
         );
       }
     });
     yield* reconcile({
       before,
-      bookmarks: before.map(({ name }) => name),
+      bookmarks: EffectArray.map(before, ({ name }) => name),
       fetch: skipped.hasBranches
         ? fetchBranches([
             trunk,
-            ...pushedOf(before).map(({ name }) => name),
+            ...EffectArray.map(pushedOf(before), ({ name }) => name),
             ...(yield* syncedBranches(skipped.revset)),
           ])
         : [],

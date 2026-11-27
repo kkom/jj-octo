@@ -3,7 +3,7 @@ import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer } from "effect";
+import { Array as EffectArray, Effect, Layer, String as EffectString } from "effect";
 
 import { environment } from "../testing/environment";
 import { removeScratchRepositories, scratchDirectory } from "../testing/scratch-repository";
@@ -31,24 +31,27 @@ const standIn = (command: string, exitCode = 0) => {
   const script = path.join(directory, command);
   writeFileSync(
     script,
-    [
-      "#!/bin/sh",
-      `printf '%s\\n' "$@" > "${directory}/args"`,
-      `cat > "${directory}/stdin"`,
-      "sleep 30 &",
-      `echo $! > "${directory}/held"`,
-      `exit ${exitCode}`,
-    ].join("\n"),
+    EffectArray.join(
+      [
+        "#!/bin/sh",
+        `printf '%s\\n' "$@" > "${directory}/args"`,
+        `cat > "${directory}/stdin"`,
+        "sleep 30 &",
+        `echo $! > "${directory}/held"`,
+        `exit ${exitCode}`,
+      ],
+      "\n",
+    ),
   );
   chmodSync(script, 0o755);
   const read = (file: string) => readFileSync(path.join(directory, file), "utf8");
-  const held = () => Number(read("held").trim());
+  const held = () => Number(EffectString.trim(read("held")));
   return {
     PATH: directory,
     recorded: () => {
       // A killed process can stay as a zombie, which `ps` shows with the state Z.
       const state = Bun.spawnSync(["ps", "-o", "stat=", "-p", String(held())]).stdout.toString();
-      const alive = state.trim() !== "" && !state.startsWith("Z");
+      const alive = EffectString.trim(state) !== "" && !EffectString.startsWith("Z")(state);
       if (alive) {
         process.kill(held());
       }
@@ -66,7 +69,10 @@ describe("clipboardLayer", () => {
     expect({ recorded: osascript.recorded(), reported }).toStrictEqual({
       recorded: {
         alive: true,
-        args: ["-l", "JavaScript", "-e", MACOS_SCRIPT, content.html, content.text, ""].join("\n"),
+        args: EffectArray.join(
+          ["-l", "JavaScript", "-e", MACOS_SCRIPT, content.html, content.text, ""],
+          "\n",
+        ),
         stdin: "",
       },
       reported: "copied",

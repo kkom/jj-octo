@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { Option } from "effect";
 
 import { ACTIONS, requiring, run, status } from "../../testing/checks";
-import { checkReport } from "./checks";
+import { checkReport } from "./check-report";
 
 describe("checkReport", () => {
   it("names the required checks that failed, whatever the others are", () => {

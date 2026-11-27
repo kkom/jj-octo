@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect } from "effect";
+import { Array as EffectArray, Effect } from "effect";
 
 import { conflictWithTrunk } from "../../../testing/conflicts";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
@@ -13,8 +13,8 @@ describe("stackBookmarks", () => {
     const repository = scratchRepository();
     repository.stack("a", "b");
     const stack = await Effect.runPromise(stackChanges("@").pipe(Effect.provide(repository.layer)));
-    expect(stack.map(({ bookmark }) => bookmark)).toEqual(["a", "b"]);
-    expect(stack.map(({ description }) => description)).toEqual(["a\n", "b\n"]);
+    expect(EffectArray.map(stack, ({ bookmark }) => bookmark)).toEqual(["a", "b"]);
+    expect(EffectArray.map(stack, ({ description }) => description)).toEqual(["a\n", "b\n"]);
   });
 
   it("reads a change with conflicts as part of the stack, and says it has them", async () => {
@@ -28,23 +28,27 @@ describe("stackBookmarks", () => {
     const shortOf = read("change_id.shortest(8)");
     const stack = await Effect.runPromise(stackChanges("@").pipe(Effect.provide(repository.layer)));
     expect(stack).toStrictEqual(
-      [
-        { bookmark: "a", conflict: false },
-        { bookmark: "b", conflict: true },
-        { bookmark: "c", conflict: true },
-      ].map(({ bookmark, conflict }) => ({
-        bookmark,
-        changeId: changeOf(bookmark),
-        commitId: commitOf(bookmark),
-        conflict,
-        description: `${bookmark}\n`,
-        label: `${shortOf(bookmark)} ${bookmark}`,
-      })),
+      EffectArray.map(
+        [
+          { bookmark: "a", conflict: false },
+          { bookmark: "b", conflict: true },
+          { bookmark: "c", conflict: true },
+        ],
+        ({ bookmark, conflict }) => ({
+          bookmark,
+          changeId: changeOf(bookmark),
+          commitId: commitOf(bookmark),
+          conflict,
+          description: `${bookmark}\n`,
+          label: `${shortOf(bookmark)} ${bookmark}`,
+        }),
+      ),
     );
     const failure = await Effect.runPromise(Effect.flip(withoutConflicts(stack)));
     expect(failure).toStrictEqual(
       new NotAStack({
-        message: ["resolve the conflicts first:", `${shortOf("b")} b`, `${shortOf("c")} c`].join(
+        message: EffectArray.join(
+          ["resolve the conflicts first:", `${shortOf("b")} b`, `${shortOf("c")} c`],
           "\n",
         ),
       }),

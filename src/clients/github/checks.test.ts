@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { Option } from "effect";
+import { Array as EffectArray, Option, Order } from "effect";
 
 import { withGitHub } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
@@ -46,7 +46,7 @@ const listing =
 // it received sorted, since the check runs and the statuses are read at once.
 const readLatestChecks = async (respond: (request: InterceptedRequest) => unknown) => {
   const { requests, result } = await withGitHub(respond, (github) => github.latestChecks("abc"));
-  return { requests: requests.toSorted(), result };
+  return { requests: EffectArray.sort(requests, Order.String), result };
 };
 
 // A check run's result from GitHub Actions.
@@ -100,7 +100,7 @@ describe("latestChecks", () => {
     expect(
       await readLatestChecks(
         listing(
-          conclusions.map((conclusion, index) =>
+          EffectArray.map(conclusions, (conclusion, index) =>
             checkRun({ conclusion, id: index, name: conclusion }),
           ),
           [],
@@ -126,7 +126,7 @@ describe("latestChecks", () => {
       await readLatestChecks(
         listing(
           [],
-          ["success", "pending", "failure", "error"].map((state) => ({
+          EffectArray.map(["success", "pending", "failure", "error"], (state) => ({
             context: `ci/${state}`,
             state,
           })),
@@ -159,13 +159,13 @@ describe("latestChecks", () => {
       ({ path }) => pages[path] ?? new Reply(404, { message: "Not Found" }),
       (github) => github.latestChecks("abc"),
     );
-    expect({ requests: requests.toSorted(), result }).toStrictEqual({
+    expect({ requests: EffectArray.sort(requests, Order.String), result }).toStrictEqual({
       requests: [
         `GET api.github.com${checkRunsPath(1)}`,
         `GET api.github.com${checkRunsPath(2)}`,
         `GET api.github.com${statusPath(1)}`,
       ],
-      result: firstPage.map(({ name }) => check(name, "success", "passed")),
+      result: EffectArray.map(firstPage, ({ name }) => check(name, "success", "passed")),
     });
   });
 });

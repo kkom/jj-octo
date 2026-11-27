@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { Option } from "effect";
+import { Array as EffectArray, Option, String as EffectString } from "effect";
 
 import { PullRequestNumberSchema, StackNumberSchema } from "../../../clients/github/types";
-import { pullRequests, stackNumbered } from "../../../testing/fake-github";
+import { pullRequests, stackNumbered } from "../../../testing/pull-requests";
 import {
   agreedDescription,
   basesFor,
@@ -22,7 +22,7 @@ describe("basesFor", () => {
 });
 
 const wanted = (...numbers: readonly (number | undefined)[]) =>
-  numbers.map((number) =>
+  EffectArray.map(numbers, (number) =>
     number === undefined ? Option.none() : Option.some(PullRequestNumberSchema.make(number)),
   );
 
@@ -143,24 +143,28 @@ describe("titleAndBody", () => {
 // whitespace-only lines in each position.
 const lineKinds = ["", "  ", "Text", "    code", "\tcode", "  - nested", "Text  "];
 const withLine = (prefixes: readonly string[]): string[] =>
-  prefixes.flatMap((prefix) => lineKinds.map((line) => `${prefix}\n${line}`));
+  EffectArray.flatMap(prefixes, (prefix) =>
+    EffectArray.map(lineKinds, (line) => `${prefix}\n${line}`),
+  );
 const twoLines = withLine(lineKinds);
 const threeLines = withLine(twoLines);
 const descriptions = [...lineKinds, ...twoLines, ...threeLines, ...withLine(threeLines)];
 
 /** The non-blank lines of a description, without the whitespace at its end. */
 const contentLines = (description: string): string =>
-  description
-    .trimEnd()
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .join("\n");
+  EffectArray.join(
+    EffectArray.filter(
+      EffectString.split(EffectString.trimEnd(description), "\n"),
+      (line) => EffectString.trim(line) !== "",
+    ),
+    "\n",
+  );
 
 const roundTrip = (description: string): string => descriptionFrom(titleAndBody(description));
 
 describe("titleAndBody and descriptionFrom", () => {
   it("change a description at most once, in its blank lines and the whitespace at its end", () => {
-    const changed = descriptions.filter((description) => {
+    const changed = EffectArray.filter(descriptions, (description) => {
       const once = roundTrip(description);
       return roundTrip(once) !== once || contentLines(once) !== contentLines(description);
     });
@@ -168,11 +172,17 @@ describe("titleAndBody and descriptionFrom", () => {
   });
 
   it("give back a pull request's title and a body that starts and ends with text", () => {
-    const bodies = descriptions.filter(
-      (body) => body === body.trimEnd() && body.split("\n")[0]?.trim() !== "",
+    const bodies = EffectArray.filter(
+      descriptions,
+      (body) =>
+        body === EffectString.trimEnd(body) &&
+        EffectString.trim(EffectString.split(body, "\n")[0]) !== "",
     );
-    const titled = ["", "Title"].flatMap((title) => bodies.map((body) => ({ body, title })));
-    const changed = titled.filter(
+    const titled = EffectArray.flatMap(["", "Title"], (title) =>
+      EffectArray.map(bodies, (body) => ({ body, title })),
+    );
+    const changed = EffectArray.filter(
+      titled,
       (pullRequest) => !Bun.deepEquals(titleAndBody(descriptionFrom(pullRequest)), pullRequest),
     );
     expect(changed).toStrictEqual([]);

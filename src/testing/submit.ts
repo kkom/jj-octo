@@ -1,14 +1,9 @@
-import type { Effect } from "effect";
+import { type Effect, String as EffectString } from "effect";
 
 import { type SubmitFailed, submit } from "../cli/gh/stack/push";
 import type { RemoteStack } from "../clients/github/types";
-import {
-  fakeGitHub,
-  type FakeGitHubOptions,
-  inRepository,
-  openPullRequest,
-  stackOf,
-} from "./fake-github";
+import { fakeGitHub, type FakeGitHubOptions, inRepository } from "./fake-github";
+import { openPullRequest, stackOf } from "./pull-requests";
 import { pushedStack, type ScratchRepository } from "./scratch-repository";
 
 /** Submits the revision in the repository, against the fake GitHub. */
@@ -32,7 +27,7 @@ export const submitIn = (
 
 /** The revision's description. */
 export const description = (repository: ScratchRepository, revision: string): string =>
-  repository.jj("log", "--no-graph", "-r", revision, "-T", "description").trimEnd();
+  EffectString.trimEnd(repository.jj("log", "--no-graph", "-r", revision, "-T", "description"));
 
 /** A stack of `a` and `b`, pushed with `a` described as three paragraphs. */
 export const pushed = (): ScratchRepository => {

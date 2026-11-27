@@ -1,11 +1,12 @@
 import { afterAll, describe, expect, it } from "bun:test";
 
-import { Effect } from "effect";
+import { Effect, String as EffectString } from "effect";
 
 import type { ListedPullRequest, RequiredChecks } from "../../clients/github/types";
 import { requiring, run } from "../../testing/checks";
 import { conflictWithTrunk } from "../../testing/conflicts";
-import { fakeGitHub, inRepository, pullRequest } from "../../testing/fake-github";
+import { fakeGitHub, inRepository } from "../../testing/fake-github";
+import { pullRequest } from "../../testing/pull-requests";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import { checks } from "./checks";
 
@@ -135,7 +136,7 @@ describe("checks", () => {
       ),
     ).toStrictEqual([
       "c  no open pull request  conflicted",
-      `b  #2 failed: CI         head ${pushedB.slice(0, 12)} differs from the change  conflicted`,
+      `b  #2 failed: CI         head ${EffectString.slice(0, 12)(pushedB)} differs from the change  conflicted`,
       "a  #1 passed",
     ]);
   });

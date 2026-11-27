@@ -1,3 +1,5 @@
+import { Array as EffectArray, String as EffectString } from "effect";
+
 import type { ScratchRepository } from "./scratch-repository";
 
 // What GitHub does to branches by itself, done in the clone and pushed to `origin`.
@@ -62,7 +64,11 @@ export const rewriteElsewhere = (
     repository.elsewhere("edit", branch);
     repository.writeElsewhere(`${branch}-elsewhere.txt`, "elsewhere\n");
   }
-  repository.elsewhere("git", "push", ...branches.flatMap((branch) => ["--bookmark", branch]));
+  repository.elsewhere(
+    "git",
+    "push",
+    ...EffectArray.flatMap(branches, (branch) => ["--bookmark", branch]),
+  );
 };
 
 /**
@@ -92,12 +98,15 @@ export const squashMergeOnGitHub = (
   repository.git("commit", "--quiet", "-m", `${branch} (#1)`);
   repository.git("push", "--quiet", "origin", into);
   for (const name of [...below, branch]) {
-    repository.mergedOnGitHub(name, repository.git("rev-parse", `origin/${name}`).trim());
+    repository.mergedOnGitHub(
+      name,
+      EffectString.trim(repository.git("rev-parse", `origin/${name}`)),
+    );
   }
-  let previous = repository.git("rev-parse", `origin/${branch}`).trim();
+  let previous = EffectString.trim(repository.git("rev-parse", `origin/${branch}`));
   let base = into;
   for (const name of above) {
-    const pushed = repository.git("rev-parse", `origin/${name}`).trim();
+    const pushed = EffectString.trim(repository.git("rev-parse", `origin/${name}`));
     repository.git("checkout", "--quiet", "-B", name, pushed);
     repository.git("rebase", "--quiet", "--onto", base, previous, name);
     repository.git("push", "--quiet", "--force", "origin", name);

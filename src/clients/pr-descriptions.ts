@@ -1,4 +1,15 @@
-import { Console, Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
+import {
+  Array as EffectArray,
+  Console,
+  Context,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Schema,
+  String as EffectString,
+} from "effect";
 
 import type { PullRequestNumber } from "./github/types";
 import { Jj } from "./jj";
@@ -74,11 +85,14 @@ export const prDescriptionsLayer: Layer.Layer<
     // holding its path relative to the workspace's `.jj`.
     const directory = yield* Effect.cached(
       Effect.gen(function* () {
-        const dotJj = path.join((yield* jj.read(["workspace", "root"])).trim(), ".jj");
+        const root = yield* jj.read(["workspace", "root"]).pipe(Effect.map(EffectString.trim));
+        const dotJj = path.join(root, ".jj");
         const repository = path.join(dotJj, "repo");
         const shared =
           (yield* fs.stat(repository)).type === "File"
-            ? path.resolve(dotJj, (yield* fs.readFileString(repository)).trim())
+            ? yield* fs
+                .readFileString(repository)
+                .pipe(Effect.map((text) => path.resolve(dotJj, EffectString.trim(text))))
             : repository;
         return path.join(shared, "jj-octo", "pr-descriptions");
       }),
@@ -97,7 +111,7 @@ export const prDescriptionsLayer: Layer.Layer<
         Effect.gen(function* () {
           const records = yield* directory;
           const names = (yield* fs.exists(records)) ? yield* fs.readDirectory(records) : [];
-          const recorded = names.filter((name) => RECORD.test(name));
+          const recorded = EffectArray.filter(names, (name) => RECORD.test(name));
           const left = recorded.length === 0 ? [] : yield* bookmarks;
           for (const name of recorded) {
             const file = path.join(records, name);
@@ -107,7 +121,7 @@ export const prDescriptionsLayer: Layer.Layer<
             }
           }
           const now = Date.now();
-          for (const name of names.filter((file) => PARTIAL.test(file))) {
+          for (const name of EffectArray.filter(names, (file) => PARTIAL.test(file))) {
             const file = path.join(records, name);
             const modified = yield* fs.stat(file).pipe(
               Effect.map(({ mtime }) => Option.getOrElse(mtime, () => new Date(0)).getTime()),
