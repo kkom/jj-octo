@@ -149,7 +149,7 @@ describe("links", () => {
     const console = fakeConsole();
     const exit = await Effect.runPromiseExit(
       links({ copy: true, revision: "@" }).pipe(
-        Effect.provide(Layer.succeed(Clipboard, { write: () => Effect.fail(failure) })),
+        Effect.provideService(Clipboard, { write: () => Effect.fail(failure) }),
         inRepository(repository, github),
         console.provide,
       ),
