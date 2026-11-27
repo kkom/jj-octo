@@ -127,8 +127,10 @@ describe("clipboardLayer", () => {
 
   it("fails naming the command where it exits non-zero", async () => {
     const xclip = standIn("xclip", 1);
-    const failure = await Effect.runPromise(
-      Effect.flip(writeWith(layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }))),
+    const failure = await layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }).pipe(
+      writeWith,
+      Effect.flip,
+      Effect.runPromise,
     );
     xclip.recorded();
     expect(failure).toStrictEqual(new ClipboardFailed({ message: "xclip exited with 1" }));
@@ -136,8 +138,10 @@ describe("clipboardLayer", () => {
 
   it("fails naming the command where it isn't installed", async () => {
     const empty = scratchDirectory("clipboard-");
-    const failure = await Effect.runPromise(
-      Effect.flip(writeWith(layerFor("linux", { PATH: empty, WAYLAND_DISPLAY: "" }))),
+    const failure = await layerFor("linux", { PATH: empty, WAYLAND_DISPLAY: "" }).pipe(
+      writeWith,
+      Effect.flip,
+      Effect.runPromise,
     );
     expect(failure).toStrictEqual(
       new ClipboardFailed({
@@ -147,7 +151,7 @@ describe("clipboardLayer", () => {
   });
 
   it("fails on a platform it has no command for", async () => {
-    const failure = await Effect.runPromise(Effect.flip(writeWith(layerFor("win32"))));
+    const failure = await layerFor("win32").pipe(writeWith, Effect.flip, Effect.runPromise);
     expect(failure).toStrictEqual(
       new ClipboardFailed({
         message: "copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not win32",
