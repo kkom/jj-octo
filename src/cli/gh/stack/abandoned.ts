@@ -21,9 +21,10 @@ const abandonedBookmarks = (targets: readonly (readonly [string, BookmarkTarget]
     if (candidates.length === 0) {
       return [];
     }
-    const visible = new Set(
-      yield* changeIdsAt(anyOf(candidates.map(({ change }) => changeRevset(change)))),
+    const visibleIds = yield* changeIdsAt(
+      anyOf(candidates.map(({ change }) => changeRevset(change))),
     );
+    const visible = new Set(visibleIds);
     return candidates.filter(({ change }) => !visible.has(change)).map(({ name }) => name);
   });
 

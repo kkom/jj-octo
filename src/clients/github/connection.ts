@@ -66,15 +66,14 @@ const gitProxy = Effect.gen(function* () {
   const caFile = yield* gitSetting("http.sslCAInfo");
   const ca = Option.isNone(caFile)
     ? Option.none<string>()
-    : Option.some(
-        yield* fs.readFileString(caFile.value).pipe(
-          Effect.mapError(
-            (error) =>
-              new GitHubFailed({
-                message: `can't read git's http.sslCAInfo ${caFile.value}: ${error.message}`,
-              }),
-          ),
+    : yield* fs.readFileString(caFile.value).pipe(
+        Effect.mapError(
+          (error) =>
+            new GitHubFailed({
+              message: `can't read git's http.sslCAInfo ${caFile.value}: ${error.message}`,
+            }),
         ),
+        Effect.asSome,
       );
   // Git reads a proxy without a scheme as an HTTP one.
   const withScheme = /^[a-z][\d+.a-z-]*:\/\//iu.test(url.value) ? url.value : `http://${url.value}`;

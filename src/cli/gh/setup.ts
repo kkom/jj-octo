@@ -104,7 +104,8 @@ const identity = (key: string): SetupStep => ({
     return inJj ? undefined : problem;
   }),
   fix: Effect.gen(function* () {
-    yield* setJjConfig(key, yield* gitConfig([key]));
+    const fromGit = yield* gitConfig([key]);
+    yield* setJjConfig(key, fromGit);
   }),
 });
 

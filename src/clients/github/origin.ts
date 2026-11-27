@@ -17,6 +17,7 @@ export const GitHubFromOrigin = Layer.unwrap(
     if (Option.isNone(repository)) {
       return yield* new GitHubFailed({ message: "the `origin` remote isn't a GitHub repository" });
     }
-    return GitHubLive(repository.value, yield* connection);
+    const settings = yield* connection;
+    return GitHubLive(repository.value, settings);
   }),
 );
