@@ -20,7 +20,9 @@
           "acquireReleaseDisposable": "error",
           "allOfMapToForEach": "error",
           "anyUnknownInErrorContext": "off", // undecided
-          "apiStabilityLeak": "off", // undecided
+          // jj-octo builds on Effect's unstable modules on purpose, such as `effect/cli`, and
+          // no package imports its modules, so neither exposing nor using one is a problem.
+          "apiStabilityLeak": "off",
           "asyncFunction": "off", // undecided
           "catchAllTagDispatchToCatchTag": "error",
           "catchAllToMapError": "error",
@@ -169,7 +171,8 @@
           "unnecessaryPipeChain": "error",
           "unnecessaryTypeofType": "error",
           "unsafeEffectTypeAssertion": "error",
-          "unstableApiUsage": "off", // undecided
+          // jj-octo builds on Effect's unstable modules on purpose, such as `effect/cli`.
+          "unstableApiUsage": "off",
           "yieldInCallArgument": "off" // undecided
         },
         // A pipe reads better than nesting only from three steps. At two, the rule also
