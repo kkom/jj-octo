@@ -19,20 +19,23 @@ import { openPullRequestsAB } from "../../../testing/pull-requests";
 import { pushedStack, ScratchRepository } from "../../../testing/scratch-repository";
 import { submitting } from "../../../testing/submit";
 import { addWorkspace } from "../../../testing/workspace";
+import { NotAStack } from "./changes";
+import { BranchesDeleted } from "./sync-stack";
 
-// What the submit of the revision failed with, as it would print it.
-const failureOf = (revision = "@") =>
-  Effect.map(Effect.flip(submitting({ revision })), ({ message }) => message);
+// What the submit of the revision failed with.
+const failureOf = (revision = "@") => Effect.flip(submitting({ revision }));
 
-const deletedFailure = (...branches: readonly string[]): string =>
-  EffectArray.join(
-    [
-      "these branches were deleted on GitHub, so nothing was changed:",
-      ...branches,
-      "to push a change again, run `jj bookmark forget --include-remotes <name>`, then `jj bookmark create <name> -r <change>`; to drop one, run `jj abandon <change>`",
-    ],
-    "\n",
-  );
+const deletedFailure = (...branches: readonly string[]): BranchesDeleted =>
+  BranchesDeleted.make({
+    message: EffectArray.join(
+      [
+        "these branches were deleted on GitHub, so nothing was changed:",
+        ...branches,
+        "to push a change again, run `jj bookmark forget --include-remotes <name>`, then `jj bookmark create <name> -r <change>`; to drop one, run `jj abandon <change>`",
+      ],
+      "\n",
+    ),
+  });
 
 layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
   "submit, where the stack changed on GitHub",
@@ -70,7 +73,9 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         const branches = yield* repository.branches;
         expect({ branch: branches["b"], failure }).toStrictEqual({
           branch: pushed,
-          failure: `resolve the conflicts first:\n${yield* repository.labels("b")}`,
+          failure: NotAStack.make({
+            message: `resolve the conflicts first:\n${yield* repository.labels("b")}`,
+          }),
         });
       }));
 
@@ -204,7 +209,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         yield* repository.jj("edit", "a");
         yield* repository.write("a.txt", "a, edited\n");
         const failure = yield* failureOf();
-        expect(failure).toBe(
+        expect(failure).toStrictEqual(
           deletedFailure("a: its pushed commit merged, and the change was edited since"),
         );
       }));
@@ -216,13 +221,12 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         yield* addCommitOnGitHub("a");
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         const failure = yield* failureOf();
-        const log = yield* repository.log;
-        expect(failure).toBe(
-          deletedFailure(
+        expect({ failure, log: yield* repository.log }).toStrictEqual({
+          failure: deletedFailure(
             "a: a pull request from it merged, but not the commit pushed for this change",
           ),
-        );
-        expect(log).toStrictEqual(["a [a]", "b [b]"]);
+          log: ["a [a]", "b [b]"],
+        });
       }));
 
     it("leaves alone the changes above the one named", () =>

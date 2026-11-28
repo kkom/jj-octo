@@ -2,10 +2,11 @@ import { expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Option, Order, String as EffectString } from "effect";
 
-import { callGitHub, failureOf, gitHubThroughProxy, searchPath } from "../../testing/github-client";
+import { callGitHub, gitHubThroughProxy, searchPath } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
 import { layer } from "../../testing/it-effect";
 import { pullRequests } from "../../testing/pull-requests";
+import { GitHubFailed } from "./failure";
 
 const CREATED = "2026-01-01T00:00:00Z";
 const LATER = "2026-02-02T00:00:00Z";
@@ -150,14 +151,13 @@ layer(gitHubThroughProxy)("approvedPullRequests", (it) => {
     Effect.gen(function* () {
       const path = searchPath(`5 created:${CREATED}..${CREATED}`);
       const outcome = yield* callGitHub(searchOf([indexed(5), ...mentioning(5, 1200)]), (github) =>
-        failureOf(github.approvedPullRequests(asked([5]))),
+        Effect.flip(github.approvedPullRequests(asked([5]))),
       );
       expect(outcome).toStrictEqual({
         requests: [`GET api.github.com${path}`],
-        result: {
+        result: GitHubFailed.make({
           message: `GET ${path} matched 1201 pull requests, at least the 1000 that search lists, so whether #5 is approved is unknown`,
-          status: undefined,
-        },
+        }),
       });
     }));
 
@@ -165,14 +165,13 @@ layer(gitHubThroughProxy)("approvedPullRequests", (it) => {
     Effect.gen(function* () {
       const path = searchPath(`7 created:${CREATED}..${CREATED}`);
       const outcome = yield* callGitHub(searchOf([indexed(7)], true), (github) =>
-        failureOf(github.approvedPullRequests(asked([7]))),
+        Effect.flip(github.approvedPullRequests(asked([7]))),
       );
       expect(outcome).toStrictEqual({
         requests: [`GET api.github.com${path}`],
-        result: {
+        result: GitHubFailed.make({
           message: `GET ${path} timed out, and listed only some pull requests`,
-          status: undefined,
-        },
+        }),
       });
     }));
 

@@ -12,7 +12,8 @@ import { fakeGitHub } from "../../testing/fake-github";
 import { layer } from "../../testing/it-effect";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { editLocally, syncing } from "../../testing/sync";
-import { stackChanges } from "./stack/changes";
+import { NotAStack, stackChanges } from "./stack/changes";
+import { NotCombined } from "./stack/reconcile";
 
 // Rebases `a` onto a moved trunk on GitHub, and `b` onto the new `a`, with `b` edited locally.
 const rebaseBoth: Effect.Effect<void, never, ScratchRepository> = Effect.gen(function* () {
@@ -134,20 +135,22 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync", (it) => {
         const failure = yield* Effect.flip(syncing());
         expect({
           conflicted: yield* repository.conflicted,
+          failure,
           files: yield* repository.files("@"),
-          message: failure.message,
         }).toStrictEqual({
           conflicted: "",
+          failure: NotCombined.make({
+            message: EffectArray.join(
+              [
+                "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
+                "b",
+                "a",
+                "`jj bookmark list <name>` shows both sides, and `jj bookmark set <name> -r <revision>` keeps one",
+              ],
+              "\n",
+            ),
+          }),
           files: ["a.txt", "b.txt", "base.txt", "later.txt", "trunk.txt"],
-          message: EffectArray.join(
-            [
-              "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
-              "b",
-              "a",
-              "`jj bookmark list <name>` shows both sides, and `jj bookmark set <name> -r <revision>` keeps one",
-            ],
-            "\n",
-          ),
         });
       }));
 
@@ -159,26 +162,30 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync", (it) => {
         const failure = yield* Effect.flip(syncing());
         const check = yield* Effect.flip(stackChanges("@"));
         expect({
-          check: check.message,
+          check,
+          failure,
           files: yield* repository.files("b"),
-          message: failure.message,
         }).toStrictEqual({
-          check: EffectArray.join(
-            [
-              "these bookmarks point at two changes, one local and one from GitHub; keep one with `jj bookmark set <name> -r <revision>`:",
-              "a",
-            ],
-            "\n",
-          ),
+          check: NotAStack.make({
+            message: EffectArray.join(
+              [
+                "these bookmarks point at two changes, one local and one from GitHub; keep one with `jj bookmark set <name> -r <revision>`:",
+                "a",
+              ],
+              "\n",
+            ),
+          }),
+          failure: NotCombined.make({
+            message: EffectArray.join(
+              [
+                "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
+                "a",
+                "`jj bookmark list <name>` shows both sides, and `jj bookmark set <name> -r <revision>` keeps one",
+              ],
+              "\n",
+            ),
+          }),
           files: ["a.txt", "b.txt", "base.txt", "local.txt", "trunk.txt"],
-          message: EffectArray.join(
-            [
-              "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",
-              "a",
-              "`jj bookmark list <name>` shows both sides, and `jj bookmark set <name> -r <revision>` keeps one",
-            ],
-            "\n",
-          ),
         });
       }));
   });

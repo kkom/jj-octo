@@ -1,18 +1,11 @@
 import { expect } from "bun:test";
 
-import { Array as EffectArray, Effect, FileSystem } from "effect";
+import { Array as EffectArray, Effect, FileSystem, Result } from "effect";
 
 import { GitClone, gitClone } from "../testing/git-clone";
 import { layer } from "../testing/it-effect";
 import { ScratchRepository, scratchRepository } from "../testing/scratch-repository";
 import { Jj, JjFailed, jjConfig } from "./jj";
-
-// The value the program reads, or the message it fails with.
-const read = <A>(program: Effect.Effect<A, JjFailed, Jj>) =>
-  program.pipe(
-    Effect.map((value) => ({ value })),
-    Effect.catch(({ message }) => Effect.succeed({ message })),
-  );
 
 layer(gitClone())("jjConfig", (it) => {
   it("reads a key without a value as an empty string, and fails on a config jj can't read", () =>
@@ -54,13 +47,15 @@ layer(gitClone())("jjConfig", (it) => {
           '[jj-octo]\non = true\nword = "true"\ntable = { a = "x" }\n',
         ),
       );
-      const word = yield* read(jjConfig("jj-octo.word"));
-      const on = yield* read(jjConfig("jj-octo.on"));
-      const table = yield* read(jjConfig("jj-octo.table"));
+      const word = yield* Effect.result(jjConfig("jj-octo.word"));
+      const on = yield* Effect.result(jjConfig("jj-octo.on"));
+      const table = yield* Effect.result(jjConfig("jj-octo.table"));
       expect([word, on, table]).toStrictEqual([
-        { value: "true" },
-        { message: "jj-octo.on is true; set it to a string" },
-        { message: "jj-octo.table is a table; set it to a single value" },
+        Result.succeed("true"),
+        Result.fail(JjFailed.make({ message: "jj-octo.on is true; set it to a string" })),
+        Result.fail(
+          JjFailed.make({ message: "jj-octo.table is a table; set it to a single value" }),
+        ),
       ]);
     }));
 });

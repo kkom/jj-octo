@@ -8,10 +8,11 @@ import { GitClone, gitClone } from "../../testing/git-clone";
 import { layer } from "../../testing/it-effect";
 import { scratchDirectory } from "../../testing/scratch-process";
 import { connection } from "./connection";
+import { GitHubFailed } from "./failure";
 
 /**
  * Makes the clone a colocated jj repository, and returns the clone with the connection it resolves
- * and the message it fails with, each in an environment holding `env`.
+ * and the failure it fails with, each in an environment holding `env`.
  */
 const checkout = (env: Readonly<Record<string, string>> = {}) =>
   Effect.gen(function* () {
@@ -26,9 +27,7 @@ const checkout = (env: Readonly<Record<string, string>> = {}) =>
       })),
       withEnvironment(env),
     );
-    const failure = Effect.flip(connection.pipe(withEnvironment(env))).pipe(
-      Effect.map(({ message }) => message),
-    );
+    const failure = Effect.flip(connection.pipe(withEnvironment(env)));
     return { failure, git: clone.git, jj: clone.jj, resolved };
   });
 
@@ -87,9 +86,12 @@ layer(gitClone())("connection", (it) => {
       const { failure, git, jj } = yield* checkout({ GH_TOKEN: "own-token" });
       yield* git("config", "http.https://example.com/.proxy", "http://127.0.0.1:1234");
       yield* jj("config", "set", "--repo", GITHUB_AUTH.key, "git-proxy");
-      const message = yield* failure;
-      expect(message).toBe(
-        "jj-octo.github-auth is git-proxy, but git has no http.proxy for https://github.com",
+      const failed = yield* failure;
+      expect(failed).toStrictEqual(
+        GitHubFailed.make({
+          message:
+            "jj-octo.github-auth is git-proxy, but git has no http.proxy for https://github.com",
+        }),
       );
     }));
 
@@ -97,7 +99,11 @@ layer(gitClone())("connection", (it) => {
     Effect.gen(function* () {
       const { failure, jj } = yield* checkout({ GH_TOKEN: "own-token" });
       yield* jj("config", "set", "--repo", GITHUB_AUTH.key, "proxy");
-      const message = yield* failure;
-      expect(message).toBe('jj-octo.github-auth is "proxy"; set it to token or git-proxy');
+      const failed = yield* failure;
+      expect(failed).toStrictEqual(
+        GitHubFailed.make({
+          message: 'jj-octo.github-auth is "proxy"; set it to token or git-proxy',
+        }),
+      );
     }));
 });

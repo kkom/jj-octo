@@ -3,11 +3,12 @@ import { expect } from "bun:test";
 import { Array as EffectArray, Effect, Result, Schema } from "effect";
 
 import { withEnvironment } from "../../testing/environment";
-import { callGitHub, failureOf, gitHubThroughProxy } from "../../testing/github-client";
+import { callGitHub, gitHubThroughProxy } from "../../testing/github-client";
 import { InterceptingProxy, Reply } from "../../testing/intercepting-proxy";
 import { layer } from "../../testing/it-effect";
 import { pullRequest } from "../../testing/pull-requests";
 import { MarkReadyForReview } from "./documents";
+import { GitHubFailed } from "./failure";
 import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
 
 const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
@@ -42,14 +43,14 @@ layer(gitHubThroughProxy)("unfinishedRuns", (it) => {
     Effect.gen(function* () {
       const outcome = yield* callGitHub(
         () => new Reply(500, { message: "answered 500" }),
-        (github) => failureOf(github.unfinishedRuns({ branch: "claude/a", commit: "abc" })),
+        (github) => Effect.flip(github.unfinishedRuns({ branch: "claude/a", commit: "abc" })),
       );
       expect(outcome).toStrictEqual({
         requests: [`GET api.github.com${runsPath(1)}`],
-        result: {
+        result: GitHubFailed.make({
           message: `GET ${runsPath(1)} returned 500: {"message":"answered 500"}`,
           status: 500,
-        },
+        }),
       });
     }));
 });
@@ -94,18 +95,12 @@ layer(gitHubThroughProxy)("pullRequestsFrom", (it) => {
     }));
 });
 
-// Cancels run 7 where GitHub answers the cancel with the status, and returns the outcome or how it
-// failed, with the requests GitHub received.
+// Cancels run 7 where GitHub answers the cancel with the status, and returns the result, with the
+// requests GitHub received.
 const cancel = (status: number) =>
   callGitHub(
     () => new Reply(status, { message: `answered ${status}` }),
-    (github) =>
-      github.cancelRun(WorkflowRunIdSchema.make("7")).pipe(
-        Effect.map((outcome) => ({ outcome })),
-        Effect.catchTag("GitHubFailed", ({ message, status: failed }) =>
-          Effect.succeed({ failed: { message, status: failed } }),
-        ),
-      ),
+    (github) => Effect.result(github.cancelRun(WorkflowRunIdSchema.make("7"))),
   );
 
 layer(gitHubThroughProxy)("cancelRun", (it) => {
@@ -116,7 +111,7 @@ layer(gitHubThroughProxy)("cancelRun", (it) => {
       const outcome = yield* cancel(202);
       expect(outcome).toStrictEqual({
         requests: [request],
-        result: { outcome: "cancelled" },
+        result: Result.succeed("cancelled"),
       });
     }));
 
@@ -125,7 +120,7 @@ layer(gitHubThroughProxy)("cancelRun", (it) => {
       const outcome = yield* cancel(409);
       expect(outcome).toStrictEqual({
         requests: [request],
-        result: { outcome: "finished" },
+        result: Result.succeed("finished"),
       });
     }));
 
@@ -134,13 +129,13 @@ layer(gitHubThroughProxy)("cancelRun", (it) => {
       const outcome = yield* cancel(403);
       expect(outcome).toStrictEqual({
         requests: [request],
-        result: {
-          failed: {
+        result: Result.fail(
+          GitHubFailed.make({
             message:
               'POST /repos/owner/name/actions/runs/7/cancel returned 403: {"message":"answered 403"}',
             status: 403,
-          },
-        },
+          }),
+        ),
       });
     }));
 });
@@ -179,8 +174,7 @@ layer(gitHubThroughProxy)("closing a pull request", (it) => {
 });
 
 // Marks #7 ready for review, against a GitHub whose GraphQL API answers with `graphql`, and returns
-// the outcome or how it failed, with the body of each GraphQL request and the requests GitHub
-// received.
+// the result, with the body of each GraphQL request and the requests GitHub received.
 const markReady = (graphql: unknown, env: Readonly<Record<string, string>> = {}) =>
   Effect.gen(function* () {
     const outcome = yield* callGitHub(
@@ -191,11 +185,9 @@ const markReady = (graphql: unknown, env: Readonly<Record<string, string>> = {})
         return path === "/repos/owner/name/pulls/7" ? { node_id: "PR_seven" } : {};
       },
       (github) =>
-        github.markReadyForReview(PullRequestNumberSchema.make(7)).pipe(
-          Effect.as({ marked: true }),
-          Effect.catchTag("GitHubFailed", ({ message }) => Effect.succeed({ failed: message })),
-          withEnvironment(env),
-        ),
+        github
+          .markReadyForReview(PullRequestNumberSchema.make(7))
+          .pipe(Effect.result, withEnvironment(env)),
     );
     return { ...outcome, bodies: yield* bodiesSent("/graphql") };
   });
@@ -218,7 +210,7 @@ layer(gitHubThroughProxy)("markReadyForReview", (it) => {
       expect(outcome).toStrictEqual({
         bodies: [graphqlBody],
         requests: graphqlRequests,
-        result: { marked: true },
+        result: Result.void,
       });
     }));
 
@@ -231,9 +223,11 @@ layer(gitHubThroughProxy)("markReadyForReview", (it) => {
       expect(outcome).toStrictEqual({
         bodies: [graphqlBody],
         requests: graphqlRequests,
-        result: {
-          failed: "marking #7 ready for review failed: Resource not accessible by integration",
-        },
+        result: Result.fail(
+          GitHubFailed.make({
+            message: "marking #7 ready for review failed: Resource not accessible by integration",
+          }),
+        ),
       });
     }));
 
@@ -243,7 +237,7 @@ layer(gitHubThroughProxy)("markReadyForReview", (it) => {
       expect(outcome).toStrictEqual({
         bodies: [],
         requests: ["POST api.github.com/repos/owner/name/pulls/7/ccr/ready_for_review"],
-        result: { marked: true },
+        result: Result.void,
       });
     }));
 });

@@ -13,7 +13,8 @@ import { layer } from "../../testing/it-effect";
 import { merging } from "../../testing/merge";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { addWorkspace } from "../../testing/workspace";
-import { merge } from "./merge";
+import { merge, NotMergeable } from "./merge";
+import { NotAStack } from "./stack/changes";
 
 // `c`, on the trunk `a` and `b` started from, with the other workspace's working copy on it.
 // `rebasedB` reads the commit of `b` as GitHub rebased it in the merge of `a`.
@@ -200,9 +201,13 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
     Effect.gen(function* () {
       yield* setUpPullRequestsAB({ stacks: [] });
       const failure = yield* Effect.flip(merging("b"));
-      expect(failure.message).toContain("#2 isn't in a GitHub stack, and its base is a");
-      const calls = yield* gitHubCalls;
-      expect(calls).toStrictEqual([]);
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
+        calls: [],
+        failure: NotMergeable.make({
+          message:
+            "#2 isn't in a GitHub stack, and its base is a, so merging it wouldn't reach the trunk; run `jj gh submit` to register the stack, or merge the changes below it first",
+        }),
+      });
     }));
 
   it("merges nothing while a change has edits that aren't pushed", () =>
@@ -211,9 +216,12 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
       yield* repository.jj("describe", "-r", "a", "-m", "a, reworded");
       yield* setUpPullRequestsAB();
       const failure = yield* Effect.flip(merging("b"));
-      expect(failure.message).toContain("these changes aren't pushed: a, b");
-      const calls = yield* gitHubCalls;
-      expect(calls).toStrictEqual([]);
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
+        calls: [],
+        failure: NotMergeable.make({
+          message: "these changes aren't pushed: a, b; run `jj gh submit` first",
+        }),
+      });
     }));
 
   it("merges nothing for a change with no bookmark", () =>
@@ -222,17 +230,23 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
       yield* repository.jj("describe", "-m", "c");
       yield* setUpPullRequestsAB({ stacks: [] });
       const failure = yield* Effect.flip(merging("@"));
-      expect(failure.message).toContain("needs a bookmark");
-      const calls = yield* gitHubCalls;
-      expect(calls).toStrictEqual([]);
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
+        calls: [],
+        failure: NotAStack.make({
+          message: `every change needs a bookmark naming its branch; these have none:\n${yield* repository.labels("@")}`,
+        }),
+      });
     }));
 
   it("merges nothing for a bookmark with no open pull request", () =>
     Effect.gen(function* () {
       const failure = yield* Effect.flip(merging("b"));
-      expect(failure.message).toContain("no open pull request for b");
-      const calls = yield* gitHubCalls;
-      expect(calls).toStrictEqual([]);
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
+        calls: [],
+        failure: NotMergeable.make({
+          message: "no open pull request for b; run `jj gh submit` first",
+        }),
+      });
     }));
 });
 

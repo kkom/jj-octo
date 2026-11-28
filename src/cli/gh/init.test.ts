@@ -7,7 +7,7 @@ import { layer } from "../../testing/it-effect";
 import { ScratchRepository, scratchRepository } from "../../testing/scratch-repository";
 import { init } from "./init";
 import { NotSetUp } from "./setup";
-import { checkTrunk } from "./stack/trunk";
+import { checkTrunk, TrunkMismatch } from "./stack/trunk";
 
 /** Pushes a `develop` branch, and makes it `origin`'s default branch. */
 const defaultToDevelop: Effect.Effect<void, never, ScratchRepository> = Effect.gen(function* () {
@@ -34,10 +34,12 @@ layer(gitClone())("init", (it) => {
       const email = yield* clone.jj("config", "get", "user.email");
       const author = yield* clone.jj("log", "--no-graph", "-r", "@", "-T", "author.email()");
       const alias = yield* clone.jj("config", "get", "aliases.gh");
-      expect(name).toBe("Cloner\n");
-      expect(email).toBe("cloner@example.com\n");
-      expect(author).toBe("cloner@example.com");
-      expect(alias).toContain("jj-octo");
+      expect({ alias, author, email, name }).toStrictEqual({
+        alias: '["util","exec","--","jj-octo"]\n',
+        author: "cloner@example.com",
+        email: "cloner@example.com\n",
+        name: "Cloner\n",
+      });
     }));
 
   it("keeps a `jj gh` alias that runs another build", () =>
@@ -170,10 +172,12 @@ layer(gitClone())("init", (it) => {
         "list",
         "--tracked",
         "-T",
-        String.raw`name ++ "\n"`,
+        String.raw`name ++ if(remote, "@" ++ remote) ++ "\n"`,
       );
-      expect(trunk).toBe('"develop"@origin\n');
-      expect(tracked).toContain("develop");
+      expect({ tracked, trunk }).toStrictEqual({
+        tracked: "develop\ndevelop@origin\n",
+        trunk: '"develop"@origin\n',
+      });
     }));
 
   it("makes trunk() a new default branch on the same commit as the old one", () =>
@@ -228,8 +232,10 @@ layer(scratchRepository)("checkTrunk", (it) => {
       yield* defaultToDevelop;
       const check = checkTrunk("develop");
       const failure = yield* Effect.flip(check);
-      expect(failure.message).toBe(
-        "trunk() isn't develop@origin, GitHub's default branch; run `jj-octo init`",
+      expect(failure).toStrictEqual(
+        TrunkMismatch.make({
+          message: "trunk() isn't develop@origin, GitHub's default branch; run `jj-octo init`",
+        }),
       );
       yield* init;
       yield* check;

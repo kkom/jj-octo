@@ -1,7 +1,8 @@
 import { expect } from "bun:test";
 
-import { Effect, FileSystem } from "effect";
+import { Effect, FileSystem, Result } from "effect";
 
+import { JjFailed } from "./clients/jj";
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting, type Setting } from "./settings";
 import { withEnvironment } from "./testing/environment";
 import { GitClone, gitClone } from "./testing/git-clone";
@@ -18,7 +19,8 @@ const mode: Setting<"fast" | "slow"> = {
 };
 
 /**
- * Writes `config` as the clone's jj config, then reads the setting with `env` as the environment.
+ * Writes `config` as the clone's jj config, then reads the setting with `env` as the environment,
+ * and returns its result.
  */
 const readWith = <A extends boolean | string>(
   setting: Setting<A>,
@@ -29,11 +31,7 @@ const readWith = <A extends boolean | string>(
     const fs = yield* FileSystem.FileSystem;
     const clone = yield* GitClone;
     yield* Effect.orDie(fs.writeFileString(clone.jjConfigFile, config));
-    return yield* readSetting(setting).pipe(
-      Effect.map((value) => ({ value })),
-      Effect.catch(({ message }) => Effect.succeed({ message })),
-      withEnvironment(env),
-    );
+    return yield* readSetting(setting).pipe(Effect.result, withEnvironment(env));
   });
 
 layer(gitClone())("readSetting", (it) => {
@@ -44,18 +42,22 @@ layer(gitClone())("readSetting", (it) => {
       const unset = yield* readWith(mode, "");
       const invalid = yield* readWith(IGNORE_CLAUDE_CODE_FOOTER, config);
       expect([set, unset, invalid]).toStrictEqual([
-        { value: "fast" },
-        { value: "slow" },
-        { message: 'jj-octo.ignore-claude-code-footer is "yes"; set it to true or false' },
+        Result.succeed("fast"),
+        Result.succeed("slow"),
+        Result.fail(
+          JjFailed.make({
+            message: 'jj-octo.ignore-claude-code-footer is "yes"; set it to true or false',
+          }),
+        ),
       ]);
     }));
 
   it("reads a choice of another type as a value it doesn't know", () =>
     Effect.gen(function* () {
       const result = yield* readWith(mode, "[jj-octo]\nmode = true\n");
-      expect(result).toStrictEqual({
-        message: "jj-octo.mode is true; set it to fast or slow",
-      });
+      expect(result).toStrictEqual(
+        Result.fail(JjFailed.make({ message: "jj-octo.mode is true; set it to fast or slow" })),
+      );
     }));
 
   it("reads a default that depends on the environment", () =>
@@ -70,9 +72,9 @@ layer(gitClone())("readSetting", (it) => {
         { CLAUDE_CODE_REMOTE: "true" },
       );
       expect([inCloudSession, elsewhere, overridden]).toStrictEqual([
-        { value: true },
-        { value: false },
-        { value: false },
+        Result.succeed(true),
+        Result.succeed(false),
+        Result.succeed(false),
       ]);
     }));
 });

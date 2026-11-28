@@ -13,6 +13,7 @@ import { layer } from "../../../testing/it-effect";
 import { openPullRequestsAB, stackOf } from "../../../testing/pull-requests";
 import { ScratchRepository, scratchRepository } from "../../../testing/scratch-repository";
 import { submitting } from "../../../testing/submit";
+import { NotAStack } from "./changes";
 
 layer(Layer.merge(scratchRepository, fakeGitHub))("submit", (it) => {
   it("submits a change and the ones below it where a change above has conflicts", () =>
@@ -42,11 +43,11 @@ layer(Layer.merge(scratchRepository, fakeGitHub))("submit", (it) => {
       expect({
         branches: EffectRecord.keys(branches),
         calls: yield* gitHubCalls,
-        message: failure.message,
+        failure,
       }).toStrictEqual({
         branches: ["main"],
         calls: [],
-        message: `resolve the conflicts first:\n${labels}`,
+        failure: NotAStack.make({ message: `resolve the conflicts first:\n${labels}` }),
       });
     }));
 

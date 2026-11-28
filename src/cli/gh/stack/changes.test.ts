@@ -73,17 +73,25 @@ layer(scratchRepository)("stackChanges", (it) => {
       yield* repository.stack("a", "b");
       yield* repository.jj("new", "a", "-m", "c");
       const failure = yield* Effect.flip(stackChanges("@"));
-      expect(failure).toBeInstanceOf(NotAStack);
-      expect(failure.message).toContain("several heads");
+      expect(failure).toStrictEqual(
+        NotAStack.make({
+          message: `the stack has several heads, and a GitHub stack must be a chain:\n${yield* repository.labels("b", "@")}`,
+        }),
+      );
     }));
 
   it("fails on a change with no bookmark", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
       yield* repository.stack("a", "b");
+      const labelOfA = yield* repository.labels("a");
       yield* repository.jj("bookmark", "delete", "a");
       const failure = yield* Effect.flip(stackChanges("@"));
-      expect(failure.message).toContain("needs a bookmark");
+      expect(failure).toStrictEqual(
+        NotAStack.make({
+          message: `every change needs a bookmark naming its branch; these have none:\n${labelOfA}`,
+        }),
+      );
     }));
 
   it("fails on a change with two bookmarks", () =>
@@ -92,6 +100,11 @@ layer(scratchRepository)("stackChanges", (it) => {
       yield* repository.stack("a", "b");
       yield* repository.jj("bookmark", "create", "extra", "-r", "a");
       const failure = yield* Effect.flip(stackChanges("@"));
-      expect(failure.message).toContain("several bookmarks");
+      expect(failure).toStrictEqual(
+        NotAStack.make({
+          message:
+            "a pull request has one branch, and these changes have several bookmarks:\na extra",
+        }),
+      );
     }));
 });

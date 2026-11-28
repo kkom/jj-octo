@@ -16,6 +16,7 @@ import { layer } from "../../testing/it-effect";
 import { merging } from "../../testing/merge";
 import { openPullRequest, openPullRequestsABC } from "../../testing/pull-requests";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
+import { NotAStack } from "./stack/changes";
 
 layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
   "merge, where changes have conflicts",
@@ -105,9 +106,9 @@ layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHub))(
         });
         const failure = yield* Effect.flip(merging("b"));
         const labels = yield* repository.labels("b");
-        expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
+        expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
           calls: [],
-          message: `resolve the conflicts first:\n${labels}`,
+          failure: NotAStack.make({ message: `resolve the conflicts first:\n${labels}` }),
         });
       }));
   },
