@@ -9,4 +9,17 @@ bun src/main.ts init
 jj config set --repo aliases.gh "[\"util\", \"exec\", \"--\", \"bun\", \"$PWD/src/main.ts\"]"
 ```
 
-`.claude/hooks/session-start.sh` runs both commands in a Claude Code cloud session whose environment runs each checkout's session-start hook.
+## Formatting with `jj fix`
+
+`jj fix` reads its tools from the checkout's jj config, which isn't committed. Set them once per checkout:
+
+```
+jj config set --repo fix.tools.oxfmt.command '["node_modules/.bin/oxfmt", "--stdin-filepath=$path"]'
+jj config set --repo fix.tools.oxfmt.patterns '["glob:\"**/*.{ts,json,jsonc,json5,yaml,yml,md,toml}\""]'
+```
+
+oxfmt skips the files that `.oxfmtrc.jsonc` ignores.
+
+## In a Claude Code cloud session
+
+Where the environment runs each checkout's session-start hook, `.claude/hooks/session-start.sh` runs all four commands.
