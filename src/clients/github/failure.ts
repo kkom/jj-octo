@@ -6,16 +6,15 @@ export class GitHubFailed extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("GitHubFailed", {
   message: Schema.String,
-  /** The status of GitHub's error response, where it sent one. */
+  /** The status of GitHub's error response, if it sent one. */
   status: Schema.optionalKey(Schema.Finite),
 }) {}
 
-/** The request's URL with its query, which `HttpClientRequest` keeps apart from `url` in `urlParams`. */
+/** The request's URL with its query, which `HttpClientRequest` keeps in `urlParams`. */
 export const urlOf = ({ url, urlParams }: HttpClientRequest.HttpClientRequest): string =>
   urlParams.params.length === 0 ? url : `${url}?${UrlParams.toString(urlParams)}`;
 
-// An error response keeps GitHub's own words, since they say what to change: a 422 naming the field
-// it rejected, or the proxy naming a route a cloud session can't use.
+// The message keeps GitHub's own words, which say what to change, such as the field a 422 rejected.
 export const failWith = (
   request: HttpClientRequest.HttpClientRequest,
   response: HttpClientResponse.HttpClientResponse,

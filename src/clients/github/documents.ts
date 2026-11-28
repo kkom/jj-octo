@@ -1,9 +1,8 @@
 import { graphql } from "./graphql";
 
-// The GraphQL documents jj-octo sends, which GraphQL Code Generator types (`codegen.ts`).
+// The GraphQL documents jj-octo sends, typed by GraphQL Code Generator (`codegen.ts`).
 
-// GitHub's REST API can open a pull request ready for review, but can't make a draft ready. Only
-// its GraphQL API can, with this mutation, which names the pull request by its node id.
+// Only GitHub's GraphQL API can make a draft ready for review.
 export const MarkReadyForReview = graphql(`
   mutation MarkReadyForReview($pullRequestId: ID!) {
     markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {

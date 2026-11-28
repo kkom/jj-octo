@@ -196,8 +196,7 @@ describe("clipboardLayer", () => {
       const failure = yield* Effect.flip(writeWith("win32"));
       expect(failure).toStrictEqual(
         ClipboardFailed.make({
-          message:
-            "copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not win32",
+          message: "copying to the clipboard needs macOS or Linux, not win32",
         }),
       );
     }),

@@ -21,8 +21,8 @@ const platform = Layer.mergeAll(
 const services = Layer.mergeAll(
   GitLive,
   Layer.provideMerge(prDescriptionsLayer, JjLive),
-  // The completions flag is left out. Its script completes a command of this name, but the shell
-  // gives everything after `jj` to jj's own completions.
+  // No completions flag: its script completes a command of this name, but the shell hands
+  // everything after `jj` to jj's completions.
   CliConfig.layer({
     builtIns: [GlobalFlag.Help, GlobalFlag.Version, GlobalFlag.Wizard, GlobalFlag.LogLevel],
   }),

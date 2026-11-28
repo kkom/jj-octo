@@ -1,22 +1,22 @@
-import { Array as EffectArray, Config, Context, Effect, Layer, Schema, Stream } from "effect";
+import { Array as EffectArray, Context, Effect, Layer, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { claudeCodeCloudSession, WAYLAND_DISPLAY } from "../settings";
+import { claudeCodeCloudSession, environmentString, WAYLAND_DISPLAY } from "../settings";
 
 export class ClipboardFailed extends Schema.TaggedError<
   ClipboardFailed,
   { readonly brand: unique symbol }
 >()("ClipboardFailed", { message: Schema.String }) {}
 
-/** Text with formatting, and the same text without it for apps that take only plain text. */
+/** Formatted text, and its plain version for apps that take only plain text. */
 export interface RichText {
   readonly html: string;
   readonly text: string;
 }
 
 /**
- * What a write did: `unreachable` in a Claude Code cloud session, where the user's clipboard is on
- * another device, so nothing was copied.
+ * `unreachable` means nothing was copied: in a Claude Code cloud session, the user's clipboard is
+ * on another device.
  */
 export type ClipboardWrite = "copied" | "unreachable";
 
@@ -25,9 +25,8 @@ export class Clipboard extends Context.Service<
   { readonly write: (content: RichText) => Effect.Effect<ClipboardWrite, ClipboardFailed> }
 >()("jj-octo/clients/clipboard") {}
 
-// Sets the HTML and the plain text on macOS's pasteboard, where AppleScript's `set the clipboard`
-// sets plain text alone. osascript passes the arguments after the script to `run`, and exits
-// non-zero where it throws.
+// AppleScript's `set the clipboard` sets only plain text, so this sets both types through AppKit.
+// osascript passes the trailing arguments to `run`, and exits non-zero if it throws.
 export const MACOS_SCRIPT = `
 ObjC.import("AppKit");
 function run([html, text]) {
@@ -42,27 +41,18 @@ function run([html, text]) {
 }`;
 
 interface ClipboardOptions {
-  /** `process.platform` by default. */
   readonly platform?: string;
 }
-
-/** The environment variables the clipboard reads, empty where unset. */
-const environment = Config.all({
-  path: Config.String("PATH").pipe(Config.withDefault("")),
-  wayland: Config.String(WAYLAND_DISPLAY.name).pipe(Config.withDefault("")),
-});
 
 interface ClipboardCommand {
   readonly name: string;
   readonly args: readonly string[];
-  /** Whether the command reads the HTML from stdin, or takes the content as arguments. */
   readonly input: "arguments" | "stdin";
 }
 
 /**
- * The clipboard commands for the platform, the first one installed to run. On Linux the commands
- * take one type, so the clipboard gets the HTML alone. Under Wayland, xclip works through
- * XWayland where wl-copy isn't installed.
+ * The first installed command runs. Linux commands take one type, so the clipboard gets only HTML.
+ * Under Wayland without wl-copy, xclip works through XWayland.
  */
 const commandsFor = (
   { html, text }: RichText,
@@ -92,10 +82,9 @@ const commandsFor = (
 };
 
 /**
- * Runs the executable found for the command. The commands that read the HTML from stdin leave a
- * process behind that holds the clipboard. It would die with a detached process group, and keeps
- * any stdout or stderr it inherits open, which would block a caller reading them. So their output
- * is dropped, and osascript's isn't.
+ * A command reading stdin leaves a process holding the clipboard. It would die with a detached
+ * process group, and would block a caller reading inherited stdout and stderr, so its output is
+ * dropped.
  */
 const childProcess = (
   { args, input }: ClipboardCommand,
@@ -118,8 +107,8 @@ export const clipboardLayer = ({ platform = process.platform }: ClipboardOptions
   Layer.effect(
     Clipboard,
     Effect.gen(function* () {
-      // Each variable defaults to empty, and any string is valid, so reading them can't fail.
-      const { path, wayland } = yield* Effect.orDie(environment);
+      const path = yield* environmentString("PATH");
+      const wayland = yield* environmentString(WAYLAND_DISPLAY.name);
       if (yield* claudeCodeCloudSession) {
         return Clipboard.of({ write: () => Effect.succeed("unreachable" as const) });
       }
@@ -130,7 +119,7 @@ export const clipboardLayer = ({ platform = process.platform }: ClipboardOptions
           if (commands.length === 0) {
             return Effect.fail(
               ClipboardFailed.make({
-                message: `copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not ${platform}`,
+                message: `copying to the clipboard needs macOS or Linux, not ${platform}`,
               }),
             );
           }

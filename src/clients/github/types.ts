@@ -6,7 +6,7 @@ export type PullRequestNumber = typeof PullRequestNumberSchema.Type;
 export const StackNumberSchema = Schema.Finite.pipe(Schema.brand("StackNumber"));
 export type StackNumber = typeof StackNumberSchema.Type;
 
-/** A workflow run's id, as the URLs of the run's endpoints write it. */
+/** A workflow run's id, as its endpoints' URLs write it. */
 export const WorkflowRunIdSchema = Schema.String.pipe(Schema.brand("WorkflowRunId"));
 export type WorkflowRunId = typeof WorkflowRunIdSchema.Type;
 
@@ -18,7 +18,7 @@ export interface PullRequest {
   readonly title: string;
 }
 
-/** Where a pull request is: open as a draft or ready for review, merged, or closed unmerged. */
+/** `ready` is open and not a draft, and `closed` is closed unmerged. */
 export type PullRequestState = "closed" | "draft" | "merged" | "ready";
 
 const OPEN: Readonly<Record<PullRequestState, boolean>> = {
@@ -28,19 +28,15 @@ const OPEN: Readonly<Record<PullRequestState, boolean>> = {
   ready: true,
 };
 
-/** Whether a pull request in the state is open. */
 export const isOpen = (state: PullRequestState): boolean => OPEN[state];
 
-/** A stack registered on GitHub, with the address of its page. */
+/** A stack registered on GitHub. */
 export interface StackLink {
   readonly number: StackNumber;
   readonly url: string;
 }
 
-/**
- * A pull request from a branch, in any state, with when GitHub created it, its head commit, title
- * and address, and the stack it is in, where it is in one.
- */
+/** A pull request from a branch, in any state. */
 export interface ListedPullRequest {
   /** As GitHub writes it, such as `2026-10-04T16:40:29Z`. */
   readonly createdAt: string;
@@ -52,42 +48,38 @@ export interface ListedPullRequest {
   readonly url: string;
 }
 
-/**
- * Where a check is: not finished, or finished as passed, failed or skipped. GitHub counts a skipped
- * required check as passed, though nothing ran.
- */
+/** GitHub counts a `skipped` required check as passed, though nothing ran. */
 export type CheckState = "failed" | "passed" | "pending" | "skipped";
 
-/** The latest result of one check of a commit: a check run, or a commit status. */
+/** The latest result of one check of a commit: a check run or a commit status. */
 export interface Check {
   /**
-   * The id of the GitHub App that sent a check run. A commit status has none, since GitHub doesn't
-   * say which app sent it.
+   * The id of the GitHub App that sent a check run. A commit status has none, as GitHub doesn't
+   * name its app.
    */
   readonly app: Option.Option<number>;
   readonly name: string;
   /**
-   * GitHub's own word for the result: a check run's conclusion, or its status before it has one,
-   * or a commit status's state. Such as `success`, `cancelled` or `in_progress`.
+   * GitHub's word for the result, such as `success`: a check run's conclusion, or its status
+   * before it has one, or a commit status's state.
    */
   readonly outcome: string;
   readonly state: CheckState;
 }
 
-/** A check that a branch requires, by name, with the GitHub App that must send it, where one must. */
+/** A check a branch requires, and the GitHub App that must send it, if any. */
 export interface RequiredCheck {
   readonly app: Option.Option<number>;
   readonly name: string;
 }
 
-/** The checks that a branch requires, or why they couldn't be read. */
 export type RequiredChecks =
   | { readonly _tag: "Known"; readonly checks: readonly RequiredCheck[] }
   | { readonly _tag: "Unknown"; readonly reason: string };
 
 /**
- * A stack registered on GitHub, with its pull requests that haven't merged bottom to top. One closed
- * without merging stays in the stack, so it is among them.
+ * A stack registered on GitHub. `unmerged` runs bottom to top, and includes pull requests closed
+ * without merging, which stay in the stack.
  */
 export interface RemoteStack {
   readonly number: StackNumber;

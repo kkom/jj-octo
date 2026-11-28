@@ -16,7 +16,7 @@ import { readOutput } from "./process";
 export class GitFailed extends Schema.TaggedError<GitFailed, { readonly brand: unique symbol }>()(
   "GitFailed",
   {
-    /** Git's exit code, where git ran and failed. */
+    /** Git's exit code, if git ran and failed. */
     exitCode: Schema.optionalKey(Schema.Finite),
     message: Schema.String,
   },
@@ -25,11 +25,11 @@ export class GitFailed extends Schema.TaggedError<GitFailed, { readonly brand: u
 export class Git extends Context.Service<
   Git,
   {
-    /** Runs a git command that reads the repository, and returns what it printed. */
+    /** Runs a read-only command and returns its stdout. */
     readonly read: (args: readonly string[]) => Effect.Effect<string, GitFailed>;
     /**
-     * Merges two edits of a text, line by line. Where both changed the same lines, the text has
-     * conflict markers around the two versions, labelled `local` and `GitHub`.
+     * Merges two edits of a text by line. Where both changed the same lines, conflict markers
+     * labelled `local` and `GitHub` surround the two versions.
      */
     readonly mergeText: (texts: {
       readonly base: string;
@@ -62,7 +62,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
           Effect.scoped(
             Effect.gen(function* () {
               const directory = yield* fs.makeTempDirectoryScoped();
-              // `git merge-file` merges lines, and treats a last line with no newline as changed.
+              // `git merge-file` treats a last line without a newline as changed.
               const written = { base: `${base}\n`, github: `${remote}\n`, local: `${local}\n` };
               yield* Effect.forEach(
                 EffectRecord.toEntries(written),
@@ -89,7 +89,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
                 ),
               );
               const { exitCode, stderr, stdout } = yield* readOutput(handle);
-              // The exit code is the number of conflicts, and 255 for a failure.
+              // The exit code is the conflict count, or 255 on failure.
               if (exitCode > 127) {
                 return yield* GitFailed.make({
                   message: `git merge-file failed: ${EffectString.trim(stderr)}`,
@@ -131,12 +131,11 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
 
 export const GitLive = gitLayer();
 
-/** What a `git config` query prints, or an empty string where it finds no value. */
 export const gitConfig = (args: readonly string[]): Effect.Effect<string, GitFailed, Git> =>
   Effect.gen(function* () {
     const git = yield* Git;
     const value = yield* git.read(["config", ...args]).pipe(
-      // Git exits 1 for a key it has no value for, and 128 for a config file it can't parse.
+      // Git exits 1 for an unset key, and 128 for an unparseable config file.
       Effect.catchIf(
         (error) => error.exitCode === 1,
         () => Effect.succeed(""),
@@ -145,10 +144,7 @@ export const gitConfig = (args: readonly string[]): Effect.Effect<string, GitFai
     return EffectString.trim(value);
   });
 
-/**
- * The checkout's top directory, its git directory and the repository's common git directory, as
- * absolute paths. In a git worktree, the git directory isn't the common one.
- */
+/** Absolute paths. In a git worktree, `gitDirectory` and `commonDirectory` differ. */
 export const gitDirectories: Effect.Effect<
   { readonly commonDirectory: string; readonly gitDirectory: string; readonly topLevel: string },
   GitFailed,

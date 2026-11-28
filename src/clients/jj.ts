@@ -21,23 +21,21 @@ export class JjFailed extends Schema.TaggedError<JjFailed, { readonly brand: uni
 export class Jj extends Context.Service<
   Jj,
   {
-    /** Runs a jj command that reads the repository, and returns what it printed. */
+    /** Runs a read-only command and returns its stdout. */
     readonly read: (args: readonly string[]) => Effect.Effect<string, JjFailed>;
-    /** Runs a jj command that changes something, showing its output as it goes. */
+    /** Runs a command that changes something, streaming its output. */
     readonly run: (args: readonly string[]) => Effect.Effect<void, JjFailed>;
     /**
-     * Runs a jj command that changes something as a dry run: jj makes the operation, and doesn't
-     * add it to the operation log. So the bookmarks, the git branches and the working copy stay as
-     * they are. The commits it makes stay in the repository, unreferenced, until jj collects them.
-     * Returns the operation's id, which `--at-operation` reads the result at. Fails where the
-     * command changed nothing.
+     * Runs a jj command without adding its operation to the operation log, so bookmarks, git
+     * branches and the working copy don't change. Returns the operation's id, for `--at-operation`.
+     * Its commits stay, unreferenced, until jj collects them. Fails if the command changed nothing.
      */
     readonly dryRun: (args: readonly string[]) => Effect.Effect<string, JjFailed>;
   }
 >()("jj-octo/clients/jj") {}
 
-// What jj printed says what went wrong, so it's the message. The command is named only where jj
-// printed nothing to this program: it failed to start, or its output went to the terminal.
+// Jj's output is the message. The command is named only where there is no output: jj failed to
+// start, or printed to the terminal.
 const failed = (args: readonly string[], detail: string): JjFailed =>
   JjFailed.make({
     message:
@@ -46,12 +44,11 @@ const failed = (args: readonly string[], detail: string): JjFailed =>
         : EffectString.replace(/^Error: /u, "")(EffectString.trim(detail)),
   });
 
-// `ui.quiet` in the user's config would keep jj from printing the operation's id.
+// The user's `ui.quiet` would hide the operation's id.
 const DRY_RUN = ["--no-integrate-operation", "--config", "ui.quiet=false"];
 
-// What jj prints after each operation that a command run with `--no-integrate-operation` makes.
-// The command's own operation is the last one: before it, jj makes one where it snapshots the
-// working copy, and one where it imports a git `HEAD` that moved.
+// Jj prints this after each operation. The command's own comes last, after any working-copy
+// snapshot or import of a moved git `HEAD`.
 const NOT_INTEGRATED =
   /left uncommitted because --no-integrate-operation was requested: (?<operation>[0-9a-f]+)/gu;
 
@@ -59,7 +56,7 @@ interface JjOptions {
   readonly cwd?: string;
   /** Added to the environment jj inherits. */
   readonly env?: Readonly<Record<string, string>>;
-  /** Receives what `run` commands print, which otherwise goes to the terminal. */
+  /** Receives `run` output, which otherwise goes to the terminal. */
   readonly printed?: (text: string) => Effect.Effect<void>;
 }
 
@@ -74,7 +71,6 @@ export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const location = { cwd, env, extendEnv: true };
 
-      // What jj printed to stdout and to stderr, and its exit code.
       const captured = (args: readonly string[]) =>
         Effect.scoped(
           Effect.gen(function* () {
@@ -136,9 +132,8 @@ export const JjLive = jjLayer();
 const ENTRY = String.raw`json(name) ++ " " ++ json(value) ++ "\n"`;
 
 /**
- * A key's value in jj's config, or `undefined` where it has none. `jj config list` prints nothing
- * for a key without a value, where `jj config get` fails. `repo` reads the repository's config
- * alone, which the user's config doesn't shadow.
+ * A key's value, or `undefined` if unset (`jj config get` fails there). `repo` reads only the
+ * repository's config, unshadowed by the user's.
  */
 export const readJjConfig = (
   key: string,
@@ -149,19 +144,19 @@ export const readJjConfig = (
     const scope = repo ? ["--repo"] : [];
     const output = yield* jj.read(["config", "list", ...scope, key, "-T", ENTRY]);
     const lines = EffectArray.filter(EffectString.split(output, "\n"), (line) => line !== "");
-    // For a table, jj lists the keys inside it.
+    // For a table, jj lists its keys.
     const prefix = `${formatJson(key)} `;
     if (EffectArray.some(lines, (line) => !EffectString.startsWith(prefix)(line))) {
       return yield* JjFailed.make({ message: `${key} is a table; set it to a single value` });
     }
     const [line] = lines;
-    // Jj writes each value as JSON, so one it doesn't is a defect
+    // Jj writes each value as JSON, so other text is a defect.
     return line === undefined
       ? undefined
       : yield* Effect.orDie(decodeJson(EffectString.slice(prefix.length)(line)));
   });
 
-/** A string in jj's config, or an empty string where it has none. Fails on any other value. */
+/** A string key's value, or `""` if unset. Fails on any other value. */
 export const jjConfig = (key: string): Effect.Effect<string, JjFailed, Jj> =>
   Effect.gen(function* () {
     const value = yield* readJjConfig(key);
@@ -173,10 +168,8 @@ export const jjConfig = (key: string): Effect.Effect<string, JjFailed, Jj> =>
     });
   });
 
-/**
- * Sets a value in the repository's jj config. Jj parses the value as TOML, so a string or an array
- * goes in as JSON writes it, which is also TOML.
- */
+// Sets the key in the repository's config. Jj parses the value as TOML, which a JSON string or
+// array also is.
 export const setJjConfig = (
   key: string,
   value: string | readonly string[],

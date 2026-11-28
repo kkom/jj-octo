@@ -14,31 +14,26 @@ import {
 } from "./responses";
 import type { Check, CheckState, RequiredCheck, RequiredChecks } from "./types";
 
-/** The client's reads of a commit's checks and of a branch's required checks. */
 export interface CheckReads {
   /**
-   * The latest result of each check of the commit: the newest check run of each name and app, and
-   * each commit status, of which GitHub lists only the latest of each name.
+   * The newest check run per name and app, and each commit status, of which GitHub lists only the
+   * latest per name.
    */
   readonly latestChecks: (commit: string) => Effect.Effect<readonly Check[], GitHubFailed>;
-  /**
-   * The checks the branch requires, through the rulesets that apply to it and through its branch
-   * protection, or why they can't be known.
-   */
+  /** The checks the branch's rulesets and branch protection require, or why they're unknown. */
   readonly requiredChecks: (branch: string) => Effect.Effect<RequiredChecks, GitHubFailed>;
 }
 
 type CheckRun = (typeof CheckRuns.Type)["check_runs"][number];
 
-// The state of each conclusion. Every other one is `failed`, as GitHub counts it.
+// The state of each conclusion. GitHub counts every other one as `failed`.
 const CONCLUSION_STATES: Readonly<Record<string, CheckState>> = {
   neutral: "passed",
   skipped: "skipped",
   success: "passed",
 };
 
-// A commit status's states. GitHub documents the field as any string, so one it adds counts as a
-// failure.
+// GitHub documents a commit status's state as any string, so a new one counts as failed.
 const STATUS_STATES: Readonly<Record<string, CheckState>> = {
   error: "failed",
   failure: "failed",
@@ -54,10 +49,9 @@ const checkRunState = ({ conclusion, status }: CheckRun): CheckState => {
 };
 
 /**
- * The newest check run of each name and app. A commit keeps every run of a check, such as one
- * cancelled and the re-run that followed it, and only the newest one counts. GitHub gives each new
- * run a higher id, whether or not it has started. Jobs of the same name in two workflows are one
- * check, as GitHub matches a required check by name.
+ * A commit keeps every run of a check, such as a cancelled run and its re-run. GitHub gives each
+ * new run a higher id, started or not. Same-named jobs in two workflows are one check, as GitHub
+ * matches required checks by name.
  */
 const newestRuns = (runs: readonly CheckRun[]): readonly CheckRun[] => {
   const newest = new Map<string, CheckRun>();
@@ -78,8 +72,7 @@ const latestChecks = (
 ): Effect.Effect<readonly Check[], GitHubFailed> =>
   Effect.all(
     [
-      // `filter=all`, since `latest` filters by when a run completed, and a re-run that hasn't
-      // completed is still the newest.
+      // `filter=all`, as `latest` filters by completion time, and an unfinished re-run is newest.
       everyPage(
         HttpClientRequest.get(repo(`/commits/${commit}/check-runs`), {
           urlParams: { filter: "all" },
@@ -109,8 +102,7 @@ const latestChecks = (
     ]),
   );
 
-// Rules that require results this command can't match to checks by name: the runs of required
-// workflows, code scanning results and deployments.
+// Rules requiring results that can't be matched to checks by name.
 const UNREAD_RULES: ReadonlySet<string> = new Set([
   "code_scanning",
   "required_deployments",
@@ -123,7 +115,7 @@ const requiredChecks = (
   branch: string,
 ): Effect.Effect<RequiredChecks, GitHubFailed> => {
   const encoded = encodeURIComponent(branch);
-  // One after the other, so where both fail, the first failure is the one reported.
+  // In turn, so where both fail, the first failure is reported.
   return Effect.all(
     [
       everyPage(HttpClientRequest.get(repo(`/rules/branches/${encoded}`)), json(BranchRules)),
@@ -145,14 +137,14 @@ const requiredChecks = (
         };
       }
       const statusRules = EffectArray.filter(rules, Schema.is(StatusCheckRule));
-      // GitHub documents a rule's `parameters` as optional, so one without them is unknown.
+      // GitHub documents a rule's `parameters` as optional.
       if (EffectArray.some(statusRules, ({ parameters }) => parameters === undefined)) {
         return {
           _tag: "Unknown",
           reason: `GitHub listed a rule requiring status checks on ${branch} without naming them`,
         };
       }
-      // GitHub documents `protection` as always there, so a protected branch without it is unknown.
+      // GitHub documents `protection` as always present.
       if (branchDetails.protected && branchDetails.protection === undefined) {
         return {
           _tag: "Unknown",
@@ -170,7 +162,7 @@ const requiredChecks = (
         }),
       );
       const statusChecks = branchDetails.protection?.required_status_checks;
-      // A check with a `null` app is one any source can send.
+      // Any source can send a check with a `null` app.
       const fromProtection =
         statusChecks === undefined || statusChecks.enforcement_level === "off"
           ? []

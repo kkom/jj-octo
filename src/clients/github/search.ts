@@ -8,16 +8,14 @@ import type { Requests } from "./requests";
 import { FoundPullRequests } from "./responses";
 import type { ListedPullRequest, PullRequestNumber } from "./types";
 
-// GitHub's search fails on a query whose text is longer than this, not counting its qualifiers.
+// GitHub's search fails on query text longer than this, qualifiers excluded.
 const MAX_SEARCH_TEXT = 256;
 
-// GitHub's search lists at most this many results, and fails on a request for a page beyond them.
+// GitHub's search lists at most this many results, and fails on a page beyond them.
 const MAX_SEARCH_RESULTS = 1000;
 
-/** A pull request to search for, by its number and the time GitHub created it. */
 export type SearchedPullRequest = Pick<ListedPullRequest, "createdAt" | "number">;
 
-/** A search that matched more pull requests than it can list. */
 class TooManyResults extends Schema.TaggedError<
   TooManyResults,
   { readonly brand: unique symbol }
@@ -26,10 +24,7 @@ class TooManyResults extends Schema.TaggedError<
   url: Schema.String,
 }) {}
 
-/**
- * Splits the pull requests into batches whose numbers, separated by spaces, fit in one search's
- * text.
- */
+/** Batches whose space-separated numbers fit in one search's text. */
 const splitIntoBatches = (
   pullRequests: readonly SearchedPullRequest[],
 ): readonly (readonly SearchedPullRequest[])[] => {
@@ -47,14 +42,13 @@ const splitIntoBatches = (
   return EffectArray.map(batches, ({ pullRequests: batch }) => batch);
 };
 
-/** The open and approved pull requests that a search with the terms lists, from every page. */
 const search = (
   { json }: Requests,
   { name, owner }: Repository,
   terms: readonly string[],
 ): Effect.Effect<readonly PullRequestNumber[], GitHubFailed | TooManyResults> =>
   everyPage(
-    // Search ranks by best match without a `sort`, and the ranking can change between pages.
+    // Without `sort`, search ranks by best match, which can change between pages.
     HttpClientRequest.get("/search/issues", {
       urlParams: {
         order: "asc",
@@ -73,16 +67,15 @@ const search = (
             items,
             total_count,
           }): Effect.Effect<readonly PullRequestNumber[], GitHubFailed | TooManyResults> => {
-            // Exactly as many results as the limit fill the last page, so a request follows for
-            // the one after it, which fails.
+            // At exactly the limit, the last page is full, so the next page's request fails.
             if (total_count >= MAX_SEARCH_RESULTS) {
               return Effect.fail(TooManyResults.make({ count: total_count, url: urlOf(request) }));
             }
-            // GitHub answers a search that timed out with what it found so far.
+            // A search that timed out returns what it found so far.
             if (incomplete_results) {
               return Effect.fail(
                 GitHubFailed.make({
-                  message: `GET ${urlOf(request)} timed out, and listed only some pull requests`,
+                  message: `GET ${urlOf(request)} timed out with partial results`,
                 }),
               );
             }
@@ -92,12 +85,7 @@ const search = (
       ),
   );
 
-/**
- * The approved pull requests that a search for the batch lists. It searches by their numbers and by
- * the range of times they were created in. The range keeps out most pull requests that only
- * mention a number. Where the search matches too many, `searchBatch` searches for each half of the
- * batch, down to one pull request.
- */
+// The creation time range excludes most pull requests that only mention a number.
 const searchBatch = (
   requests: Requests,
   repository: Repository,
@@ -112,12 +100,11 @@ const searchBatch = (
       if (only !== undefined && others.length === 0) {
         return Effect.fail(
           GitHubFailed.make({
-            message: `GET ${url} matched ${count} pull requests, at least the ${MAX_SEARCH_RESULTS} that search lists, so whether #${only.number} is approved is unknown`,
+            message: `GET ${url} matched ${count} pull requests, too many to list, so whether #${only.number} is approved is unknown`,
           }),
         );
       }
       const half = Math.ceil(batch.length / 2);
-      // In turn, under search's own low secondary rate limit.
       return Effect.forEach(
         [batch.slice(0, half), batch.slice(half)],
         (part) => searchBatch(requests, repository, part),
@@ -127,26 +114,23 @@ const searchBatch = (
   );
 
 /**
- * Those of the pull requests that GitHub's search lists as open and approved, with
- * `review:approved`. A bare number in a search matches the pull request with that number. Several
- * numbers match any of them. GitHub documents neither; requests to github.com showed both. A
- * number also matches a pull request that mentions it, so only the numbers asked about count.
- * The searches run one after another, as GitHub asks of search requests to stay under its
- * secondary rate limits.
+ * The pull requests GitHub's search lists as open and `review:approved`. Undocumented, but seen on
+ * github.com: a bare number matches the pull request with that number, and several numbers match
+ * any of them. A number also matches pull requests that mention it, so only those asked about
+ * count. Searches run one at a time, under GitHub's secondary rate limits.
  *
- * In a repository that requires reviews, `review:approved` is GitHub's own review decision, so a
- * request for changes still counts after another reviewer approves. In a repository that requires
- * none, search still lists a pull request with an approval as approved. How it treats a request
- * for changes there is unchecked. Search answers from an index. In a request to github.com, the
- * index listed an edit to a pull request's title 6 seconds after the edit.
+ * Where reviews are required, `review:approved` is GitHub's review decision, so a change request
+ * still counts after another approval. Where none are, search lists a pull request with any
+ * approval as approved; how a change request counts there is unchecked. Search reads an index,
+ * which on github.com showed a title edit 6 seconds late.
  */
 export const approvedPullRequests = (
   requests: Requests,
   repository: Repository,
   pullRequests: readonly SearchedPullRequest[],
 ): Effect.Effect<ReadonlySet<PullRequestNumber>, GitHubFailed> =>
-  // In order of creation, each batch's range of creation times is as narrow as it can be. GitHub
-  // writes each time in UTC in one format, so it sorts as text.
+  // Sorted by creation, each batch's time range is narrowest. GitHub writes times in UTC in one
+  // format, so they sort as text.
   Effect.forEach(
     splitIntoBatches(
       EffectArray.sort(
@@ -155,7 +139,6 @@ export const approvedPullRequests = (
       ),
     ),
     (batch) => searchBatch(requests, repository, batch),
-    // In turn, under search's own low secondary rate limit.
     { concurrency: 1 },
   ).pipe(
     Effect.map((found) => {

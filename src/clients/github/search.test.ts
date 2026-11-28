@@ -156,7 +156,7 @@ layer(gitHubThroughProxy)("approvedPullRequests", (it) => {
       expect(outcome).toStrictEqual({
         requests: [`GET api.github.com${path}`],
         result: GitHubFailed.make({
-          message: `GET ${path} matched 1201 pull requests, at least the 1000 that search lists, so whether #5 is approved is unknown`,
+          message: `GET ${path} matched 1201 pull requests, too many to list, so whether #5 is approved is unknown`,
         }),
       });
     }));
@@ -170,7 +170,7 @@ layer(gitHubThroughProxy)("approvedPullRequests", (it) => {
       expect(outcome).toStrictEqual({
         requests: [`GET api.github.com${path}`],
         result: GitHubFailed.make({
-          message: `GET ${path} timed out, and listed only some pull requests`,
+          message: `GET ${path} timed out with partial results`,
         }),
       });
     }));

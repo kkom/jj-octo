@@ -3,10 +3,7 @@ import { HttpClientRequest } from "effect/http";
 
 const PAGE_SIZE = 100;
 
-/**
- * Every item of a listing GitHub sends in pages. `read` sends `request` for one page, with
- * `per_page` and `page` set on it. Pages are read in order, until one comes back short.
- */
+/** Every item of a paged GitHub listing. Pages are read in order until one comes back short. */
 export const everyPage = <A, E>(
   request: HttpClientRequest.HttpClientRequest,
   read: (pageRequest: HttpClientRequest.HttpClientRequest) => Effect.Effect<readonly A[], E>,

@@ -3,7 +3,7 @@ import type { HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import type { GitHubFailed } from "./failure";
 
-/** The client's requests: one that fails on an error status, and one that also decodes the body. */
+/** Both fail on an error status, and `json` also decodes the body. */
 export interface Requests {
   readonly json: <S extends Schema.Top>(
     schema: S,
