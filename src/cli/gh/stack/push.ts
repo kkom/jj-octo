@@ -32,18 +32,15 @@ import { type BranchesDeleted, syncStack } from "./sync-stack";
 import { checkedTrunk, type TrunkMismatch } from "./trunk";
 
 interface PushOptions {
-  /** GitHub's default branch, which the bottom pull request is based on. */
   readonly trunk: string;
   /**
-   * Whether a missing pull request is opened as a draft. Where false, existing drafts are marked
-   * ready too, once the stack is registered.
+   * Whether new pull requests open as drafts. Where false, also marks existing drafts ready once
+   * the stack is registered.
    */
   readonly draft: boolean;
-  /** Sends the local description where it and the pull request's both changed, without merging. */
   readonly overwriteDescriptions: boolean;
 }
 
-/** A pull request already open for a change, and the description they agree on. */
 interface OpenPullRequest {
   readonly pullRequest: PullRequest;
   readonly synced: SyncedDescription;
@@ -60,11 +57,6 @@ export type PushFailed =
 
 export type SubmitFailed = BranchesDeleted | NotCombined | PushFailed;
 
-/**
- * Pushes the changes' bookmarks, opens the pull requests missing, sets their bases, and registers
- * them as one stack. Each pull request's title and body are kept the same as its change's
- * description. Closes the pull requests of the stack whose changes were abandoned.
- */
 export const push = (
   stack: readonly StackChange[],
   { draft, overwriteDescriptions, trunk }: PushOptions,
@@ -85,7 +77,7 @@ export const push = (
           ),
       { concurrency: "unbounded" },
     );
-    // Before a description is synced, which can rewrite changes, so a failure changes nothing.
+    // Before syncing descriptions, which can rewrite changes, so a failure changes nothing.
     const openNumbers = EffectArray.flatMap(found, ({ pullRequest }) =>
       Option.toArray(Option.map(pullRequest, ({ number }) => number)),
     );
@@ -98,8 +90,8 @@ export const push = (
     );
     const ignoreClaudeCodeFooter = yield* readSetting(IGNORE_CLAUDE_CODE_FOOTER);
 
-    // Before anything changes on GitHub, so a conflict in a description stops the whole submit.
-    // One at a time, because rewording a change rewrites the ones above it.
+    // Before anything changes on GitHub, so a description conflict stops the whole submit. One at a
+    // time, since rewording a change rewrites those above it.
     const changes = [];
     for (const { base, change, pullRequest } of found) {
       const pushed = targets.get(change.bookmark)?.origin;
@@ -123,7 +115,7 @@ export const push = (
     }
 
     // Before the stack changes, so after a failure here the next submit finds the same stack and
-    // closes the ones still open.
+    // closes the rest.
     yield* closeAbandoned(
       Option.match(existing, {
         onNone: () => [],
@@ -133,8 +125,7 @@ export const push = (
       [...targets],
     );
 
-    // GitHub rejects a base change on a pull request that is in a stack, and can only add to a
-    // stack's top, so a stack that doesn't fit what is wanted is dissolved first.
+    // Dissolves a stack that `mustDissolve` says doesn't fit.
     const moving = EffectArray.flatMap(changes, ({ base, open }) =>
       Option.isSome(open) && open.value.pullRequest.base !== base ? [open.value.pullRequest] : [],
     );
@@ -147,15 +138,15 @@ export const push = (
       yield* Console.error(`dissolved stack #${existing.value.number}`);
     }
 
-    // GitHub closes a pull request as merged once its head is reachable from its base, and pushing
-    // a pull request that moved below its old base does exactly that. Pointing it at the trunk first
-    // prevents this, because its branch still has commits the trunk doesn't have.
+    // GitHub closes a pull request as merged once its base contains its head, as after pushing one
+    // moved below its old base. Basing it on the trunk first prevents this, since its branch has
+    // commits the trunk lacks.
     for (const { number } of EffectArray.filter(moving, ({ base }) => base !== trunk)) {
       yield* github.setBase(number, trunk);
     }
     const moved = new Set(EffectArray.map(moving, ({ number }) => number));
 
-    // Jj only creates a branch on the remote for a bookmark that tracks it.
+    // Jj creates a remote branch only for a bookmark that tracks it.
     const untracked = EffectArray.filter(bookmarks, (name) => targets.get(name)?.tracked !== true);
     if (untracked.length > 0) {
       yield* jj.run([
@@ -171,7 +162,7 @@ export const push = (
       "push",
       ...EffectArray.flatMap(bookmarks, (bookmark) => ["--bookmark", exactPattern(bookmark)]),
     ]);
-    // The commits pushed, which the records are agreed for.
+    // The pushed commits, which the records are agreed for.
     const pushedTargets = yield* bookmarkTargets;
     const record = (bookmark: string, description: string, pullRequest: PullRequestNumber) =>
       records.write({
@@ -224,33 +215,26 @@ export const push = (
     }
   });
 
-/**
- * Pushes the revision's change and the ones below it in its stack, and opens their pull requests.
- * Syncs that stack first where any of its pull requests merged or any of its branches changed on
- * GitHub, since pushing over either would drop what GitHub has.
- */
 export const submit = (
   revision: string,
   options: Omit<PushOptions, "trunk">,
 ): Effect.Effect<void, SubmitFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
     const trunk = yield* checkedTrunk;
-    // Read first, so a stack that isn't one fails before the sync rewrites anything.
+    // Read first, so a non-stack fails before the sync rewrites anything.
     const downstack = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
     if (!(yield* syncStack(revision, trunk))) {
       yield* push(downstack, { ...options, trunk });
       return;
     }
     // The sync can drop merged changes and replace others with GitHub's, so the stack is found
-    // again by its bookmarks: the highest one left is its top.
+    // again by its bookmarks; the highest left is its top.
     const left = yield* bookmarksAt(
       anyOf(EffectArray.map(downstack, ({ bookmark }) => bookmarkRevset(bookmark))),
     );
     const top = EffectArray.findLast(downstack, ({ bookmark }) => left.includes(bookmark));
     if (Option.isNone(top)) {
-      yield* Console.error(
-        `nothing left to submit: no bookmark of the stack is left after the sync`,
-      );
+      yield* Console.error(`nothing left to submit: the sync left no bookmark of the stack`);
       return;
     }
     // The sync rebases the rest of the stack even where that conflicts.

@@ -9,10 +9,8 @@ import { changesIn, stackChanges, stackRevset } from "./changes";
 import { push, type PushFailed } from "./push";
 
 /**
- * Pushes the stack containing the revision again, up to the highest bookmark already pushed, so
- * local work above it stays local. A change with conflicts can't be pushed, so it pushes only the
- * changes below the lowest one, and prints which it leaves local. Does nothing when the stack has
- * no changes left or was never pushed.
+ * Pushes up to the highest pushed bookmark, so local work above stays local. Stops below the
+ * lowest change with conflicts, which jj can't push.
  */
 export const pushAgain = (
   revision: string,

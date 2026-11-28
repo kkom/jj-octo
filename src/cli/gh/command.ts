@@ -14,15 +14,14 @@ import { publishCommand } from "./publish";
 import { submitCommand } from "./submit";
 import { syncCommand } from "./sync";
 
-// Runs before a command's handler, so before the layers the handler provides, which need a jj
-// repository that `init` may be about to make.
+// Runs before the handler's layers, which need the jj repository `init` may make.
 const setUpFirst = <const Name extends string, Input, ContextInput, E, R>(
   command: Command.Command<Name, Input, ContextInput, E, R>,
 ) => Command.provideEffectDiscard(command, asUserError(setUpOnUpgrade));
 
 const settingsSection: HelpSection = {
   lines: [
-    "Keys in jj's config. Set one for this repository with `jj config set --repo <key> <value>`, or for every repository with `--user` in place of `--repo`.",
+    "jj config keys. Set one with `jj config set --repo <key> <value>` for this repository, or with `--user` in place of `--repo` for every repository.",
     ...EffectArray.flatMap(SETTINGS, (setting) => [
       "",
       setting.key,
@@ -52,7 +51,7 @@ const environmentSection: HelpSection = {
 };
 
 export const jjGhCommand = Command.make("jj gh").pipe(
-  // `doctor` reports the setup without changing it, and `init` is the setup itself.
+  // `doctor` only reports the setup, and `init` performs it.
   Command.withSubcommands([
     checksCommand.pipe(setUpFirst),
     dissolveCommand.pipe(setUpFirst),
@@ -67,9 +66,9 @@ export const jjGhCommand = Command.make("jj gh").pipe(
   ]),
   withHelp(
     "Commands for publishing jj changes as GitHub pull requests",
-    "A stack is a chain of changes, each published as one pull request on the branch its bookmark names. Each pull request targets the branch of the change below it, so it shows only that change's diff. A single change gets an ordinary pull request, outside any GitHub stack.",
-    "A change's stack is every change connected to it through mutable changes, except an empty working copy with no description. `log` shows the stack, `links` lists its pull requests, and `checks` shows their checks. The stack must be a chain: no merges, and exactly one bookmark on each change. `submit`, `publish` and `merge` act on a change and the ones below it, and none of those may have conflicts.",
-    `jj-octo acts on the repository that the \`origin\` remote points to. The GitHub proxy of a Claude Code cloud session rejects GraphQL, so jj-octo uses GitHub's REST API. Marking a draft ready, in \`publish\` and \`submit --publish\`, is the one exception, as \`jj gh publish --help\` says. In an Anthropic-hosted session, the default settings work. On a self-hosted runner that sends git through the Anthropic git proxy, set \`${GITHUB_AUTH.key}\` to \`git-proxy\`. SETTINGS and ENVIRONMENT below list the jj config keys and environment variables that change how jj-octo works.`,
+    "A stack is a chain of changes. Each change becomes a pull request on its bookmark's branch, based on the branch of the change below, so it shows only that change's diff. A single change gets an ordinary pull request, outside any GitHub stack.",
+    "A change's stack is every change connected to it through mutable changes, except an empty, undescribed working copy. It must be a chain: no merges, and one bookmark per change. `submit`, `publish` and `merge` act on a change and those below it, which must have no conflicts. An empty working copy means the change below it.",
+    `jj-octo acts on \`origin\`'s repository through GitHub's REST API, since a Claude Code cloud session's GitHub proxy rejects GraphQL. Only marking a draft ready uses GraphQL (see \`jj gh publish --help\`). In an Anthropic-hosted session, the default settings work. On a self-hosted runner sending git through the Anthropic git proxy, set \`${GITHUB_AUTH.key}\` to \`git-proxy\`.`,
   ),
   withSections(settingsSection, environmentSection),
 );

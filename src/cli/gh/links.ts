@@ -27,11 +27,7 @@ export class NoPullRequests extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("NoPullRequests", { message: Schema.String }) {}
 
-/**
- * Where a change's pull request is: a state GitHub lists it in, where `ready` is one ready for
- * review that GitHub's search doesn't list as approved, or `approved`, one ready for review that it
- * does.
- */
+/** `approved` is a `ready` pull request that GitHub's search lists as approved. */
 export type LinkState = PullRequestState | "approved";
 
 const EMOJI: Readonly<Record<LinkState, string>> = {
@@ -52,20 +48,12 @@ const OPEN: Readonly<Record<LinkState, boolean>> = {
   ready: true,
 };
 
-/** What `--copy` reports after the links, for each outcome of the clipboard's `write`. */
 const COPY_REPORT: Readonly<Record<ClipboardWrite, string>> = {
   copied: "copied the links to the clipboard",
-  unreachable: EffectArray.join(
-    [
-      "This Claude Code cloud session can't reach the user's clipboard.",
-      "Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks.",
-      "They then show as links that paste into Slack.",
-    ],
-    " ",
-  ),
+  unreachable:
+    "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim. Leave out the markers, and add no code block or backticks. The lines then show as links that paste into Slack.",
 };
 
-/** What `--copy` prints of the links, for each outcome of the clipboard's `write`. */
 const COPY_PRINT: Readonly<Record<ClipboardWrite, (text: string) => string>> = {
   copied: (text) => text,
   unreachable: (text) =>
@@ -75,17 +63,11 @@ const COPY_PRINT: Readonly<Record<ClipboardWrite, (text: string) => string>> = {
     ),
 };
 
-/** The lines a change adds and removes. */
 interface LineCounts {
   readonly added: number;
   readonly removed: number;
 }
 
-/**
- * The lines each of the commits adds and removes, by commit id. It skips the snapshot, so it can
- * run alongside a jj command that takes one, where two would be concurrent operations. A line that
- * isn't two counts is left out.
- */
 const lineCountsAt = (
   commitIds: readonly string[],
 ): Effect.Effect<ReadonlyMap<string, LineCounts>, JjFailed, Jj> =>
@@ -107,35 +89,25 @@ const lineCountsAt = (
     ),
   );
 
-/**
- * A change's pull request as GitHub lists it, with the lines the change adds and removes, and
- * whether the change has conflicts.
- */
 interface CountedPullRequest extends ListedPullRequest, LineCounts {
   readonly conflict: boolean;
 }
 
-/** A change's pull request, with the lines the change adds and removes, in its `LinkState`. */
 export interface LinkedPullRequest extends Omit<CountedPullRequest, "state"> {
   readonly state: LinkState;
 }
 
 const lineCounts = ({ added, removed }: LineCounts): string => `+${added}/-${removed}`;
 
-/**
- * The GitHub stack of the open pull requests. A merged one can be in an older stack, which `submit`
- * dissolved and registered again under a new number.
- */
+// Reads only open pull requests: a merged one can be in an older stack that `submit` dissolved.
 const currentStack = (pullRequests: readonly LinkedPullRequest[]): Option.Option<StackLink> =>
   EffectArray.findFirst(pullRequests, ({ stack, state }) => (OPEN[state] ? stack : Option.none()));
 
-/** How a line of links writes a link and a code span: as Markdown or as HTML. */
 interface LinkFormat {
   readonly code: (text: string) => string;
   readonly link: (text: string, url: string) => string;
 }
 
-/** One line for the stack of the open pull requests, where they are in one, then one per pull request. */
 const linkLines = (
   pullRequests: readonly LinkedPullRequest[],
   { code, link }: LinkFormat,
@@ -161,22 +133,15 @@ const HTML: LinkFormat = {
   link: (text, url) => `<a href="${Bun.escapeHTML(url)}">${Bun.escapeHTML(text)}</a>`,
 };
 
-/** The links as Markdown, one per line. */
 export const markdownLinks = (pullRequests: readonly LinkedPullRequest[]): string =>
   EffectArray.join(linkLines(pullRequests, MARKDOWN), "\n");
 
-/**
- * The same lines as HTML, which apps such as Slack paste as links. The charset keeps the emoji
- * intact where the app reads the HTML without one.
- */
+// The charset keeps emoji intact where an app reads the HTML without one.
 export const htmlLinks = (pullRequests: readonly LinkedPullRequest[]): string =>
   `<meta charset="utf-8">${EffectArray.join(linkLines(pullRequests, HTML), "<br>")}`;
 
-/**
- * The change's pull request: the open one from its branch, or else the newest closed one whose
- * head is the change or the commit pushed for it. A closed pull request with another head is for
- * an earlier version of the change, or from an earlier branch of the same name.
- */
+// A closed pull request with another head is for an earlier version of the change, or an earlier
+// branch of that name.
 const pullRequestOf = (
   pullRequests: readonly ListedPullRequest[],
   commitId: string,
@@ -187,7 +152,6 @@ const pullRequestOf = (
     () => EffectArray.findFirst(pullRequests, ({ head }) => head === commitId || head === pushed),
   );
 
-/** The pull request of each change of the revision's stack, top first. */
 export const stackPullRequests = (
   revision: string,
 ): Effect.Effect<readonly LinkedPullRequest[], GitHubFailed | JjFailed | NotAStack, GitHub | Jj> =>
@@ -227,7 +191,6 @@ export const stackPullRequests = (
     );
   });
 
-/** Prints the links to the stack's pull requests, and writes them to the clipboard if asked. */
 export const links = ({
   copy,
   revision,
@@ -240,7 +203,7 @@ export const links = ({
   Clipboard | GitHub | Jj
 > =>
   Effect.gen(function* () {
-    // Failing leaves the clipboard as it was, rather than as if it held the links.
+    // Failing leaves the clipboard unchanged, not as if it held the links.
     const pullRequests = yield* stackPullRequests(revision).pipe(
       Effect.filterOrFail(
         (found) => found.length > 0,
@@ -266,9 +229,7 @@ export const linksCommand = Command.make(
   {
     copy: Flag.Boolean("copy").pipe(
       Flag.withDefault(false),
-      Flag.withDescription(
-        "Also copy the links to the clipboard, as links that Slack pastes, or in a Claude Code cloud session say how to give them to the user",
-      ),
+      Flag.withDescription("Also copy the links to the clipboard"),
     ),
     revision: revisionFlag("A change of the stack to list"),
   },
@@ -278,11 +239,11 @@ export const linksCommand = Command.make(
   Command.provide(ClipboardLive),
   withHelp(
     "Print the stack's pull requests as Markdown links",
-    'Prints a link to the GitHub stack of the open pull requests, as "Current stack", where they are in one. Then prints one line per pull request, top first: 📝 for a draft, 👀 for one ready for review and not approved, ✅ for one ready for review and approved, 🏁 for a merged one, and 🚫 for one closed unmerged. Each line has a Markdown link with the number and title, and the lines the change adds and removes, in inline code, as `+123/-45`. A line whose change has conflicts ends with `conflicted`.',
-    "A pull request is approved where GitHub's search lists it as approved, which follows GitHub's own review decision. Search answers from an index, so a new review can take a few seconds to change the mark.",
-    "A change's pull request is the open one from its branch, or else the newest closed one whose head is the change or its pushed commit. Leaves out a change with no pull request, and one that `sync` abandoned because its pull request merged. Fails where no change has one.",
-    "With `--copy`, also copies the links to the clipboard as HTML, which Slack pastes as links. That needs `osascript` on macOS, or `wl-copy` or `xclip` on Linux. On macOS, it also copies the Markdown as plain text.",
-    "In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, `--copy` copies nothing. It prints the Markdown between markers, and tells the agent to copy it into its reply. The Claude app shows that as links that paste into Slack.",
-    "Fails if the changes aren't a chain, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
+    "Prints a link to the open pull requests' GitHub stack, as \"Current stack\", if they are in one. Then one line per pull request, top first: 📝 draft, 👀 ready for review, ✅ approved, 🏁 merged, 🚫 closed. Each line has a Markdown link with the number and title, then the change's added and removed lines, such as `+123/-45`. A change with conflicts ends its line with `conflicted`.",
+    "A pull request is approved where GitHub's search lists it as approved. Search answers from an index, so a new review can take seconds to show.",
+    "A change's pull request is the open one from its branch, else the newest closed one whose head is the change or its pushed commit. Leaves out changes with no pull request, and ones `sync` abandoned after their pull request merged. Fails where no change has one.",
+    "`--copy` copies the links as HTML, which Slack pastes as links. It uses `osascript` on macOS, or `wl-copy` or `xclip` on Linux. On macOS, it also copies the Markdown as plain text.",
+    "In a Claude Code cloud session (`CLAUDE_CODE_REMOTE` is `true`), `--copy` copies nothing. It prints the Markdown between markers and tells the agent to copy it into its reply, where the Claude app shows links that paste into Slack.",
+    "Changes nothing, locally or on GitHub.",
   ),
 );

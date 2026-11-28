@@ -32,20 +32,16 @@ export class NotCombined extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("NotCombined", { message: Schema.String }) {}
 
-/** The `jj git fetch` options that fetch only the branches. */
 export const fetchBranches = (branches: readonly string[]): string[] =>
   EffectArray.flatMap([...new Set(branches)], (name) => ["--branch", exactPattern(name)]);
 
-/** A change whose pull request merged, with the bookmark that names its branch. */
 export type MergedChange = Pick<StackChange, "bookmark" | "changeId">;
 
-/** Whether the bookmark's change is none of the merged ones. */
 export const notMerged =
   (merged: readonly MergedChange[]) =>
   (name: string): boolean =>
     EffectArray.every(merged, ({ bookmark }) => bookmark !== name);
 
-/** The head commit of each merged pull request from each pushed bookmark's branch. */
 export const mergedHeadsOf = (
   bookmarks: readonly BookmarkBeforeFetch[],
 ): Effect.Effect<Readonly<Record<string, readonly string[]>>, GitHubFailed, GitHub> =>
@@ -102,10 +98,9 @@ export const mergedIn = (
   });
 
 /**
- * The changes whose pull requests GitHub reports as merged. A change counts where GitHub merged
- * it as it is, or merged the commit pushed for it, which it differs from only by a rebase, as
- * after a sync. So a change edited since keeps its edits, and a pull request from an earlier
- * branch of the same name doesn't count.
+ * A change counts where GitHub merged it as it is, or merged its pushed commit, which differs only
+ * by a rebase, as after a sync. So a change edited since keeps its edits, and a pull request from
+ * an earlier same-named branch doesn't count.
  */
 export const mergedOnGitHub = (
   bookmarks: readonly BookmarkBeforeFetch[],
@@ -113,9 +108,8 @@ export const mergedOnGitHub = (
   Effect.flatMap(mergedHeadsOf(bookmarks), (heads) => mergedIn(bookmarks, heads));
 
 /**
- * Forgets the bookmarks and their branches on GitHub, in one jj operation. A fetch has already
- * deleted the bookmark of a branch deleted on GitHub, where it was unchanged locally, and jj warns
- * about a name it can't find, so only the names still listed are passed.
+ * Passes only names still listed, since a fetch already deleted the bookmark of a branch deleted on
+ * GitHub where unchanged locally, and jj warns about missing names.
  */
 const forget = (names: readonly string[]) =>
   Effect.gen(function* () {
@@ -133,14 +127,14 @@ const forget = (names: readonly string[]) =>
   });
 
 interface Reconciliation {
-  /** The bookmarks to combine with their branches, as they were before the fetch. */
+  /** The bookmarks to combine with their branches, as before the fetch. */
   readonly before: readonly BookmarkBeforeFetch[];
-  /** The bookmarks of the stacks to sync, forgotten where they end up on the trunk. */
+  /** The synced stacks' bookmarks, forgotten where they end up on the trunk. */
   readonly bookmarks: readonly string[];
-  /** The options of `jj git fetch`, such as `--branch`. With none, it fetches what it does by default. */
+  /** `jj git fetch` options, such as `--branch`. With none, it fetches its default. */
   readonly fetch: readonly string[];
   readonly merged: readonly MergedChange[];
-  /** The changes that no step rebases, abandons or moves, as a revset read at each step. */
+  /** The changes no step rebases, abandons or moves, as a revset read at each step. */
   readonly skipped: string;
   /**
    * A revset holding the bottom change of each stack to rebase, read after the fetch. So it names
@@ -150,21 +144,16 @@ interface Reconciliation {
 }
 
 /**
- * Fetches, abandons the merged changes, combines each bookmark with its branch on GitHub, and
- * rebases the stacks onto the trunk.
+ * Fetches, abandons the merged changes, combines each bookmark with its GitHub branch, and rebases
+ * the stacks onto the trunk.
  *
- * A squash merge adds the merged work to the trunk as a new commit, so the original change still
- * sits under the rest of its stack. Rebased onto the trunk, it can conflict with what the trunk
- * now has, rather than come out empty: where a change merged above it edited the same lines, or
- * the trunk moved. So every change whose pull request merged is abandoned, and its bookmark
- * forgotten. The rest of its stack is rebased even where that conflicts, since what it was based
- * on is gone.
+ * A squash merge adds the merged work to the trunk as a new commit, leaving the original change
+ * under the rest of its stack. Rebased onto the trunk, it can conflict rather than come out empty.
+ * So it abandons every merged change, and rebases the rest of that stack even where that
+ * conflicts, since its base is gone.
  *
- * A change that reaches the trunk some other way is empty after the rebase, and `--skip-emptied`
- * abandons it. Its bookmark then stays behind on the trunk, so every bookmark that was on a stack
- * and is now on the trunk is forgotten too, remote side included.
- *
- * Last, it deletes the recorded pull request descriptions of bookmarks that are gone.
+ * A change reaching the trunk another way empties in the rebase, and `--skip-emptied` abandons it,
+ * leaving its bookmark on the trunk. So it also forgets every stack bookmark now on the trunk.
  */
 export const reconcile = ({
   before,
@@ -177,7 +166,7 @@ export const reconcile = ({
   Effect.gen(function* () {
     const jj = yield* Jj;
     yield* jj.run(["git", "fetch", ...fetch]);
-    // After the fetch, so it can't bring a branch GitHub hasn't deleted yet back as a bookmark.
+    // After the fetch, so it can't bring back as a bookmark a branch GitHub hasn't deleted yet.
     yield* forget(EffectArray.map(merged, ({ bookmark }) => bookmark));
     const mergedRevset = `(${anyOf(EffectArray.map(merged, ({ changeId }) => changeRevset(changeId)))}) & mutable() ~ (${skipped})`;
     const required = yield* changeIdsAt(`(${mergedRevset}):: ~ (${mergedRevset})`);
@@ -205,7 +194,7 @@ export const reconcile = ({
     const onTrunk = yield* bookmarksAt("::trunk()");
     yield* forget(EffectArray.filter(onTrunk, (name) => onStacks.has(name)));
     const records = yield* PrDescriptions;
-    // `bookmarksAt` lists conflicted bookmarks too, which `bookmarkTargets` gives no local target.
+    // `bookmarksAt` also lists conflicted bookmarks, which `bookmarkTargets` gives no local target.
     yield* records.prune(Effect.provideService(bookmarksAt("all()"), Jj, jj));
     if (notCombined.length > 0) {
       return yield* NotCombined.make({

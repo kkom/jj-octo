@@ -9,13 +9,13 @@ export const submitCommand = Command.make(
     overwriteDescriptions: Flag.Boolean("overwrite-descriptions").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "Where a description changed both locally and on GitHub, send the local one instead of merging the two",
+        "Where a description changed locally and on GitHub, send the local one instead of merging",
       ),
     ),
     publish: Flag.Boolean("publish").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "Open new pull requests ready for review, and mark existing drafts ready, as `jj gh publish` does",
+        "Open new pull requests ready for review, and mark existing drafts ready",
       ),
     ),
     revision: revisionFlag("The top change to submit"),
@@ -26,14 +26,13 @@ export const submitCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Push a change and the ones below it, and open their pull requests",
-    "Pushes the bookmark of each change. An empty working copy means the change below it. Opens a pull request for each branch that has none, with the title and body from its change's description. Points each pull request at the branch below it, and the bottom one at the default branch.",
-    "Opens new pull requests as drafts. With `--publish`, opens them ready for review, and marks existing drafts ready after the push.",
-    "Keeps each pull request's title and body the same as its change's description. `submit` writes an edit made on GitHub into the change, and sends a local edit to the pull request. It merges edits on both sides line by line. It also sends a local edit pushed with `jj git push`, because it records the description both sides last agreed on, in `jj-octo/pr-descriptions` under the main workspace's `.jj/repo`. Edits to the same lines stop the submit before it pushes anything.",
-    "First, where a submitted change's pull request merged or its branch changed on GitHub, syncs that stack as `jj gh sync` does, so the push doesn't undo what GitHub did. It leaves other stacks as they are.",
-    "Stops before changing anything where someone deleted a submitted change's branch on GitHub and the change doesn't count as merged: no pull request from it merged, another commit merged, or you edited the change since. It says how to push the change again or drop it.",
-    "Fails before pushing anything where a submitted change has conflicts, as `jj git push` doesn't push one. That includes a conflict that the sync gives a change, by rebasing it onto the trunk. A change above the one submitted can have conflicts.",
-    "Registers the pull requests as one GitHub stack, unless there is only one.",
-    "After a reorder, an insertion or a dropped change, dissolves the GitHub stack and registers it again under a new number. The pull requests stay open, including the one of a change that you moved out of the stack.",
-    "Closes the pull request of a change in the stack that you abandoned in this repository, and comments why. It closes them before it changes the stack. It needs the pull requests to be in a GitHub stack.",
+    "Pushes each change's bookmark, and opens a pull request for each branch without one, titled and described from the change's description. Bases each pull request on the branch below, and the bottom one on the default branch.",
+    "Opens new pull requests as drafts. `--publish` opens them ready for review and marks existing drafts ready after the push.",
+    "Keeps each pull request's title and body equal to its change's description: it writes GitHub edits into the change, sends local edits, and merges edits on both sides line by line. Edits to the same lines stop the submit before any push. It records the last agreed description in `jj-octo/pr-descriptions` under the main workspace's `.jj/repo`, so it also sends local edits pushed with `jj git push`.",
+    "First, where a submitted change's pull request merged or its branch changed on GitHub, syncs only that stack, as `jj gh sync` does, so the push keeps GitHub's changes.",
+    "Stops before changing anything where a submitted change's branch was deleted on GitHub and the change doesn't count as merged: no pull request from it merged, another commit merged, or you edited it since. It says how to push the change again or drop it.",
+    "Fails before any push where the sync's rebase gives a submitted change conflicts, since `jj git push` won't push it.",
+    "Registers the pull requests as one GitHub stack, unless there is only one. After a reorder, insertion or dropped change, it dissolves the GitHub stack and registers it again under a new number. The pull requests stay open, including that of a change moved out of the stack.",
+    "Closes the pull request of each change you abandoned in this repository, and comments why. It does this before it changes the stack, and only where the pull requests are in a GitHub stack.",
   ),
 );

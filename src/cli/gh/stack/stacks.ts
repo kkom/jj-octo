@@ -11,9 +11,8 @@ export class SeveralStacks extends Schema.TaggedError<
 >()("SeveralStacks", { message: Schema.String }) {}
 
 /**
- * The one GitHub stack containing any of the pull requests, bottom to top, if there is one. Submit
- * changes only that stack, so pull requests in several fail: taking one out of another stack would
- * dissolve a stack it doesn't own.
+ * Fails where the pull requests are in several stacks, since taking one out of another stack
+ * would dissolve a stack that submit doesn't own.
  */
 export const stackContaining = (
   pullRequests: readonly PullRequestNumber[],
@@ -49,7 +48,7 @@ export const stackContaining = (
     return Option.fromNullishOr(stacks[0]);
   });
 
-/** Makes the pull requests, bottom to top, the unmerged part of one GitHub stack. */
+/** Makes the pull requests, bottom to top, one GitHub stack's unmerged part. */
 export const register = (
   remaining: Option.Option<RemoteStack>,
   pullRequests: readonly PullRequestNumber[],

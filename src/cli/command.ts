@@ -19,17 +19,13 @@ import type { Jj } from "../clients/jj";
 const userError = (message: string): CliError.UserError =>
   CliError.UserError.make({ cause: message, userMessage: message });
 
-// Every failure the commands raise is one a person can act on, so each is shown as a message
-// rather than a stack trace.
+// Shows each failure as a message, not a stack trace, since a person can act on it.
 export const asUserError = <A, R>(
   program: Effect.Effect<A, { readonly _tag: string; readonly message: string }, R>,
 ): Effect.Effect<A, CliError.UserError, R> =>
   program.pipe(Effect.mapError(({ message }) => userError(message)));
 
-/**
- * Provides a command's handler with the GitHub client of the `origin` remote. Only a command that
- * talks to GitHub builds it, and it fails as the handlers do where `origin` isn't on GitHub.
- */
+// Builds `origin`'s GitHub client only for the commands that use GitHub.
 export const provideGitHubFromOrigin = <Name extends string, Input, ContextInput, E, R>(
   command: Command.Command<Name, Input, ContextInput, E, R>,
 ): Command.Command<
@@ -45,8 +41,8 @@ export const provideGitHubFromOrigin = <Name extends string, Input, ContextInput
   | Jj
 > => command.pipe(Command.provide(Layer.unwrap(asUserError(gitHubLayerFromOrigin))));
 
-// The summary is the line a parent command lists. The command's own help shows it above the
-// paragraphs, which are indented here because the help formatter only indents the first line.
+// A parent command lists the summary. The command's own help shows it above the paragraphs,
+// indented here since the help formatter indents only the first line.
 export const withHelp =
   (summary: string, ...paragraphs: readonly string[]) =>
   <Name extends string, Input, ContextInput, E, R>(
@@ -57,9 +53,8 @@ export const withHelp =
       Command.withDescription(EffectArray.join([summary, ...paragraphs], "\n\n  ")),
     );
 
-/** A section that a command's help shows after the ones Effect generates. */
 export interface HelpSection {
-  /** Each line of the section, which the help indents. */
+  /** The help indents each line. */
   readonly lines: readonly string[];
   readonly title: string;
 }
@@ -68,7 +63,7 @@ export class HelpSections extends Context.Service<HelpSections, readonly HelpSec
   "jj-octo/cli/command/HelpSections",
 ) {}
 
-/** Adds sections to the command's help, after the ones Effect generates. */
+/** Adds sections to the command's help, after Effect's generated ones. */
 export const withSections =
   (...sections: readonly HelpSection[]) =>
   <Name extends string, Input, ContextInput, E, R>(
@@ -76,7 +71,7 @@ export const withSections =
   ): Command.Command<Name, Input, ContextInput, E, R> =>
     Command.annotate(command, HelpSections, sections);
 
-/** Rows of cells, each column lined up `gap` spaces past the widest cell of the one before it. */
+/** Rows of cells, each column `gap` spaces past the previous column's widest cell. */
 export const table = (rows: readonly (readonly string[])[], gap: number): readonly string[] => {
   const width = (column: number): number =>
     Math.max(0, ...EffectArray.map(rows, (row) => CliOutput.displayWidth(row[column] ?? "")));
@@ -94,7 +89,7 @@ export const table = (rows: readonly (readonly string[])[], gap: number): readon
   );
 };
 
-/** Effect's help formatter, which also shows each command's `HelpSections`. */
+/** Effect's help formatter, also showing each command's `HelpSections`. */
 export const helpFormatter = (colors: boolean): CliOutput.Formatter => {
   const base = CliOutput.defaultFormatter({ colors });
   const bold = (text: string) => (colors ? `\u001B[1m${text}\u001B[0m` : text);
@@ -121,7 +116,6 @@ export const helpFormatter = (colors: boolean): CliOutput.Formatter => {
   };
 };
 
-/** `-r`, as jj has it. The working copy is the default, as it is for jj's own commands. */
 export const revisionFlag = (description: string): Flag.Flag<string> =>
   Flag.String("revision").pipe(
     Flag.withAlias("r"),

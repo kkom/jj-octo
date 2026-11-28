@@ -14,11 +14,6 @@ export class NotPublishable extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("NotPublishable", { message: Schema.String }) {}
 
-/**
- * Marks the draft pull requests of the revision's change and the ones below it ready for review,
- * bottom to top. Fails before marking any where a change has conflicts, has edits that aren't
- * pushed, or has no open pull request, so a reviewer never sees one that is out of date.
- */
 export const publish = (
   revision: string,
 ): Effect.Effect<void, GitHubFailed | JjFailed | NotAStack | NotPublishable, Git | GitHub | Jj> =>
@@ -73,8 +68,8 @@ export const publishCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Mark the draft pull requests of a change and the ones below it ready for review",
-    "An empty working copy means the change below it. Leaves pull requests that are already ready as they are.",
-    "Fails before publishing any where a change has conflicts, has edits that aren't pushed, or has no open pull request. A change above the one named can have conflicts. `jj gh submit --publish` pushes the changes and then publishes them.",
-    "Uses GitHub's GraphQL API, since REST can't mark a draft ready. In a Claude Code cloud session, where `CLAUDE_CODE_REMOTE` is `true`, it uses the GitHub proxy's own route for this instead. Where the proxy doesn't serve that route, it fails with the proxy's error.",
+    "Leaves ready pull requests as they are.",
+    "Fails before publishing any where a change has unpushed edits or no open pull request, so reviewers never see an outdated one. `jj gh submit --publish` pushes, then publishes.",
+    "Uses GitHub's GraphQL API, since REST can't mark a draft ready. In a Claude Code cloud session (`CLAUDE_CODE_REMOTE` is `true`), it uses the GitHub proxy's own route, and fails with the proxy's error where the proxy lacks it.",
   ),
 );

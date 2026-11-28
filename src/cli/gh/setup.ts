@@ -12,30 +12,25 @@ export class NotSetUp extends Schema.TaggedError<NotSetUp, { readonly brand: uni
 
 type SetupEffect<A> = Effect.Effect<A, GitFailed | JjFailed, FileSystem.FileSystem | Git | Jj>;
 
-/** What a check finds isn't set up, and whether `init` sets it up. */
 export interface Problem {
+  /** Whether `init` sets it up. */
   readonly byInit: boolean;
   readonly message: string;
 }
 
 const forInit = (message: string): Problem => ({ byInit: true, message });
 
-/** The problem, with what fixes it. */
 export const advice = ({ byInit, message }: Problem): string =>
   byInit ? `${message}; run \`jj-octo init\`` : message;
 
 /** One thing that `init` sets up in a checkout. */
 export interface SetupStep {
-  /** What isn't set up, or `undefined` where it is set up. Changes nothing. */
+  /** Changes nothing. */
   readonly check: SetupEffect<Problem | undefined>;
-  /** Sets it up. */
   readonly fix: SetupEffect<void>;
 }
 
-/**
- * The branch `origin`'s HEAD names, which on GitHub is the default branch. Read from the remote
- * itself, so it needs no token.
- */
+// On GitHub, `origin`'s HEAD is the default branch. `ls-remote` needs no token.
 const defaultBranch = Effect.gen(function* () {
   const git = yield* Git;
   const output = yield* git.read(["ls-remote", "--symref", "origin", "HEAD"]);
@@ -46,11 +41,8 @@ const defaultBranch = Effect.gen(function* () {
   return branch;
 });
 
-/**
- * The checkout's directory, and whether it's a git worktree or a colocated jj repository. Read
- * from the files rather than from jj, which fails the same way outside a jj repository as on a
- * config it can't parse.
- */
+// Reads the files, since jj fails the same way outside a jj repository as on a config it can't
+// parse.
 const checkout = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const { commonDirectory, gitDirectory, topLevel: root } = yield* gitDirectories;
@@ -58,17 +50,10 @@ const checkout = Effect.gen(function* () {
   return { isColocated, isWorktree: gitDirectory !== commonDirectory, root };
 });
 
-/** The jj config key that records which version of jj-octo last set the checkout up. */
 export const SET_UP_VERSION = "jj-octo.set-up-version";
 
-/** The version of jj-octo whose `init` last set the repository up, or `undefined` where none did. */
 export const readSetUpVersion = readJjConfig(SET_UP_VERSION, { repo: true });
 
-/**
- * Makes the git checkout a colocated jj repository. A jj repository further up, holding the
- * checkout as an ordinary directory, doesn't count. A git worktree stays as it is, since a jj
- * repository there would be a second one over the same git repository, and share its branches.
- */
 const colocated: SetupStep = {
   check: Effect.map(checkout, ({ isColocated, isWorktree }) => {
     const problem = isWorktree
@@ -89,11 +74,7 @@ const colocated: SetupStep = {
 
 const IDENTITY = ["user.name", "user.email"];
 
-/**
- * Copies git's name or email into the repository's jj config where jj has none, as in a fresh
- * container that configures git alone. A change jj makes without them has no author, and can't
- * be pushed.
- */
+// Copies git's name or email into jj's config, as a fresh container often configures only git.
 const identity = (key: string): SetupStep => ({
   check: Effect.gen(function* () {
     const inJj = (yield* jjConfig(key)) !== "";
@@ -112,10 +93,10 @@ const identity = (key: string): SetupStep => ({
   }),
 });
 
-// Changes jj made before it had an identity have no author, and can't be pushed.
+// Changes jj made before it had an identity have no author and can't be pushed.
 const ANONYMOUS = 'mutable() & (author_name(exact:"") | author_email(exact:""))';
 
-/** Gives those changes jj's identity, which the identity step reports where jj has none. */
+// Gives those changes jj's identity. Where jj has none, the identity step reports it.
 const authors: SetupStep = {
   check: Effect.gen(function* () {
     const values = yield* Effect.forEach(IDENTITY, jjConfig, { concurrency: "unbounded" });
@@ -129,24 +110,20 @@ const authors: SetupStep = {
   }),
 };
 
-/** Whether `origin`'s branch is fetched and tracked. */
 const isTracked = (branch: string) =>
   Effect.map(
     commitsAt(`tracked_remote_bookmarks(${exactPattern(branch)}, remote=exact:"origin")`),
     (commits) => commits.length > 0,
   );
 
-/**
- * Whether the `trunk()` alias names the branch, as `fix` writes it or as jj does when it colocates.
- * Compared as text, since another branch can be on the same commit, until one of them moves.
- */
+// Compares the text, since another branch can share the commit. A colocating jj writes
+// `<branch>@origin`.
 const namesTrunk = (branch: string) =>
   Effect.map(
     jjConfig('revset-aliases."trunk()"'),
     (alias) => alias === trunkRevset(branch) || alias === `${branch}@origin`,
   );
 
-/** Tracks the default branch, fetching it if needed, and makes it `trunk()`. */
 const trunk = (branchOnOrigin: Effect.Effect<string, GitFailed, Git>): SetupStep => ({
   check: Effect.gen(function* () {
     const branch = yield* branchOnOrigin;
@@ -169,33 +146,21 @@ const trunk = (branchOnOrigin: Effect.Effect<string, GitFailed, Git>): SetupStep
   }),
 });
 
-/**
- * The `jj gh` alias, set to run jj-octo from `PATH` where the repository has none. One that runs
- * another build stays. Jj reads aliases from user and repository config, never from a tracked file.
- */
+// Sets the alias in the repository's config where it has none, and keeps one that runs another
+// build. jj reads aliases only from user and repository config, not from a tracked file.
 const alias: SetupStep = {
-  // The repository's config, where `fix` writes, rather than one that the user's config shadows.
   check: Effect.map(readJjConfig("aliases.gh", { repo: true }), (value) =>
     value === undefined ? forInit("`jj gh` isn't set up") : undefined,
   ),
   fix: setJjConfig("aliases.gh", ["util", "exec", "--", "jj-octo"]),
 };
 
-/**
- * The steps of `init` after `colocated`, in the order it runs them, and the default branch they
- * read once, on first use.
- */
+// The steps that read the colocated jj repository.
 const setup = Effect.map(Effect.cached(defaultBranch), (branch) => ({
   branch,
   steps: [...EffectArray.map(IDENTITY, (key) => identity(key)), authors, trunk(branch), alias],
 }));
 
-/**
- * Runs `run` on each step of `init`, and returns the problems it finds, with the default branch
- * the steps read, each problem once. Without a colocated jj repository, it runs no other step,
- * since they read it.
- * `init` runs the fixes this way, and `doctor` the checks.
- */
 export const runSteps = <R>(
   run: (step: SetupStep) => Effect.Effect<string | undefined, never, R>,
 ): Effect.Effect<
@@ -206,13 +171,13 @@ export const runSteps = <R>(
   Effect.gen(function* () {
     const { branch, steps } = yield* setup;
     const notColocated = yield* run(colocated);
-    // In turn: `init`'s fixes write the same jj config, and each check runs jj, which may
-    // snapshot the working copy.
+    // In turn: `init`'s fixes write the same jj config, and each check runs jj, which may snapshot
+    // the working copy.
     const found =
       notColocated === undefined
         ? yield* Effect.forEach(steps, (step) => run(step), { concurrency: 1 })
         : [notColocated];
-    // Steps that fail the same way, such as on a jj config that jj can't parse, report it once.
+    // Reports once a failure several steps share, such as an unparseable jj config.
     const problems = new Set(EffectArray.filter(found, (problem) => problem !== undefined));
     return { branch, problems: [...problems] };
   });

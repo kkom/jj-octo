@@ -4,12 +4,12 @@ import type { Check, CheckState, RequiredCheck, RequiredChecks } from "../../cli
 import { table } from "../command";
 
 /**
- * Where a required check is: a `CheckState`, or `unknown` where only a commit status could be its
- * result, and GitHub doesn't say whether the app the requirement names sent it.
+ * A required check's state: a `CheckState`, or `unknown` where only a commit status could be its
+ * result and GitHub doesn't say whether the required app sent it.
  */
 type RequirementState = CheckState | "unknown";
 
-// The states, the furthest from passing first.
+// The states, furthest from passing first.
 const FURTHEST_FIRST: readonly RequirementState[] = [
   "failed",
   "unknown",
@@ -19,8 +19,8 @@ const FURTHEST_FIRST: readonly RequirementState[] = [
 ];
 
 /**
- * How a check relates to a required check: its `result`, or `maybe` its result, for a commit status
- * of the name where the requirement names an app, or `unrelated`.
+ * How a check relates to a required check: its `result`; `maybe` its result, for a commit status
+ * of that name where the requirement names an app; or `unrelated`.
  */
 type Relation = "maybe" | "result" | "unrelated";
 
@@ -42,7 +42,6 @@ const relationOf =
     });
   };
 
-/** The state furthest from passing among the checks, or pending where there are none. */
 const furthestOf = (checks: readonly Check[]): RequirementState =>
   Option.getOrElse(
     EffectArray.findFirst(FURTHEST_FIRST, (state) =>
@@ -51,11 +50,7 @@ const furthestOf = (checks: readonly Check[]): RequirementState =>
     () => "pending",
   );
 
-/**
- * The state of a required check, from its results: the one furthest from passing, or pending with
- * none. Where a commit status may also be its result, the state is the same with and without the
- * status, or else unknown.
- */
+// Unknown where a commit status that may be the check's result changes its state.
 const stateOf = (required: RequiredCheck, checks: readonly Check[]): RequirementState => {
   const withRelation = (relations: readonly Relation[]) =>
     EffectArray.filter(checks, (check) => relations.includes(relationOf(required)(check)));
@@ -69,7 +64,6 @@ const byName = <A extends { readonly name: string }>(items: readonly A[]): reado
     Order.mapInput(Order.String, ({ name }: A) => name),
   );
 
-/** One row per check: whether it's required, its name, and GitHub's word for its result. */
 const rows = (requirement: string, checks: readonly Check[]): readonly (readonly string[])[] =>
   EffectArray.map(byName(checks), ({ name, outcome }) => [requirement, name, outcome]);
 
@@ -79,13 +73,13 @@ const names = (required: readonly RequiredCheck[]): string =>
 /** What `checks` prints of a pull request's checks. */
 export interface CheckReport {
   /**
-   * One row per check, the required ones first: whether it's required, its name, and GitHub's
-   * word for its result. A required check with no result yet is `expected`, as GitHub shows it.
+   * One row per check, required ones first, with GitHub's word for its result. A required check
+   * without a result is `expected`, as GitHub shows it.
    */
   readonly rows: readonly string[];
   /**
-   * The state of the required checks: the one furthest from passing, naming the required checks in
-   * it unless they passed, or that the trunk requires none, or that they're unknown.
+   * The state furthest from passing, naming the required checks in it unless they passed. It's
+   * `no required checks` where none are required, and `unknown` where they can't be known.
    */
   readonly state: string;
 }
@@ -97,7 +91,6 @@ export const checkReport = (required: RequiredChecks, checks: readonly Check[]):
       state: "unknown",
     })),
     Match.tag("Known", ({ checks: requiredChecks }) => {
-      // A check's closest relation to any required check.
       const relationToAny = (check: Check): Relation => {
         const all = new Set(EffectArray.map(requiredChecks, (req) => relationOf(req)(check)));
         return Option.getOrElse(

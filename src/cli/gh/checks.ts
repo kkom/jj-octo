@@ -21,11 +21,9 @@ import { asUserError, provideGitHubFromOrigin, revisionFlag, table, withHelp } f
 import { checkReport } from "./check-report";
 import { CONFLICTED, type NotAStack, stackChanges } from "./stack/changes";
 
-/** The open pull request among those from a branch, newest first. */
 const openOf = (pullRequests: readonly ListedPullRequest[]): Option.Option<ListedPullRequest> =>
   EffectArray.findFirst(pullRequests, ({ state }) => isOpen(state));
 
-/** A change of the stack, with its open pull request and that pull request's latest checks. */
 interface Checked {
   readonly bookmark: string;
   readonly commitId: string;
@@ -36,11 +34,6 @@ interface Checked {
   }>;
 }
 
-/**
- * One line per change, top first: its bookmark, then its open pull request and the state of its
- * required checks. With `verbose`, each line is followed by its pull request's check rows. Where the
- * required checks are unknown, a line above says why.
- */
 const checksLines = (
   checked: readonly Checked[],
   required: RequiredChecks,
@@ -93,10 +86,6 @@ const checksLines = (
     : [...why, ...blocks].flat();
 };
 
-/**
- * The checks of each change's open pull request in the revision's stack, top first, as
- * `checksLines` prints them.
- */
 export const checks = (
   revision: string,
   options: { readonly verbose: boolean },
@@ -149,10 +138,10 @@ export const checksCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Show the state of the required checks of the stack's pull requests",
-    "Prints one line per change of the stack, top first: its bookmark, its open pull request or `no open pull request`, and the state of the required checks, the one furthest from passing: `failed`, `unknown`, `pending`, `skipped` or `passed`. Unless they passed, the line names the required checks in that state, such as `failed: CI`, or `unknown: codecov` for a required check whose result can't be told apart, as below. Where the default branch requires no checks, the line says `no required checks`, and where the required checks can't be known, it says `unknown`, under a line that says why. A change with conflicts is marked `conflicted` at the end of its line.",
-    "With `--verbose`, each line is followed by one row per check, the required ones first: whether it's required, its name, and GitHub's word for its result, such as `success`, `cancelled` or `in_progress`. A required check with no result yet is `expected`.",
-    "The checks are those of the pull request's head commit, as GitHub has it. Where that differs from the change, the line names that commit. Each check counts once, with its latest result: the newest check run of each name and app, and the latest commit status of each name. So a run cancelled and then run again counts as the second run, and jobs of the same name in two workflows count as one check, as GitHub matches a required check by name. A check passes where it ends as `success` or `neutral`. One that ends as `skipped` is `skipped`, even where it skips on purpose, such as by a path filter, though GitHub counts it as passed. A required check that names a GitHub App counts only that app's check runs. GitHub doesn't say which app sent a commit status, so a status of its name is `maybe required`, and makes the check `unknown` where counting the status changes its state. A required check with results from several sources counts as the one furthest from passing.",
-    "The required checks are the ones GitHub's default branch requires, through its rulesets and its branch protection. A pull request in a stack targets the branch of the change below it, which usually requires none, but `jj gh merge` merges the stack into the default branch, so that branch's rules decide the merge. Where the token can't read them, or the rulesets also require workflows, code scanning results or deployments, the required checks are unknown, and each row of `--verbose` says `maybe required`.",
-    "Fails if the changes aren't a chain, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
+    "Prints one line per change, top first: its bookmark, its open pull request, and the required checks' state furthest from passing: `failed`, `unknown`, `pending`, `skipped` or `passed`. Unless they passed, it names the checks in that state, such as `failed: CI`. It prints `no open pull request` for a change without one, and `no required checks` where none are required. Where the required checks can't be known, the state is `unknown`, and a line above says why. A change with conflicts ends its line with `conflicted`.",
+    "With `--verbose`, each line is followed by one row per check, required ones first, with GitHub's word for its result, such as `success`. A required check without a result is `expected`.",
+    "The checks are those of the pull request's head commit, which the line names where it differs from the change. Each check counts once, with its latest result: the newest check run per name and app, and the latest commit status per name. GitHub matches required checks by name, so same-named jobs in two workflows count as one check. A check passes on `success` or `neutral`. A check that ends as `skipped`, such as by a path filter, is `skipped`, though GitHub counts it as passed. A required check naming a GitHub App counts only that app's check runs. GitHub doesn't say which app sent a commit status, so a status of that name is `maybe required`, and makes the check `unknown` where counting it changes the state. A check with several results takes the one furthest from passing.",
+    "The required checks are the default branch's, from its rulesets and branch protection, since `jj gh merge` merges the stack into it. Where the token can't read them, or the rulesets also require workflows, code scanning results or deployments, they're unknown, and each `--verbose` row says `maybe required`.",
+    "Changes nothing, locally or on GitHub.",
   ),
 );

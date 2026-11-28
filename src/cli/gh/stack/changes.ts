@@ -9,37 +9,35 @@ export class NotAStack extends Schema.TaggedError<NotAStack, { readonly brand: u
   { message: Schema.String },
 ) {}
 
-// The bottom change of every stack. A mutable change on anything but the trunk's history, such as
-// one on a release branch, is in no stack.
+// Every stack's bottom change. A mutable change off the trunk's history, such as on a release
+// branch, is in no stack.
 export const STACK_ROOTS = "roots(mutable()) & children(::trunk())";
 
-// The scratch change `jj new` and `jj commit` leave on top, or the one another workspace starts from.
+// The scratch change `jj new` and `jj commit` leave on top, or the one another workspace starts
+// from.
 export const SCRATCH = '(working_copies() & empty() & description(exact:""))';
 
-// Every change connected to the revision through mutable changes. Separate stacks meet only at
-// the trunk, which is immutable, so this never reaches into another one.
+// Every change connected to the revision through mutable changes. Stacks meet only at the
+// immutable trunk, so this never enters another stack.
 export const stackRevset = (revision: string): string =>
   `(reachable(${revision}, mutable()) & (${STACK_ROOTS})::) ~ ${SCRATCH}`;
 
-// For an empty working copy, which the stack leaves out, this starts at the change below it.
+// For an empty working copy, which the stack leaves out, this starts at the change below.
 export const downstackRevset = (revision: string): string =>
   `::(${revision}) & (${stackRevset(revision)})`;
 
-/** The changes of the revision's stack that are above it. */
 export const upstackRevset = (revision: string): string =>
   `(${revision})+:: & (${stackRevset(revision)})`;
 
-/** The commits of any of the revsets. With none, no commits, where an empty union fails. */
+// `none()` gives an empty list a valid revset, where an empty union fails.
 export const anyOf = (revsets: readonly string[]): string =>
   EffectArray.join(["none()", ...revsets], " | ");
 
-/** A jj string pattern that matches the name alone. */
 export const exactPattern = (name: string): string => `exact:${formatJson(name)}`;
 
-/** The commits of a change. A change with no visible commit selects none, where its bare id fails. */
+// Selects none for a change with no visible commit, where its bare id fails.
 export const changeRevset = (change: string): string => `change_id(${change})`;
 
-/** The change a bookmark is on. */
 export const bookmarkRevset = (bookmark: string): string => `bookmarks(${exactPattern(bookmark)})`;
 
 export const lines = (output: string): readonly string[] =>
@@ -47,23 +45,19 @@ export const lines = (output: string): readonly string[] =>
 
 const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
 
-/** A description that a template printed with `escape_json()`. */
+/** A description a template printed with `escape_json()`. */
 export const parseDescription = (json: string): string => {
   const parsed = Result.getOrThrow(decodeJson(json));
   return typeof parsed === "string" ? parsed : "";
 };
 
 interface ReadLogOptions {
-  /** The operation to read the repository at, such as one that `Jj.dryRun` returned. */
+  /** The operation to read the repository at, such as one `Jj.dryRun` returned. */
   readonly atOperation?: string;
+  /** Skips the working-copy snapshot, so the read can run beside a jj command that takes one. */
   readonly ignoreWorkingCopy?: boolean;
 }
 
-/**
- * What `jj log` prints for the revset's commits with the template, bottom first.
- * `ignoreWorkingCopy` skips the snapshot of the working copy, so the read can run alongside another
- * jj command that takes one.
- */
 export const readLog = (
   revset: string,
   template: string,
@@ -91,7 +85,6 @@ export const logLines = (
 ): Effect.Effect<readonly string[], JjFailed, Jj> =>
   readLog(revset, template, options).pipe(Effect.map(lines));
 
-/** Each of the revset's changes as its short id and the first line of its description. */
 export const changesIn = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   logLines(revset, String.raw`change_id.shortest(8) ++ " " ++ description.first_line() ++ "\n"`);
 
@@ -101,26 +94,23 @@ export const commitsAt = (revset: string): Effect.Effect<readonly string[], JjFa
 export const changeIdsAt = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   logLines(revset, String.raw`change_id ++ "\n"`);
 
-/** The names of the local bookmarks on the revset's commits. */
 export const bookmarksAt = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
     // `jj bookmark list` also prints a bookmark's remote copy where it points elsewhere, as a
-    // merged branch's does, so the template keeps the local one alone.
+    // merged branch's does, so the template keeps only the local one.
     const template = String.raw`if(!remote, name ++ "\n")`;
     const listed = yield* jj.read(["bookmark", "list", "-r", revset, "-T", template]);
     return lines(listed);
   });
 
-/** What the commands that show a stack print beside a change with conflicts. */
 export const CONFLICTED = "conflicted";
 
-/** One change of a stack, with the bookmark that names its branch. */
 export interface StackChange {
   readonly bookmark: string;
   readonly changeId: string;
   readonly commitId: string;
-  /** Whether the change has conflicts, which `jj git push` won't push. */
+  /** `jj git push` won't push a change with conflicts. */
   readonly conflict: boolean;
   readonly description: string;
   /** The short change id and the first line of the description. */
@@ -129,7 +119,6 @@ export interface StackChange {
 
 export type Pushed = "changed since push" | "not pushed" | "pushed";
 
-/** Whether a change is the commit its bookmark's branch has. */
 export const pushedState = (
   target: BookmarkTarget | undefined,
   { commitId }: StackChange,
@@ -148,17 +137,16 @@ export interface LoggedChange {
   readonly commitId: string;
   readonly conflict: boolean;
   readonly description: string;
-  /** Whether another visible commit has the same change id. */
+  /** Whether another visible commit has its change id. */
   readonly divergent: boolean;
   /** The short change id and the first line of the description. */
   readonly label: string;
   readonly parents: readonly string[];
 }
 
-// One line per change. The description is JSON, so a tab or a newline in it can't split a field.
+// One line per change. The description is JSON, so a tab or newline in it can't split a field.
 const CHANGE = String.raw`change_id.shortest(8) ++ "\t" ++ change_id ++ "\t" ++ commit_id ++ "\t" ++ parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ conflict ++ "\t" ++ divergent ++ "\t" ++ local_bookmarks.map(|b| b.name() ++ if(b.conflict(), "?")).join(" ") ++ "\t" ++ description.escape_json() ++ "\n"`;
 
-/** The revset's changes, each after the changes below it. */
 export const loggedChanges = (
   revset: string,
   options?: ReadLogOptions,
@@ -197,12 +185,7 @@ const notAStack = (message: string, changes: readonly string[]) =>
 const labels = (changes: readonly LoggedChange[]): readonly string[] =>
   EffectArray.map(changes, ({ label }) => label);
 
-/**
- * The changes of the revset, bottom to top, each with its bookmark. A GitHub stack must be a
- * chain, but jj allows any history: one head and no merges means the changes form a chain. Each
- * change becomes one pull request, so it needs exactly one bookmark to name its branch. A change
- * with conflicts is still part of the chain, which only a command that pushes or merges it fails on.
- */
+// A change with conflicts still belongs to the chain; only the commands that push or merge it fail.
 const chain = (
   revset: string,
   revision: string,
@@ -232,7 +215,7 @@ const chain = (
     const unnamed = EffectArray.filter(changes, ({ bookmarks }) => bookmarks.length === 0);
     if (unnamed.length > 0) {
       return yield* notAStack(
-        "every change needs a bookmark naming its branch; these have none:",
+        "these changes have no bookmark naming their branch:",
         labels(unnamed),
       );
     }
@@ -268,22 +251,16 @@ const chain = (
     );
   });
 
-/** The whole stack containing the revision, bottom to top. */
 export const stackChanges = (
   revision: string,
 ): Effect.Effect<readonly StackChange[], JjFailed | NotAStack, Jj> =>
   chain(stackRevset(revision), revision);
 
-/** The revision's change and the ones below it in its stack, bottom to top. */
 export const downstackChanges = (
   revision: string,
 ): Effect.Effect<readonly StackChange[], JjFailed | NotAStack, Jj> =>
   chain(downstackRevset(revision), revision);
 
-/**
- * The changes, where none has conflicts. A command that pushes or merges changes checks the ones it
- * acts on, before it touches the remote.
- */
 export const withoutConflicts = (
   changes: readonly StackChange[],
 ): Effect.Effect<readonly StackChange[], NotAStack> => {

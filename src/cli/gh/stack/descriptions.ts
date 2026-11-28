@@ -25,7 +25,6 @@ export class DescriptionConflict extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("DescriptionConflict", { message: Schema.String }) {}
 
-/** The description a change and its pull request agree on, and whether GitHub needs it sent. */
 export interface SyncedDescription {
   readonly send: boolean;
   readonly text: string;
@@ -37,12 +36,11 @@ const sent = (text: string): SyncedDescription => ({ send: true, text });
 interface DescriptionOptions {
   readonly ignoreClaudeCodeFooter: boolean;
   readonly overwriteDescriptions: boolean;
-  /** The commit on `origin`'s branch, where it has one. */
+  /** The commit on `origin`'s branch, if any. */
   readonly pushedCommit: string | undefined;
   readonly pushedDescription: string;
 }
 
-/** The description of each commit, by commit id, read in one command. */
 export const descriptionsOf = (
   commits: readonly string[],
 ): Effect.Effect<ReadonlyMap<string, string>, JjFailed, Jj> =>
@@ -66,15 +64,14 @@ export const descriptionsOf = (
 interface Evolution {
   readonly commit: string;
   readonly description: string;
-  /** Whether jj took the commit from git, as a fetch does, rather than making it here. */
+  /** Whether jj took the commit from git, as a fetch does, rather than making it. */
   readonly isImported: boolean;
   readonly predecessors: readonly string[];
 }
 
 /**
- * The change's commits, newest first, read from its evolog. The evolog also holds commits squashed
- * into the change, which belong to other changes, so only commits with the change's id count. That
- * also leaves out what a change had before `jj split` gave it a new id.
+ * Newest first. Leaves out commits squashed in from other changes, and what the change had before
+ * `jj split` gave it a new id.
  */
 const ownHistory = (
   bookmark: string,
@@ -110,9 +107,9 @@ const ownHistory = (
   });
 
 /**
- * Whether the change evolved from the commit with no other description taken from git since, as
- * another clone's rewrite of the branch brings in. A commit taken from git keeps the description
- * where one of its predecessors had it.
+ * Whether the change evolved from the commit without taking another description from git since, as
+ * another clone's rewrite of the branch brings in. A commit from git keeps the description where a
+ * predecessor had it.
  */
 const isDescribedHereFrom = (history: readonly Evolution[], commit: string): boolean => {
   const descriptions = new Map(
@@ -131,17 +128,15 @@ const isDescribedHereFrom = (history: readonly Evolution[], commit: string): boo
 };
 
 /**
- * Makes a change's description and its pull request's title and body the same text. An edit made
- * on GitHub alone is written into the change here. Returns the text both sides then agree on, and
- * whether it has to be sent to GitHub once the bookmark is pushed.
+ * Makes a change's description and its pull request's title and body the same text, and returns
+ * that text and whether GitHub needs it sent.
  *
- * Who changed the description is read against the text both sides last agreed on, which `submit`
- * records for each pull request with the commit it was agreed for. A record counts while the change
- * evolved from that commit and took no other description from git since, as another clone's
- * rewrite of the branch brings in. Without one, it's the pushed description, unless the pull
- * request has a description the change had before: a push made without `submit`, such as
- * `jj git push`, leaves the pull request with that earlier text. A bookmark never pushed has no
- * pushed description, and an empty text is merged from.
+ * Who changed the description is judged against the text both sides last agreed on, which `submit`
+ * records per pull request with its commit. A record counts while the change evolved from that
+ * commit without taking another description from git, as another clone's rewrite of the branch
+ * brings in. Without one, the pushed description counts, unless the pull request has an earlier
+ * description of the change, which a push without `submit`, such as `jj git push`, leaves. A
+ * never-pushed bookmark merges from empty text.
  */
 export const syncDescription = (
   { bookmark, changeId, description }: StackChange,
@@ -169,8 +164,8 @@ export const syncDescription = (
     const onGitHub = normalized(descriptionFrom(pullRequest));
     const pushed = normalized(pushedDescription);
     const record = yield* records.read(pullRequest.number, bookmark);
-    // Only a record, or GitHub's text other than the pushed one, needs the evolog where the two
-    // sides differ.
+    // Where the sides differ, only a record or a GitHub text other than the pushed one needs the
+    // evolog.
     const history =
       local === onGitHub || (Option.isNone(record) && onGitHub === pushed)
         ? []

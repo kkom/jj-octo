@@ -120,7 +120,7 @@ layer(Layer.mergeAll(scratchRepository, fakeGitHub, fakeClipboard))("links", (it
     {
       outcome: "unreachable",
       report:
-        "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks. They then show as links that paste into Slack.",
+        "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim. Leave out the markers, and add no code block or backticks. The lines then show as links that paste into Slack.",
       stdout: EffectArray.join(
         [
           "-----BEGIN TEXT TO PASTE VERBATIM-----",

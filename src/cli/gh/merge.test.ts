@@ -205,7 +205,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
         calls: [],
         failure: NotMergeable.make({
           message:
-            "#2 isn't in a GitHub stack, and its base is a, so merging it wouldn't reach the trunk; run `jj gh submit` to register the stack, or merge the changes below it first",
+            "#2 isn't in a GitHub stack and its base is a, not the trunk; run `jj gh submit` to register the stack, or merge the changes below it first",
         }),
       });
     }));
@@ -233,7 +233,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
       expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
         calls: [],
         failure: NotAStack.make({
-          message: `every change needs a bookmark naming its branch; these have none:\n${yield* repository.labels("@")}`,
+          message: `these changes have no bookmark naming their branch:\n${yield* repository.labels("@")}`,
         }),
       });
     }));
