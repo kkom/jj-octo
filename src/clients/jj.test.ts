@@ -24,7 +24,7 @@ describe("jjConfig", () => {
           provideClients(clone.layer),
         );
         expect(failure).toStrictEqual(
-          new JjFailed({
+          JjFailed.make({
             message: EffectArray.join(
               [
                 "Config error: Configuration cannot be parsed as TOML document",
@@ -107,7 +107,9 @@ describe("Jj.dryRun", () => {
       const failure = yield* Effect.flip(dryRun(["describe", "-m", ""])).pipe(
         provideClients(repository.layer),
       );
-      expect(failure).toStrictEqual(new JjFailed({ message: "jj describe -m  made no operation" }));
+      expect(failure).toStrictEqual(
+        JjFailed.make({ message: "jj describe -m  made no operation" }),
+      );
     }),
   );
 });

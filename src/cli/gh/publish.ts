@@ -1,4 +1,4 @@
-import { Array as EffectArray, Console, Data, Effect, Option } from "effect";
+import { Array as EffectArray, Console, Effect, Option, Schema } from "effect";
 import { Command } from "effect/cli";
 
 import type { Git } from "../../clients/git";
@@ -10,9 +10,10 @@ import { asUserError, revisionFlag, withHelp } from "../command";
 import { bookmarkTargets } from "./stack/bookmark-targets";
 import { downstackChanges, type NotAStack, pushedState, withoutConflicts } from "./stack/changes";
 
-export class NotPublishable extends Data.TaggedError("NotPublishable")<{
-  readonly message: string;
-}> {}
+export class NotPublishable extends Schema.TaggedError<
+  NotPublishable,
+  { readonly brand: unique symbol }
+>()("NotPublishable", { message: Schema.String }) {}
 
 /**
  * Marks the draft pull requests of the revision's change and the ones below it ready for review,
@@ -31,7 +32,7 @@ export const publish = (
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
     );
     if (unpushed.length > 0) {
-      return yield* new NotPublishable({
+      return yield* NotPublishable.make({
         message: `these changes aren't pushed: ${EffectArray.join(
           EffectArray.map(unpushed, ({ bookmark }) => bookmark),
           ", ",
@@ -46,7 +47,7 @@ export const publish = (
     );
     const missing = EffectArray.filter(found, ({ pullRequest }) => Option.isNone(pullRequest));
     if (missing.length > 0) {
-      return yield* new NotPublishable({
+      return yield* NotPublishable.make({
         message: `no open pull request for ${EffectArray.join(
           EffectArray.map(missing, ({ bookmark }) => bookmark),
           ", ",

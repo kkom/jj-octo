@@ -1,23 +1,26 @@
 import {
   Array as EffectArray,
   Context,
-  Data,
   Effect,
   FileSystem,
   Layer,
   Path,
   Record as EffectRecord,
+  Schema,
   String as EffectString,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { readOutput } from "./process";
 
-export class GitFailed extends Data.TaggedError("GitFailed")<{
-  readonly message: string;
-  /** Git's exit code, where git ran and failed. */
-  readonly exitCode?: number;
-}> {}
+export class GitFailed extends Schema.TaggedError<GitFailed, { readonly brand: unique symbol }>()(
+  "GitFailed",
+  {
+    /** Git's exit code, where git ran and failed. */
+    exitCode: Schema.optionalKey(Schema.Finite),
+    message: Schema.String,
+  },
+) {}
 
 export class Git extends Context.Service<
   Git,
@@ -88,7 +91,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
               const { exitCode, stderr, stdout } = yield* readOutput(handle);
               // The exit code is the number of conflicts, and 255 for a failure.
               if (exitCode > 127) {
-                return yield* new GitFailed({
+                return yield* GitFailed.make({
                   message: `git merge-file failed: ${EffectString.trim(stderr)}`,
                 });
               }
@@ -96,7 +99,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
             }),
           ).pipe(
             Effect.catchTag("PlatformError", (error) =>
-              Effect.fail(new GitFailed({ message: `git merge-file failed: ${error.message}` })),
+              Effect.fail(GitFailed.make({ message: `git merge-file failed: ${error.message}` })),
             ),
           ),
         read: (args) =>
@@ -108,7 +111,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
               const { exitCode, stderr, stdout } = yield* readOutput(handle);
               return exitCode === 0
                 ? stdout
-                : yield* new GitFailed({
+                : yield* GitFailed.make({
                     exitCode,
                     message: `git ${EffectArray.join(args, " ")} failed${EffectString.trim(stderr) === "" ? "" : `: ${EffectString.trim(stderr)}`}`,
                   });
@@ -116,7 +119,7 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
           ).pipe(
             Effect.catchTag("PlatformError", (error) =>
               Effect.fail(
-                new GitFailed({
+                GitFailed.make({
                   message: `git ${EffectArray.join(args, " ")} failed: ${error.message}`,
                 }),
               ),

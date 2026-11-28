@@ -1,9 +1,9 @@
 import {
   Array as EffectArray,
   Console,
-  Data,
   Effect,
   Record as EffectRecord,
+  Schema,
   String as EffectString,
 } from "effect";
 
@@ -27,7 +27,10 @@ import { rebaseOntoTrunk } from "./rebase-onto-trunk";
 // A stack already on the trunk has nothing to rebase.
 export const STACK_ROOTS_NOT_ON_TRUNK = `(${STACK_ROOTS}) ~ children(trunk())`;
 
-export class NotCombined extends Data.TaggedError("NotCombined")<{ readonly message: string }> {}
+export class NotCombined extends Schema.TaggedError<
+  NotCombined,
+  { readonly brand: unique symbol }
+>()("NotCombined", { message: Schema.String }) {}
 
 /** The `jj git fetch` options that fetch only the branches. */
 export const fetchBranches = (branches: readonly string[]): string[] =>
@@ -205,7 +208,7 @@ export const reconcile = ({
     // `bookmarksAt` lists conflicted bookmarks too, which `bookmarkTargets` gives no local target.
     yield* records.prune(Effect.provideService(bookmarksAt("all()"), Jj, jj));
     if (notCombined.length > 0) {
-      return yield* new NotCombined({
+      return yield* NotCombined.make({
         message: EffectArray.join(
           [
             "these bookmarks changed locally and were rewritten on GitHub with different content, so they weren't combined:",

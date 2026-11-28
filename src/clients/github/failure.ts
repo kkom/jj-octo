@@ -1,11 +1,14 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { type HttpClientRequest, type HttpClientResponse, UrlParams } from "effect/http";
 
-export class GitHubFailed extends Data.TaggedError("GitHubFailed")<{
-  readonly message: string;
+export class GitHubFailed extends Schema.TaggedError<
+  GitHubFailed,
+  { readonly brand: unique symbol }
+>()("GitHubFailed", {
+  message: Schema.String,
   /** The status of GitHub's error response, where it sent one. */
-  readonly status?: number;
-}> {}
+  status: Schema.optionalKey(Schema.Finite),
+}) {}
 
 /** The request's URL with its query, which `HttpClientRequest` keeps apart from `url` in `urlParams`. */
 export const urlOf = ({ url, urlParams }: HttpClientRequest.HttpClientRequest): string =>
@@ -21,7 +24,7 @@ export const failWith = (
     Effect.orElseSucceed(() => ""),
     Effect.flatMap((text) =>
       Effect.fail(
-        new GitHubFailed({
+        GitHubFailed.make({
           message: `${request.method} ${urlOf(request)} returned ${response.status}: ${text}`,
           status: response.status,
         }),

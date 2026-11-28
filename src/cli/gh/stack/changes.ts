@@ -1,10 +1,13 @@
-import { Array as EffectArray, Data, Effect, Result, Schema, String as EffectString } from "effect";
+import { Array as EffectArray, Effect, Result, Schema, String as EffectString } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
 import { formatJson } from "../../../json";
 import type { BookmarkTarget } from "./bookmark-targets";
 
-export class NotAStack extends Data.TaggedError("NotAStack")<{ readonly message: string }> {}
+export class NotAStack extends Schema.TaggedError<NotAStack, { readonly brand: unique symbol }>()(
+  "NotAStack",
+  { message: Schema.String },
+) {}
 
 // The bottom change of every stack. A mutable change on anything but the trunk's history, such as
 // one on a release branch, is in no stack.
@@ -189,7 +192,7 @@ export const loggedChanges = (
   );
 
 const notAStack = (message: string, changes: readonly string[]) =>
-  Effect.fail(new NotAStack({ message: EffectArray.join([message, ...changes], "\n") }));
+  Effect.fail(NotAStack.make({ message: EffectArray.join([message, ...changes], "\n") }));
 
 const labels = (changes: readonly LoggedChange[]): readonly string[] =>
   EffectArray.map(changes, ({ label }) => label);

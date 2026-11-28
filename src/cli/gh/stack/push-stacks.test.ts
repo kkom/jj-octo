@@ -56,7 +56,7 @@ describe("submit's stacks", () => {
       const github = githubWithThree([stackNumbered(9, 1, 2), stackNumbered(7, 3)]);
       const failure = yield* Effect.flip(submitIn(repository, github));
       expect(failure).toStrictEqual(
-        new SeveralStacks({
+        SeveralStacks.make({
           message:
             "the pull requests are in GitHub stacks #9 (#1, #2), #7 (#3), and submit won't take a pull request out of another stack; to keep #9, which holds the bottom one, run `jj gh dissolve 7`, then submit again",
         }),

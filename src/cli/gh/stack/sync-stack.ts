@@ -1,4 +1,4 @@
-import { Array as EffectArray, Console, Data, Effect, String as EffectString } from "effect";
+import { Array as EffectArray, Console, Effect, Schema, String as EffectString } from "effect";
 
 import { Git, type GitFailed } from "../../../clients/git";
 import type { GitHub } from "../../../clients/github/client";
@@ -27,9 +27,10 @@ import {
 
 // Syncs one stack, for `submit`, where GitHub merged or changed any of it.
 
-export class BranchesDeleted extends Data.TaggedError("BranchesDeleted")<{
-  readonly message: string;
-}> {}
+export class BranchesDeleted extends Schema.TaggedError<
+  BranchesDeleted,
+  { readonly brand: unique symbol }
+>()("BranchesDeleted", { message: Schema.String }) {}
 
 /** Why a deleted branch's change doesn't count as merged, from its merged pull requests' heads. */
 const whyDeleted = (heads: readonly string[], { remote }: BookmarkBeforeFetch): string => {
@@ -111,7 +112,7 @@ export const syncStack = (
     // doesn't prove: GitHub may have added commits before merging, or the name may be reused.
     const deleted = EffectArray.filter(onGitHub.deleted, ({ name }) => notMerged(merged)(name));
     if (deleted.length > 0) {
-      return yield* new BranchesDeleted({
+      return yield* BranchesDeleted.make({
         message: EffectArray.join(
           [
             "these branches were deleted on GitHub, so nothing was changed:",

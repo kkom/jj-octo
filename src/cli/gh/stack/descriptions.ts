@@ -1,10 +1,10 @@
 import {
   Array as EffectArray,
   Console,
-  Data,
   Effect,
   Match,
   Option,
+  Schema,
   String as EffectString,
 } from "effect";
 
@@ -20,9 +20,10 @@ import {
   normalizedDescription,
 } from "./plan";
 
-export class DescriptionConflict extends Data.TaggedError("DescriptionConflict")<{
-  readonly message: string;
-}> {}
+export class DescriptionConflict extends Schema.TaggedError<
+  DescriptionConflict,
+  { readonly brand: unique symbol }
+>()("DescriptionConflict", { message: Schema.String }) {}
 
 /** The description a change and its pull request agree on, and whether GitHub needs it sent. */
 export interface SyncedDescription {
@@ -213,7 +214,7 @@ export const syncDescription = (
           }
           const merged = yield* git.mergeText({ base: agreed, local, remote: onGitHub });
           if (merged.conflicted) {
-            return yield* new DescriptionConflict({
+            return yield* DescriptionConflict.make({
               message: EffectArray.join(
                 [
                   `the description of ${bookmark} changed here and in #${pullRequest.number}, in the same lines:`,

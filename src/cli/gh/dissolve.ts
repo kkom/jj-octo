@@ -1,4 +1,4 @@
-import { Console, Data, Effect } from "effect";
+import { Console, Effect, Schema } from "effect";
 import { Argument, Command } from "effect/cli";
 
 import { GitHub } from "../../clients/github/client";
@@ -7,9 +7,10 @@ import { GitHubFromOrigin } from "../../clients/github/origin";
 import { type StackNumber, StackNumberSchema } from "../../clients/github/types";
 import { asUserError, withHelp } from "../command";
 
-export class NoSuchStack extends Data.TaggedError("NoSuchStack")<{
-  readonly message: string;
-}> {}
+export class NoSuchStack extends Schema.TaggedError<
+  NoSuchStack,
+  { readonly brand: unique symbol }
+>()("NoSuchStack", { message: Schema.String }) {}
 
 /** Dissolves a GitHub stack. Its pull requests stay open, each on the base it had. */
 export const dissolve = (
@@ -20,7 +21,7 @@ export const dissolve = (
     yield* github.unstack(stack).pipe(
       Effect.catchIf(
         (failure) => failure.status === 404,
-        () => new NoSuchStack({ message: `this repository has no stack #${stack}` }),
+        () => NoSuchStack.make({ message: `this repository has no stack #${stack}` }),
       ),
     );
     yield* Console.error(`dissolved stack #${stack}`);

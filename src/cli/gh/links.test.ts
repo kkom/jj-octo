@@ -153,7 +153,7 @@ describe("links", () => {
       const github = fakeGitHub({}, [], {
         pullRequestsFrom: (branch) => (branch === "a" ? [listed] : []),
       });
-      const failure = new ClipboardFailed({ message: "xclip exited with 1" });
+      const failure = ClipboardFailed.make({ message: "xclip exited with 1" });
       const exit = yield* Effect.exit(
         links({ copy: true, revision: "@" }).pipe(
           Effect.provideService(Clipboard, { write: () => Effect.fail(failure) }),
@@ -183,7 +183,7 @@ describe("links", () => {
       );
       expect({ copied: clipboard.copied, failure }).toStrictEqual({
         copied: [],
-        failure: new NoPullRequests({ message: "no change of the stack has a pull request" }),
+        failure: NoPullRequests.make({ message: "no change of the stack has a pull request" }),
       });
     }),
   );

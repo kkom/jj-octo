@@ -139,7 +139,7 @@ export const GitHubLive = (
         client.execute(request).pipe(
           Effect.provideService(FetchHttpClient.RequestInit, requestInit),
           Effect.catchTag("HttpClientError", (error) =>
-            Effect.fail(new GitHubFailed({ message: error.message })),
+            Effect.fail(GitHubFailed.make({ message: error.message })),
           ),
           Effect.filterOrElse(
             (response) => response.status < 400,
@@ -153,10 +153,11 @@ export const GitHubLive = (
           send(request).pipe(
             Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
             Effect.catchTags({
-              HttpClientError: (error) => Effect.fail(new GitHubFailed({ message: error.message })),
+              HttpClientError: (error) =>
+                Effect.fail(GitHubFailed.make({ message: error.message })),
               SchemaError: (error) =>
                 Effect.fail(
-                  new GitHubFailed({
+                  GitHubFailed.make({
                     message: `unexpected response to ${urlOf(request)}: ${error.message}`,
                   }),
                 ),
@@ -234,7 +235,7 @@ export const GitHubLive = (
             );
             const { uuid } = started.details;
             if (uuid === undefined) {
-              return yield* new GitHubFailed({
+              return yield* GitHubFailed.make({
                 message: `merging #${pullRequest} returned no request to follow`,
               });
             }
@@ -247,7 +248,7 @@ export const GitHubLive = (
             if (settled.status === "merged" || settled.status === "enqueued") {
               return settled.status;
             }
-            return yield* new GitHubFailed({
+            return yield* GitHubFailed.make({
               message: `merging #${pullRequest} ended ${settled.status}: ${settled.details.message}`,
             });
           }),

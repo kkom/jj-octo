@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
@@ -6,9 +6,10 @@ import type { Jj, JjFailed } from "../../../clients/jj";
 import { formatJson } from "../../../json";
 import { commitsAt } from "./changes";
 
-export class TrunkMismatch extends Data.TaggedError("TrunkMismatch")<{
-  readonly message: string;
-}> {}
+export class TrunkMismatch extends Schema.TaggedError<
+  TrunkMismatch,
+  { readonly brand: unique symbol }
+>()("TrunkMismatch", { message: Schema.String }) {}
 
 /** The default branch as `origin` has it, quoted so that any branch name parses. */
 export const trunkRevset = (branch: string): string => `${formatJson(branch)}@origin`;
@@ -21,7 +22,7 @@ export const trunkRevset = (branch: string): string => `${formatJson(branch)}@or
 export const checkTrunk = (branch: string): Effect.Effect<void, JjFailed | TrunkMismatch, Jj> =>
   Effect.gen(function* () {
     if ((yield* commitsAt(`trunk() & present(${trunkRevset(branch)})`)).length === 0) {
-      return yield* new TrunkMismatch({
+      return yield* TrunkMismatch.make({
         message: `trunk() isn't ${branch}@origin, GitHub's default branch; run \`jj-octo init\``,
       });
     }

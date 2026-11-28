@@ -81,7 +81,7 @@ describe("init", () => {
         clone.git("config", "--unset", "user.email");
         const failure = yield* Effect.flip(init.pipe(provideClients(clone.layer)));
         expect(failure).toStrictEqual(
-          new NotSetUp({
+          NotSetUp.make({
             message:
               "neither jj nor git has user.email; set it with `jj config set --user user.email`",
           }),
@@ -99,7 +99,7 @@ describe("init", () => {
       clone.git("remote", "set-url", "origin", "/nonexistent");
       const failure = yield* Effect.flip(init.pipe(provideClients(clone.layer)));
       expect(failure).toStrictEqual(
-        new NotSetUp({
+        NotSetUp.make({
           message: EffectArray.join(
             [
               "git ls-remote --symref origin HEAD failed: fatal: '/nonexistent' does not appear to be a git repository",
@@ -125,7 +125,7 @@ describe("init", () => {
       clone.jj("config", "set", "--workspace", 'revset-aliases."trunk()"', "root()");
       const failure = yield* Effect.flip(init.pipe(provideClients(clone.layer)));
       expect(failure).toStrictEqual(
-        new NotSetUp({
+        NotSetUp.make({
           message:
             "trunk() isn't main@origin, GitHub's default branch, fetched and tracked, though init set it up",
         }),
@@ -140,7 +140,7 @@ describe("init", () => {
       clone.git("worktree", "add", "--detach", worktree);
       const failure = yield* Effect.flip(init.pipe(provideClients(clone.layerAt(worktree))));
       expect(failure).toStrictEqual(
-        new NotSetUp({
+        NotSetUp.make({
           message:
             "this is a git worktree, where jj would make a second repository; run `jj workspace add` in the main checkout instead",
         }),

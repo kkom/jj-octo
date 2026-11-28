@@ -130,7 +130,7 @@
           "preferEffectRecord": "error",
           "preferEffectString": "error",
           "preferNamespaceImport": "error",
-          "preferSchemaTaggedError": "off", // undecided
+          "preferSchemaTaggedError": "error",
           "preferSchemaTypeProperty": "error",
           "preferSucceedSomeOrNone": "error",
           "preferTypedSchemaDecoder": "error",
