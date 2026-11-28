@@ -57,13 +57,22 @@ Code that still validates with another schema library keeps it until it's migrat
 
 ## Write a test's body as an Effect with `itEffect`
 
-`itEffect` from `src/testing/it-effect.ts` runs the test's effect on bun's runner, in a scope that closes when it ends, with Bun's platform services, a `TestClock` that starts at 0 and a `TestConsole`. The services a test's own setup builds, such as a scratch repository's clients or a fake GitHub, go in with `provideSetup`, ❌ not `Effect.provide`, which `strictEffectProvide` fails outside an entry point. A failure fails the test. Where bun stops waiting, such as at the test's timeout, the effect is interrupted and its finalizers run. A test with no effect stays a plain `it`.
+`itEffect` from `src/testing/it-effect.ts` runs the test's effect on bun's runner, in a scope that closes when it ends, with Bun's platform services, a `TestClock` that starts at 0, a `TestConsole` and an empty environment. A failure fails the test. Where bun stops waiting, such as at the test's timeout, the effect is interrupted and its finalizers run. A test with no effect stays a plain `it`.
 
 That's because the test then composes the code under test as production does: it provides layers, and reads a failure as a value. bun's `it.each` spreads an array row, so `itEffect.each` takes object rows.
 
 - ❌ `it("…", async () => { const failure = await Effect.runPromise(Effect.flip(program)); … })`
 - ✅ `itEffect("…", () => Effect.gen(function* () { const failure = yield* Effect.flip(program); … }))`
 - ✅ `TestClock.adjust` in the test, where the code under test sleeps or repeats on a `Schedule`
+
+## Provide a test's fixtures as layers
+
+`layer(fixture)` from `src/testing/it-effect.ts` defines a `describe` block. Its tests ask for the fixture's services with `yield*`. Each test builds its own fixture, so no two tests share its state. Set up a state that only some tests need inside those tests, such as the answers of the `InterceptingProxy`.
+
+That's because the test then gets its fixtures as production code gets its services. `strictEffectProvide` fails a layer provided with `Effect.provide` outside an entry point.
+
+- ❌ `program.pipe(Effect.provide(fixtureLayer))` inside a test
+- ✅ `layer(gitHubThroughProxy)("cancelRun", (it) => { it("…", () => Effect.gen(function* () { const outcome = yield* callGitHub(…); … })) })`
 
 ## Use the real type where Effect code meets other code
 
