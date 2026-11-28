@@ -99,7 +99,7 @@ export class GitHub extends Context.Service<
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
   } & CheckReads &
     PullRequestWrites
->()("jj-octo/GitHub") {}
+>()("jj-octo/clients/github/client/GitHub") {}
 
 export const GitHubLive = (
   repository: Repository,

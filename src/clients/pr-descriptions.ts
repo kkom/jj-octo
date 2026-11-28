@@ -47,7 +47,7 @@ export class PrDescriptions extends Context.Service<
       bookmarks: Effect.Effect<readonly string[], { readonly message: string }>,
     ) => Effect.Effect<void>;
   }
->()("jj-octo/PrDescriptions") {}
+>()("jj-octo/clients/pr-descriptions/PrDescriptions") {}
 
 /** A description both sides agreed on, and the commit of the change it was agreed for. */
 export interface PrDescription {

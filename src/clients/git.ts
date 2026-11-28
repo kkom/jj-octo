@@ -33,7 +33,7 @@ export class Git extends Context.Service<
       readonly remote: string;
     }) => Effect.Effect<{ readonly conflicted: boolean; readonly text: string }, GitFailed>;
   }
->()("jj-octo/Git") {}
+>()("jj-octo/clients/git") {}
 
 interface GitOptions {
   readonly cwd?: string;
