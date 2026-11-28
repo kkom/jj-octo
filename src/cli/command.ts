@@ -31,7 +31,7 @@ export interface HelpSection {
 }
 
 export class HelpSections extends Context.Service<HelpSections, readonly HelpSection[]>()(
-  "jj-octo/HelpSections",
+  "jj-octo/cli/command/HelpSections",
 ) {}
 
 /** Adds sections to the command's help, after the ones Effect generates. */

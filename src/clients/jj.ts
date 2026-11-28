@@ -32,7 +32,7 @@ export class Jj extends Context.Service<
      */
     readonly dryRun: (args: readonly string[]) => Effect.Effect<string, JjFailed>;
   }
->()("jj-octo/Jj") {}
+>()("jj-octo/clients/jj") {}
 
 // What jj printed says what went wrong, so it's the message. The command is named only where jj
 // printed nothing to this program: it failed to start, or its output went to the terminal.

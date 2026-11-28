@@ -22,7 +22,7 @@ export type ClipboardWrite = "copied" | "unreachable";
 export class Clipboard extends Context.Service<
   Clipboard,
   { readonly write: (content: RichText) => Effect.Effect<ClipboardWrite, ClipboardFailed> }
->()("jj-octo/Clipboard") {}
+>()("jj-octo/clients/clipboard") {}
 
 // Sets the HTML and the plain text on macOS's pasteboard, where AppleScript's `set the clipboard`
 // sets plain text alone. osascript passes the arguments after the script to `run`, and exits
