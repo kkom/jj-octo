@@ -1,24 +1,25 @@
-import { afterAll, describe, expect, it } from "bun:test";
+import { afterAll, describe, expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Option } from "effect";
 
 import { PullRequestNumberSchema } from "../../clients/github/types";
 import { squashMergeOnGitHub } from "../../testing/branch-changes";
+import { itEffect } from "../../testing/it-effect";
 import {
   pushedStack,
   removeScratchRepositories,
   type ScratchRepository,
 } from "../../testing/scratch-repository";
-import { syncIn } from "../../testing/sync";
+import { syncing } from "../../testing/sync";
 
 afterAll(removeScratchRepositories);
 
 const [one, two] = [PullRequestNumberSchema.make(1), PullRequestNumberSchema.make(2)];
 
 // A stack of `a` and `b`, with a record of each pull request's description.
-const recorded = async (): Promise<ScratchRepository> => {
+const recorded = Effect.gen(function* () {
   const repository = pushedStack("a", "b");
-  await repository.records((store) =>
+  yield* repository.records((store) =>
     Effect.all(
       [
         store.write({ bookmark: "a", commit: "1", description: "a", pullRequest: one }),
@@ -28,7 +29,7 @@ const recorded = async (): Promise<ScratchRepository> => {
     ),
   );
   return repository;
-};
+});
 
 const left = (repository: ScratchRepository) =>
   repository.records((store) =>
@@ -40,10 +41,13 @@ const left = (repository: ScratchRepository) =>
   );
 
 describe("sync", () => {
-  it("deletes the recorded descriptions of merged pull requests, and keeps the others", async () => {
-    const repository = await recorded();
-    squashMergeOnGitHub(repository, "a");
-    await syncIn(repository);
-    expect(await left(repository)).toStrictEqual([Option.none(), Option.some("b")]);
-  });
+  itEffect("deletes the recorded descriptions of merged pull requests, and keeps the others", () =>
+    Effect.gen(function* () {
+      const repository = yield* recorded;
+      squashMergeOnGitHub(repository, "a");
+      yield* syncing(repository);
+      const descriptions = yield* left(repository);
+      expect(descriptions).toStrictEqual([Option.none(), Option.some("b")]);
+    }),
+  );
 });

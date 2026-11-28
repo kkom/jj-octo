@@ -1,9 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect } from "bun:test";
 
-import { Array as EffectArray, Option, Order } from "effect";
+import { Array as EffectArray, Effect, Option, Order } from "effect";
 
 import { withGitHub } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
+import { itEffect } from "../../testing/it-effect";
 import type { Check } from "./types";
 
 const ACTIONS = 15_368;
@@ -44,10 +45,13 @@ const listing =
 
 // The checks of commit `abc` against a GitHub that answers as `respond` does, with the requests
 // it received sorted, since the check runs and the statuses are read at once.
-const readLatestChecks = async (respond: (request: InterceptedRequest) => unknown) => {
-  const { requests, result } = await withGitHub(respond, (github) => github.latestChecks("abc"));
-  return { requests: EffectArray.sort(requests, Order.String), result };
-};
+const readLatestChecks = (respond: (request: InterceptedRequest) => unknown) =>
+  withGitHub(respond, (github) => github.latestChecks("abc")).pipe(
+    Effect.map(({ requests, result }) => ({
+      requests: EffectArray.sort(requests, Order.String),
+      result,
+    })),
+  );
 
 // A check run's result from GitHub Actions.
 const check = (name: string, outcome: string, state: Check["state"]): Check => ({
@@ -58,9 +62,9 @@ const check = (name: string, outcome: string, state: Check["state"]): Check => (
 });
 
 describe("latestChecks", () => {
-  it("counts only the newest run of each check", async () => {
-    expect(
-      await readLatestChecks(
+  itEffect("counts only the newest run of each check", () =>
+    Effect.gen(function* () {
+      const checks = yield* readLatestChecks(
         listing(
           [
             // Listed newest first, as GitHub lists them, with a re-run of each check.
@@ -74,56 +78,58 @@ describe("latestChecks", () => {
           ],
           [],
         ),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
-      result: [
-        check("Merge Gate", "success", "passed"),
-        check("CI", "queued", "pending"),
-        { ...check("CI", "failure", "failed"), app: Option.some(OTHER_APP) },
-        { ...check("CI", "success", "passed"), app: Option.none() },
-      ],
-    });
-  });
+      );
+      expect(checks).toStrictEqual({
+        requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
+        result: [
+          check("Merge Gate", "success", "passed"),
+          check("CI", "queued", "pending"),
+          { ...check("CI", "failure", "failed"), app: Option.some(OTHER_APP) },
+          { ...check("CI", "success", "passed"), app: Option.none() },
+        ],
+      });
+    }),
+  );
 
-  it("counts a run as passed where GitHub counts it so for a required check", async () => {
-    const conclusions = [
-      "success",
-      "neutral",
-      "skipped",
-      "failure",
-      "cancelled",
-      "timed_out",
-      "action_required",
-      "stale",
-    ];
-    expect(
-      await readLatestChecks(
+  itEffect("counts a run as passed where GitHub counts it so for a required check", () =>
+    Effect.gen(function* () {
+      const conclusions = [
+        "success",
+        "neutral",
+        "skipped",
+        "failure",
+        "cancelled",
+        "timed_out",
+        "action_required",
+        "stale",
+      ];
+      const checks = yield* readLatestChecks(
         listing(
           EffectArray.map(conclusions, (conclusion, index) =>
             checkRun({ conclusion, id: index, name: conclusion }),
           ),
           [],
         ),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
-      result: [
-        check("success", "success", "passed"),
-        check("neutral", "neutral", "passed"),
-        check("skipped", "skipped", "passed"),
-        check("failure", "failure", "failed"),
-        check("cancelled", "cancelled", "failed"),
-        check("timed_out", "timed_out", "failed"),
-        check("action_required", "action_required", "failed"),
-        check("stale", "stale", "failed"),
-      ],
-    });
-  });
+      );
+      expect(checks).toStrictEqual({
+        requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
+        result: [
+          check("success", "success", "passed"),
+          check("neutral", "neutral", "passed"),
+          check("skipped", "skipped", "passed"),
+          check("failure", "failure", "failed"),
+          check("cancelled", "cancelled", "failed"),
+          check("timed_out", "timed_out", "failed"),
+          check("action_required", "action_required", "failed"),
+          check("stale", "stale", "failed"),
+        ],
+      });
+    }),
+  );
 
-  it("reads each commit status, with no app", async () => {
-    expect(
-      await readLatestChecks(
+  itEffect("reads each commit status, with no app", () =>
+    Effect.gen(function* () {
+      const checks = yield* readLatestChecks(
         listing(
           [],
           EffectArray.map(["success", "pending", "failure", "error"], (state) => ({
@@ -131,41 +137,44 @@ describe("latestChecks", () => {
             state,
           })),
         ),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
-      result: [
-        { ...check("ci/success", "success", "passed"), app: Option.none() },
-        { ...check("ci/pending", "pending", "pending"), app: Option.none() },
-        { ...check("ci/failure", "failure", "failed"), app: Option.none() },
-        { ...check("ci/error", "error", "failed"), app: Option.none() },
-      ],
-    });
-  });
+      );
+      expect(checks).toStrictEqual({
+        requests: [`GET api.github.com${checkRunsPath(1)}`, `GET api.github.com${statusPath(1)}`],
+        result: [
+          { ...check("ci/success", "success", "passed"), app: Option.none() },
+          { ...check("ci/pending", "pending", "pending"), app: Option.none() },
+          { ...check("ci/failure", "failure", "failed"), app: Option.none() },
+          { ...check("ci/error", "error", "failed"), app: Option.none() },
+        ],
+      });
+    }),
+  );
 
-  it("reads every page of check runs", async () => {
-    const firstPage = Array.from({ length: 100 }, (_, index) =>
-      checkRun({ conclusion: "success", id: index + 2, name: `check ${index + 2}` }),
-    );
-    const pages: Readonly<Record<string, unknown>> = {
-      [checkRunsPath(1)]: { check_runs: firstPage, total_count: 101 },
-      [checkRunsPath(2)]: {
-        check_runs: [checkRun({ conclusion: "failure", id: 1, name: "check 2" })],
-        total_count: 101,
-      },
-      [statusPath(1)]: { state: "pending", statuses: [], total_count: 0 },
-    };
-    const { requests, result } = await withGitHub(
-      ({ path }) => pages[path] ?? new Reply(404, { message: "Not Found" }),
-      (github) => github.latestChecks("abc"),
-    );
-    expect({ requests: EffectArray.sort(requests, Order.String), result }).toStrictEqual({
-      requests: [
-        `GET api.github.com${checkRunsPath(1)}`,
-        `GET api.github.com${checkRunsPath(2)}`,
-        `GET api.github.com${statusPath(1)}`,
-      ],
-      result: EffectArray.map(firstPage, ({ name }) => check(name, "success", "passed")),
-    });
-  });
+  itEffect("reads every page of check runs", () =>
+    Effect.gen(function* () {
+      const firstPage = Array.from({ length: 100 }, (_, index) =>
+        checkRun({ conclusion: "success", id: index + 2, name: `check ${index + 2}` }),
+      );
+      const pages: Readonly<Record<string, unknown>> = {
+        [checkRunsPath(1)]: { check_runs: firstPage, total_count: 101 },
+        [checkRunsPath(2)]: {
+          check_runs: [checkRun({ conclusion: "failure", id: 1, name: "check 2" })],
+          total_count: 101,
+        },
+        [statusPath(1)]: { state: "pending", statuses: [], total_count: 0 },
+      };
+      const { requests, result } = yield* withGitHub(
+        ({ path }) => pages[path] ?? new Reply(404, { message: "Not Found" }),
+        (github) => github.latestChecks("abc"),
+      );
+      expect({ requests: EffectArray.sort(requests, Order.String), result }).toStrictEqual({
+        requests: [
+          `GET api.github.com${checkRunsPath(1)}`,
+          `GET api.github.com${checkRunsPath(2)}`,
+          `GET api.github.com${statusPath(1)}`,
+        ],
+        result: EffectArray.map(firstPage, ({ name }) => check(name, "success", "passed")),
+      });
+    }),
+  );
 });

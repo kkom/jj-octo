@@ -1,9 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Result, Schema } from "effect";
 
 import { failureOf, withGitHub } from "../../testing/github-client";
 import { Reply } from "../../testing/intercepting-proxy";
+import { itEffect } from "../../testing/it-effect";
 import { pullRequest } from "../../testing/pull-requests";
 import { MarkReadyForReview } from "./documents";
 import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
@@ -14,42 +15,46 @@ const runsPath = (page: number) =>
   `/repos/owner/name/actions/runs?head_sha=abc&per_page=100&page=${page}`;
 
 describe("unfinishedRuns", () => {
-  it("lists the runs that haven't completed from every page, until one comes back short", async () => {
-    // A full first page, of which only run 100 is unfinished, then a short one with run 101.
-    const pages: Readonly<Record<string, unknown>> = {
-      [runsPath(1)]: {
-        workflow_runs: Array.from({ length: 100 }, (_, index) => ({
-          id: index + 1,
-          status: index === 99 ? "in_progress" : "completed",
-        })),
-      },
-      [runsPath(2)]: { workflow_runs: [{ id: 101, status: "queued" }] },
-    };
-    expect(
-      await withGitHub(
-        ({ path }) => pages[path],
-        (github) => github.unfinishedRuns("abc"),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${runsPath(1)}`, `GET api.github.com${runsPath(2)}`],
-      result: [WorkflowRunIdSchema.make("100"), WorkflowRunIdSchema.make("101")],
-    });
-  });
+  itEffect(
+    "lists the runs that haven't completed from every page, until one comes back short",
+    () =>
+      Effect.gen(function* () {
+        // A full first page, of which only run 100 is unfinished, then a short one with run 101.
+        const pages: Readonly<Record<string, unknown>> = {
+          [runsPath(1)]: {
+            workflow_runs: Array.from({ length: 100 }, (_, index) => ({
+              id: index + 1,
+              status: index === 99 ? "in_progress" : "completed",
+            })),
+          },
+          [runsPath(2)]: { workflow_runs: [{ id: 101, status: "queued" }] },
+        };
+        const outcome = yield* withGitHub(
+          ({ path }) => pages[path],
+          (github) => github.unfinishedRuns("abc"),
+        );
+        expect(outcome).toStrictEqual({
+          requests: [`GET api.github.com${runsPath(1)}`, `GET api.github.com${runsPath(2)}`],
+          result: [WorkflowRunIdSchema.make("100"), WorkflowRunIdSchema.make("101")],
+        });
+      }),
+  );
 
-  it("fails with the page it read, for an error response", async () => {
-    expect(
-      await withGitHub(
+  itEffect("fails with the page it read, for an error response", () =>
+    Effect.gen(function* () {
+      const outcome = yield* withGitHub(
         () => new Reply(500, { message: "answered 500" }),
         (github) => failureOf(github.unfinishedRuns("abc")),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${runsPath(1)}`],
-      result: {
-        message: `GET ${runsPath(1)} returned 500: {"message":"answered 500"}`,
-        status: 500,
-      },
-    });
-  });
+      );
+      expect(outcome).toStrictEqual({
+        requests: [`GET api.github.com${runsPath(1)}`],
+        result: {
+          message: `GET ${runsPath(1)} returned 500: {"message":"answered 500"}`,
+          status: 500,
+        },
+      });
+    }),
+  );
 });
 
 const pullsPath = (page: number) =>
@@ -70,26 +75,27 @@ const listed = (number: number, state: "closed" | "open") => ({
 });
 
 describe("pullRequestsFrom", () => {
-  it("lists the pull requests from every page, until one comes back short", async () => {
-    // A full first page, then a short one.
-    const all = [
-      listed(101, "open"),
-      ...Array.from({ length: 100 }, (_, index) => listed(100 - index, "closed")),
-    ];
-    const pages: Readonly<Record<string, unknown>> = {
-      [pullsPath(1)]: EffectArray.map(all.slice(0, 100), ({ github }) => github),
-      [pullsPath(2)]: EffectArray.map(all.slice(100), ({ github }) => github),
-    };
-    expect(
-      await withGitHub(
+  itEffect("lists the pull requests from every page, until one comes back short", () =>
+    Effect.gen(function* () {
+      // A full first page, then a short one.
+      const all = [
+        listed(101, "open"),
+        ...Array.from({ length: 100 }, (_, index) => listed(100 - index, "closed")),
+      ];
+      const pages: Readonly<Record<string, unknown>> = {
+        [pullsPath(1)]: EffectArray.map(all.slice(0, 100), ({ github }) => github),
+        [pullsPath(2)]: EffectArray.map(all.slice(100), ({ github }) => github),
+      };
+      const outcome = yield* withGitHub(
         ({ path }) => pages[path],
         (github) => github.pullRequestsFrom("claude/a"),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${pullsPath(1)}`, `GET api.github.com${pullsPath(2)}`],
-      result: EffectArray.map(all, ({ read }) => read),
-    });
-  });
+      );
+      expect(outcome).toStrictEqual({
+        requests: [`GET api.github.com${pullsPath(1)}`, `GET api.github.com${pullsPath(2)}`],
+        result: EffectArray.map(all, ({ read }) => read),
+      });
+    }),
+  );
 });
 
 // Cancels run 7 where GitHub answers the cancel with the status, and returns the outcome or how it
@@ -109,64 +115,77 @@ const cancel = (status: number) =>
 describe("cancelRun", () => {
   const request = "POST api.github.com/repos/owner/name/actions/runs/7/cancel";
 
-  it("cancels a run GitHub accepts the cancel of", async () => {
-    expect(await cancel(202)).toStrictEqual({
-      requests: [request],
-      result: { outcome: "cancelled" },
-    });
-  });
+  itEffect("cancels a run GitHub accepts the cancel of", () =>
+    Effect.gen(function* () {
+      const outcome = yield* cancel(202);
+      expect(outcome).toStrictEqual({
+        requests: [request],
+        result: { outcome: "cancelled" },
+      });
+    }),
+  );
 
-  it("reads GitHub's 409 as a run that had finished", async () => {
-    expect(await cancel(409)).toStrictEqual({
-      requests: [request],
-      result: { outcome: "finished" },
-    });
-  });
+  itEffect("reads GitHub's 409 as a run that had finished", () =>
+    Effect.gen(function* () {
+      const outcome = yield* cancel(409);
+      expect(outcome).toStrictEqual({
+        requests: [request],
+        result: { outcome: "finished" },
+      });
+    }),
+  );
 
-  it("fails with GitHub's own words for any other error", async () => {
-    expect(await cancel(403)).toStrictEqual({
-      requests: [request],
-      result: {
-        failed: {
-          message:
-            'POST /repos/owner/name/actions/runs/7/cancel returned 403: {"message":"answered 403"}',
-          status: 403,
+  itEffect("fails with GitHub's own words for any other error", () =>
+    Effect.gen(function* () {
+      const outcome = yield* cancel(403);
+      expect(outcome).toStrictEqual({
+        requests: [request],
+        result: {
+          failed: {
+            message:
+              'POST /repos/owner/name/actions/runs/7/cancel returned 403: {"message":"answered 403"}',
+            status: 403,
+          },
         },
-      },
-    });
-  });
+      });
+    }),
+  );
 });
 
 describe("closing a pull request", () => {
-  it("sets the pull request's state to closed, then comments on the pull request's issue", async () => {
-    const bodies: unknown[] = [];
-    const { requests } = await withGitHub(
-      ({ body }) => {
-        bodies.push(Result.getOrThrow(decodeJson(body)));
-        return {};
-      },
-      (github) =>
-        github
-          .closePullRequest(PullRequestNumberSchema.make(7))
-          .pipe(
-            Effect.andThen(github.commentOnPullRequest(PullRequestNumberSchema.make(7), "why")),
-          ),
-    );
-    expect({ bodies, requests }).toStrictEqual({
-      bodies: [{ state: "closed" }, { body: "why" }],
-      requests: [
-        "PATCH api.github.com/repos/owner/name/pulls/7",
-        "POST api.github.com/repos/owner/name/issues/7/comments",
-      ],
-    });
-  });
+  itEffect(
+    "sets the pull request's state to closed, then comments on the pull request's issue",
+    () =>
+      Effect.gen(function* () {
+        const bodies: unknown[] = [];
+        const { requests } = yield* withGitHub(
+          ({ body }) => {
+            bodies.push(Result.getOrThrow(decodeJson(body)));
+            return {};
+          },
+          (github) =>
+            github
+              .closePullRequest(PullRequestNumberSchema.make(7))
+              .pipe(
+                Effect.andThen(github.commentOnPullRequest(PullRequestNumberSchema.make(7), "why")),
+              ),
+        );
+        expect({ bodies, requests }).toStrictEqual({
+          bodies: [{ state: "closed" }, { body: "why" }],
+          requests: [
+            "PATCH api.github.com/repos/owner/name/pulls/7",
+            "POST api.github.com/repos/owner/name/issues/7/comments",
+          ],
+        });
+      }),
+  );
 });
 
 // Marks #7 ready for review, against a GitHub whose GraphQL API answers with `graphql`, and returns
 // the outcome or how it failed, with the body of each GraphQL request.
-const markReady = async (graphql: unknown, env: Readonly<Record<string, string>> = {}) => {
+const markReady = (graphql: unknown, env: Readonly<Record<string, string>> = {}) => {
   const bodies: unknown[] = [];
-  const outcome = await withGitHub(
+  return withGitHub(
     ({ body, path }) => {
       if (path === "/graphql") {
         bodies.push(Result.getOrThrow(decodeJson(body)));
@@ -180,8 +199,7 @@ const markReady = async (graphql: unknown, env: Readonly<Record<string, string>>
         Effect.catchTag("GitHubFailed", ({ message }) => Effect.succeed({ failed: message })),
       ),
     env,
-  );
-  return { ...outcome, bodies };
+  ).pipe(Effect.map((outcome) => ({ ...outcome, bodies })));
 };
 
 describe("markReadyForReview", () => {
@@ -194,38 +212,43 @@ describe("markReadyForReview", () => {
     variables: { pullRequestId: "PR_seven" },
   };
 
-  it("sends GraphQL's mutation for the pull request's node id", async () => {
-    expect(
-      await markReady({
+  itEffect("sends GraphQL's mutation for the pull request's node id", () =>
+    Effect.gen(function* () {
+      const outcome = yield* markReady({
         data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } },
-      }),
-    ).toStrictEqual({
-      bodies: [graphqlBody],
-      requests: graphqlRequests,
-      result: { marked: true },
-    });
-  });
+      });
+      expect(outcome).toStrictEqual({
+        bodies: [graphqlBody],
+        requests: graphqlRequests,
+        result: { marked: true },
+      });
+    }),
+  );
 
-  it("fails with the errors GitHub returns beside a 200", async () => {
-    expect(
-      await markReady({
+  itEffect("fails with the errors GitHub returns beside a 200", () =>
+    Effect.gen(function* () {
+      const outcome = yield* markReady({
         data: { markPullRequestReadyForReview: null },
         errors: [{ message: "Resource not accessible by integration" }],
-      }),
-    ).toStrictEqual({
-      bodies: [graphqlBody],
-      requests: graphqlRequests,
-      result: {
-        failed: "marking #7 ready for review failed: Resource not accessible by integration",
-      },
-    });
-  });
+      });
+      expect(outcome).toStrictEqual({
+        bodies: [graphqlBody],
+        requests: graphqlRequests,
+        result: {
+          failed: "marking #7 ready for review failed: Resource not accessible by integration",
+        },
+      });
+    }),
+  );
 
-  it("uses the GitHub proxy's own route in a Claude Code cloud session", async () => {
-    expect(await markReady({}, { CLAUDE_CODE_REMOTE: "true" })).toStrictEqual({
-      bodies: [],
-      requests: ["POST api.github.com/repos/owner/name/pulls/7/ccr/ready_for_review"],
-      result: { marked: true },
-    });
-  });
+  itEffect("uses the GitHub proxy's own route in a Claude Code cloud session", () =>
+    Effect.gen(function* () {
+      const outcome = yield* markReady({}, { CLAUDE_CODE_REMOTE: "true" });
+      expect(outcome).toStrictEqual({
+        bodies: [],
+        requests: ["POST api.github.com/repos/owner/name/pulls/7/ccr/ready_for_review"],
+        result: { marked: true },
+      });
+    }),
+  );
 });

@@ -4,7 +4,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 
-import { Array as EffectArray, Option, String as EffectString } from "effect";
+import { Array as EffectArray, Effect, Option, String as EffectString } from "effect";
 
 import { formatJson } from "../json";
 import { scratchDirectory } from "./scratch-repository";
@@ -77,45 +77,80 @@ const certificateFor = (host: string) => {
   return made;
 };
 
-// Listens on a free port of the loopback address, and returns the port.
-const listen = (server: Server) =>
-  new Promise<number>((resolve, reject) => {
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (address === null || typeof address === "string") {
-        reject(new Error(`expected a TCP address, got ${String(address)}`));
-      } else {
-        resolve(address.port);
-      }
-    });
-  });
-
-const closed = (server: Server) =>
-  new Promise<void>((resolve) => {
-    server.close(() => {
-      resolve();
-    });
-  });
+// Listens on a free port of the loopback address, and returns the port. The scope closes the
+// server, after `beforeClose` has ended the connections it holds open.
+const listen = (server: Server, beforeClose: () => void) =>
+  Effect.acquireRelease(
+    Effect.callback<number>((resume) => {
+      const onError = (error: Readonly<Error>) => {
+        resume(Effect.die(error));
+      };
+      server.once("error", onError);
+      server.listen(0, "127.0.0.1", () => {
+        server.off("error", onError);
+        const address = server.address();
+        resume(
+          address === null || typeof address === "string"
+            ? Effect.die(new Error(`expected a TCP address, got ${String(address)}`))
+            : Effect.succeed(address.port),
+        );
+      });
+    }),
+    () =>
+      Effect.callback<undefined>((resume) => {
+        beforeClose();
+        server.close(() => {
+          resume(Effect.undefined);
+        });
+      }),
+  );
 
 /**
  * Runs `run` against a proxy that answers each request to the host with the JSON `respond`
- * returns, or the `Reply`. Returns its result, and each CONNECT and request the proxy received, in order, as
- * `CONNECT host:port` or `GET host/path`.
+ * returns, or the `Reply`. Returns its result, and each CONNECT and request the proxy received, in
+ * order, as `CONNECT host:port` or `GET host/path`.
  */
-export const throughProxy = async <A>(
+export const throughProxy = <A, E, R>(
   host: string,
   respond: (request: InterceptedRequest) => unknown,
-  run: (proxy: InterceptingProxy) => Promise<A>,
-): Promise<{ readonly log: readonly string[]; readonly result: A }> => {
-  const { cert, key } = certificateFor(host);
-  const caFile = path.join(scratchDirectory("proxy-"), "ca.pem");
-  writeFileSync(caFile, cert);
-  const log: string[] = [];
+  run: (proxy: InterceptingProxy) => Effect.Effect<A, E, R>,
+): Effect.Effect<{ readonly log: readonly string[]; readonly result: A }, E, R> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { cert, key } = certificateFor(host);
+      const caFile = path.join(scratchDirectory("proxy-"), "ca.pem");
+      writeFileSync(caFile, cert);
+      const log: string[] = [];
+      const record = (line: string) => {
+        log.push(line);
+      };
+      const origin = originServer({ cert, key, record, respond });
+      const port = yield* listen(origin, () => {
+        origin.closeAllConnections();
+      });
+      const proxy = proxyServer(port, record);
+      const proxyPort = yield* listen(proxy.server, proxy.destroySockets);
+      const result = yield* run({ ca: cert, caFile, url: `http://127.0.0.1:${proxyPort}` });
+      return { log: [...log], result };
+    }),
+  );
 
-  const origin = createHttpsServer({ cert, key }, (request, response) => {
+// The HTTPS server inside the tunnel, which records each request and answers it as `respond` does.
+const originServer = ({
+  cert,
+  key,
+  record,
+  respond,
+}: {
+  readonly cert: string;
+  readonly key: string;
+  readonly record: (line: string) => void;
+  readonly respond: (request: InterceptedRequest) => unknown;
+}) =>
+  createHttpsServer({ cert, key }, (request, response) => {
     const method = request.method ?? "";
     const requestPath = request.url ?? "";
-    log.push(`${method} ${request.headers.host ?? ""}${requestPath}`);
+    record(`${method} ${request.headers.host ?? ""}${requestPath}`);
     const chunks: Buffer[] = [];
     request.on("data", (chunk: Buffer) => {
       chunks.push(chunk);
@@ -132,11 +167,12 @@ export const throughProxy = async <A>(
       response.end(formatJson(body));
     });
   });
-  const port = await listen(origin);
 
-  // The plain TCP server has no `closeAllConnections`, so its sockets are kept to close them.
+// The proxy, which records each CONNECT and tunnels it to the origin's port. A plain TCP server has
+// no `closeAllConnections`, so it keeps its sockets for `destroySockets` to close.
+const proxyServer = (port: number, record: (line: string) => void) => {
   const sockets = new Set<Socket>();
-  const proxy = createServer((client) => {
+  const server = createServer((client) => {
     sockets.add(client);
     client.on("close", () => {
       sockets.delete(client);
@@ -159,7 +195,7 @@ export const throughProxy = async <A>(
         EffectArray.headNonEmpty(EffectString.split(head, "\r\n")),
         " ",
       );
-      log.push(`${method} ${target}`);
+      record(`${method} ${target}`);
       const tunnel = connect(port, "127.0.0.1", () => {
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         tunnel.write(Buffer.from(EffectString.slice(end.value + 4)(head), "latin1"));
@@ -172,16 +208,10 @@ export const throughProxy = async <A>(
     };
     client.on("data", onData);
   });
-  const url = `http://127.0.0.1:${await listen(proxy)}`;
-
-  try {
-    const result = await run({ ca: cert, caFile, url });
-    return { log: [...log], result };
-  } finally {
+  const destroySockets = () => {
     for (const socket of sockets) {
       socket.destroy();
     }
-    origin.closeAllConnections();
-    await Promise.all([closed(origin), closed(proxy)]);
-  }
+  };
+  return { destroySockets, server };
 };
