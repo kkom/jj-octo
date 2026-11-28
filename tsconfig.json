@@ -19,7 +19,7 @@
           "abortControllerInEffect": "error",
           "acquireReleaseDisposable": "error",
           "allOfMapToForEach": "error",
-          "anyUnknownInErrorContext": "off", // undecided
+          "anyUnknownInErrorContext": "error",
           // jj-octo builds on Effect's unstable modules on purpose, such as `effect/cli`, and
           // no package imports its modules, so neither exposing nor using one is a problem.
           "apiStabilityLeak": "off",
@@ -57,7 +57,7 @@
           // Its analysis can make the type check report circular instantiations (TS2615, TS5115),
           // which stock TypeScript doesn't.
           "experimentalApiUsage": "off",
-          "extendsNativeError": "off", // undecided
+          "extendsNativeError": "error",
           "failCauseToConstructor": "error",
           "flatMapConditionalToFilterOrFail": "error",
           "flatMapIdentityToFlatten": "error",
@@ -88,7 +88,7 @@
           "globalTimersInEffect": "error",
           "instanceOfSchema": "error",
           "layerMergeAllWithDependencies": "error",
-          "lazyEffect": "off", // undecided
+          "lazyEffect": "error",
           "lazyPromiseInEffectSync": "error",
           "leakingRequirements": "error",
           "manualMetricTapToTrack": "error",
@@ -115,7 +115,7 @@
           "multipleCatchTag": "error",
           "multipleEffectProvide": "error",
           "nestedEffectGenYield": "error",
-          "newPromise": "off", // undecided
+          "newPromise": "error",
           "newSchemaClass": "error",
           "nodeBuiltinImport": "off", // undecided
           "nonObjectEffectServiceType": "error",
