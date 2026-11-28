@@ -9,8 +9,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     // Effect's diagnostics, which `effect-tsgo tsc` reports in the type check. Every rule is
-    // set here, since a rule left out takes the plugin's default. A rule marked "undecided" is
-    // off until a decision fixes what it finds, or gives the reason it stays off.
+    // set here, since a rule left out takes the plugin's default. A rule that's off says why.
     // `scripts/effect-diagnostics.test.ts` holds this to the plugin's rules.
     "plugins": [
       {
@@ -117,7 +116,7 @@
           "nestedEffectGenYield": "error",
           "newPromise": "error",
           "newSchemaClass": "error",
-          "nodeBuiltinImport": "off", // undecided
+          "nodeBuiltinImport": "error",
           "nonObjectEffectServiceType": "error",
           "obsoleteMatchImport": "error",
           "obsoleteSchemaImport": "error",

@@ -1,13 +1,21 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { createServer as createHttpsServer } from "node:https";
 import { connect, createServer, type Server, type Socket } from "node:net";
-import path from "node:path";
 
-import { Array as EffectArray, Effect, Option, String as EffectString } from "effect";
+import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
+import {
+  Array as EffectArray,
+  Effect,
+  FileSystem,
+  Match,
+  Option,
+  Path,
+  String as EffectString,
+} from "effect";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import { readOutput } from "../clients/process";
 import { formatJson } from "../json";
-import { scratchDirectory } from "./scratch-repository";
+import { scratchDirectory } from "./scratch-process";
 
 /**
  * A proxy that answers HTTPS requests to one host itself, as a sandbox's proxy does. It accepts
@@ -40,16 +48,27 @@ export class Reply {
   }
 }
 
-// Each host's certificate and key, made once per run, since openssl takes a while.
+// Each host's certificate and key, made once per process, since openssl takes a while.
 const certificates = new Map<string, { readonly cert: string; readonly key: string }>();
 
-const certificateFor = (host: string) => {
-  let made = certificates.get(host);
-  if (made === undefined) {
-    const directory = scratchDirectory("certificate-");
-    execFileSync(
-      "openssl",
-      [
+const certificateFor = (
+  host: string,
+): Effect.Effect<
+  { readonly cert: string; readonly key: string },
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const known = certificates.get(host);
+      if (known !== undefined) {
+        return known;
+      }
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const directory = yield* scratchDirectory("certificate-");
+      const args = [
         "req",
         "-x509",
         "-newkey",
@@ -67,15 +86,22 @@ const certificateFor = (host: string) => {
         `/CN=${host}`,
         "-addext",
         `subjectAltName=DNS:${host}`,
-      ],
-      { cwd: directory, stdio: "ignore" },
-    );
-    const read = (file: string) => readFileSync(path.join(directory, file), "utf8");
-    made = { cert: read("cert.pem"), key: read("key.pem") };
-    certificates.set(host, made);
-  }
-  return made;
-};
+      ];
+      const { exitCode, stderr } = yield* Effect.scoped(
+        Effect.flatMap(
+          spawner.spawn(ChildProcess.make("openssl", args, { cwd: directory, stdin: "ignore" })),
+          readOutput,
+        ),
+      ).pipe(Effect.orDie);
+      if (exitCode !== 0) {
+        return yield* Effect.die(new Error(`openssl failed:\n${stderr}`));
+      }
+      const read = (file: string) => Effect.orDie(fs.readFileString(path.join(directory, file)));
+      const made = { cert: yield* read("cert.pem"), key: yield* read("key.pem") };
+      certificates.set(host, made);
+      return made;
+    }),
+  );
 
 // Listens on a free port of the loopback address, and returns the port. The scope closes the
 // server, after `beforeClose` has ended the connections it holds open.
@@ -114,20 +140,24 @@ export const throughProxy = <A, E, R>(
   host: string,
   respond: (request: InterceptedRequest) => unknown,
   run: (proxy: InterceptingProxy) => Effect.Effect<A, E, R>,
-): Effect.Effect<{ readonly log: readonly string[]; readonly result: A }, E, R> =>
+): Effect.Effect<
+  { readonly log: readonly string[]; readonly result: A },
+  E,
+  R | ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+> =>
   Effect.scoped(
     Effect.gen(function* () {
-      const { cert, key } = certificateFor(host);
-      const caFile = path.join(scratchDirectory("proxy-"), "ca.pem");
-      writeFileSync(caFile, cert);
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { cert, key } = yield* certificateFor(host);
+      const directory = yield* scratchDirectory("proxy-");
+      const caFile = path.join(directory, "ca.pem");
+      yield* Effect.orDie(fs.writeFileString(caFile, cert));
       const log: string[] = [];
       const record = (line: string) => {
         log.push(line);
       };
-      const origin = originServer({ cert, key, record, respond });
-      const port = yield* listen(origin, () => {
-        origin.closeAllConnections();
-      });
+      const port = yield* serveOrigin({ cert, key, record, respond });
       const proxy = proxyServer(port, record);
       const proxyPort = yield* listen(proxy.server, proxy.destroySockets);
       const result = yield* run({ ca: cert, caFile, url: `http://127.0.0.1:${proxyPort}` });
@@ -136,7 +166,8 @@ export const throughProxy = <A, E, R>(
   );
 
 // The HTTPS server inside the tunnel, which records each request and answers it as `respond` does.
-const originServer = ({
+// It returns the server's port, and stops with the scope.
+const serveOrigin = ({
   cert,
   key,
   record,
@@ -147,29 +178,38 @@ const originServer = ({
   readonly record: (line: string) => void;
   readonly respond: (request: InterceptedRequest) => unknown;
 }) =>
-  createHttpsServer({ cert, key }, (request, response) => {
-    const method = request.method ?? "";
-    const requestPath = request.url ?? "";
-    record(`${method} ${request.headers.host ?? ""}${requestPath}`);
-    const chunks: Buffer[] = [];
-    request.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-    request.on("end", () => {
-      const answer = respond({
-        body: Buffer.concat(chunks).toString("utf8"),
-        method,
-        path: requestPath,
-      });
-      const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
-      response.statusCode = status;
-      response.setHeader("content-type", "application/json");
-      response.end(formatJson(body));
-    });
+  Effect.gen(function* () {
+    const server = yield* Effect.orDie(
+      BunHttpServer.make({ hostname: "127.0.0.1", port: 0, tls: { cert, key } }),
+    );
+    yield* server.serve(
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        record(`${request.method} ${request.headers["host"] ?? ""}${request.url}`);
+        const answer = respond({
+          body: yield* request.text,
+          method: request.method,
+          path: request.url,
+        });
+        const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
+        return HttpServerResponse.text(formatJson(body), {
+          contentType: "application/json",
+          status,
+        });
+      }).pipe(Effect.orDie),
+    );
+    return yield* Match.value(server.address).pipe(
+      Match.tag("UnixPathAddress", ({ path }) =>
+        Effect.die(new Error(`expected a TCP address, got ${path}`)),
+      ),
+      Match.tag("InetAddressV4", "InetAddressV6", ({ port }) => Effect.succeed(port)),
+      Match.exhaustive,
+    );
   });
 
 // The proxy, which records each CONNECT and tunnels it to the origin's port. A plain TCP server has
-// no `closeAllConnections`, so it keeps its sockets for `destroySockets` to close.
+// no `closeAllConnections`, so it keeps both ends of each tunnel for `destroySockets` to close.
+// The origin then has no connection left when its scope stops it, so its graceful stop ends.
 const proxyServer = (port: number, record: (line: string) => void) => {
   const sockets = new Set<Socket>();
   const server = createServer((client) => {
@@ -201,6 +241,10 @@ const proxyServer = (port: number, record: (line: string) => void) => {
         tunnel.write(Buffer.from(EffectString.slice(end.value + 4)(head), "latin1"));
         client.pipe(tunnel);
         tunnel.pipe(client);
+      });
+      sockets.add(tunnel);
+      tunnel.on("close", () => {
+        sockets.delete(tunnel);
       });
       tunnel.on("error", () => {
         client.destroy();

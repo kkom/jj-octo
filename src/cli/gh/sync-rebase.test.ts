@@ -1,63 +1,90 @@
-import { afterAll, beforeEach, describe, expect } from "bun:test";
+import { describe, expect } from "bun:test";
 
 import { Array as EffectArray, Effect, String as EffectString } from "effect";
 
 import { moveTrunkOnGitHub } from "../../testing/branch-changes";
 import { itEffect } from "../../testing/it-effect";
-import {
-  pushedStack,
-  removeScratchRepositories,
-  type ScratchRepository,
-} from "../../testing/scratch-repository";
+import { pushedStack } from "../../testing/scratch-repository";
 import { syncing } from "../../testing/sync";
 import { lines } from "./stack/changes";
 
-afterAll(removeScratchRepositories);
-
 const OPERATION = String.raw`description.first_line() ++ "\n"`;
 
+// A stack of `a` and `b`, and a second stack, `c`, which conflicts with what `moveTrunkOnGitHub`
+// adds to the trunk.
+const withConflictingStack = Effect.gen(function* () {
+  const repository = yield* pushedStack("a", "b");
+  yield* repository.jj("new", "main", "-m", "c");
+  yield* repository.jj("bookmark", "create", "c", "-r", "@");
+  yield* repository.write("trunk.txt", "c's own\n");
+  return repository;
+});
+
 describe("sync, with several stacks to rebase", () => {
-  let repository: ScratchRepository;
-
-  // A second stack, `c`, which conflicts with what `moveTrunkOnGitHub` adds to the trunk.
-  beforeEach(() => {
-    repository = pushedStack("a", "b");
-    repository.jj("new", "main", "-m", "c");
-    repository.jj("bookmark", "create", "c", "-r", "@");
-    repository.write("trunk.txt", "c's own\n");
-  });
-
   itEffect("rebases the stacks in one jj operation, and leaves no other operation", () =>
     Effect.gen(function* () {
-      repository.jj("new", "main", "-m", "d");
-      repository.jj("bookmark", "create", "d", "-r", "@");
-      moveTrunkOnGitHub(repository);
-      const before = lines(repository.jj("operation", "log", "--no-graph", "-T", OPERATION));
+      const repository = yield* withConflictingStack;
+      yield* repository.jj("new", "main", "-m", "d");
+      yield* repository.jj("bookmark", "create", "d", "-r", "@");
+      yield* moveTrunkOnGitHub(repository);
+      const operationsBefore = yield* repository.jj(
+        "operation",
+        "log",
+        "--no-graph",
+        "-T",
+        OPERATION,
+      );
+      const before = lines(operationsBefore);
       yield* syncing(repository);
-      const after = lines(repository.jj("operation", "log", "--no-graph", "-T", OPERATION));
+      const operationsAfter = yield* repository.jj(
+        "operation",
+        "log",
+        "--no-graph",
+        "-T",
+        OPERATION,
+      );
+      const after = lines(operationsAfter);
       expect(
         EffectArray.map(
           after.slice(0, after.length - before.length),
           (line) => EffectString.split(line, " ")[0],
         ),
       ).toEqual(["rebase", "fetch"]);
-      expect([repository.files("b"), repository.files("d")]).toStrictEqual([
+      const filesOfB = yield* repository.files("b");
+      const filesOfD = yield* repository.files("d");
+      expect([filesOfB, filesOfD]).toStrictEqual([
         ["a.txt", "b.txt", "base.txt", "trunk.txt"],
         ["base.txt", "trunk.txt"],
       ]);
-      expect(repository.jj("log", "--no-graph", "-r", "c-", "-T", "description")).toBe("base\n");
+      const parent = yield* repository.jj("log", "--no-graph", "-r", "c-", "-T", "description");
+      expect(parent).toBe("base\n");
     }),
   );
 
   itEffect("leaves the stacks that a merge joins where one conflicts with the moved trunk", () =>
     Effect.gen(function* () {
-      repository.jj("new", "b", "c", "-m", "both");
-      moveTrunkOnGitHub(repository);
+      const repository = yield* withConflictingStack;
+      yield* repository.jj("new", "b", "c", "-m", "both");
+      yield* moveTrunkOnGitHub(repository);
       yield* syncing(repository);
-      expect(repository.jj("log", "--no-graph", "-r", "conflicts()", "-T", "change_id")).toBe("");
-      expect(repository.jj("log", "--no-graph", "-r", "a- | c-", "-T", "description")).toBe(
-        "base\n",
+      const conflicts = yield* repository.jj(
+        "log",
+        "--no-graph",
+        "-r",
+        "conflicts()",
+        "-T",
+        "change_id",
       );
+      const parents = yield* repository.jj(
+        "log",
+        "--no-graph",
+        "-r",
+        "a- | c-",
+        "-T",
+        "description",
+      );
+      expect(conflicts).toBe("");
+      expect(parents).toBe("base\n");
     }),
   );
 });

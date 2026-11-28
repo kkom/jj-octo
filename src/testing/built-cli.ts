@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import {
   Array as EffectArray,
   Effect,
@@ -10,7 +8,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { readOutput } from "../clients/process";
 
-const dist = path.join(import.meta.dirname, "..", "..", "dist");
+const dist = new URL("../../dist", import.meta.url).pathname;
 
 /**
  * What `bun run test` builds first: the file npm publishes, run through its shebang as an
@@ -20,8 +18,8 @@ export const builds: readonly {
   readonly command: readonly [string, ...string[]];
   readonly name: string;
 }[] = [
-  { command: [path.join(dist, "jj-octo.js")], name: "the built file" },
-  { command: [path.join(dist, "jj-octo")], name: "the standalone executable" },
+  { command: [`${dist}/jj-octo.js`], name: "the built file" },
+  { command: [`${dist}/jj-octo`], name: "the standalone executable" },
 ];
 
 // The environment of the tests, without the proxy settings it may hold, which would otherwise

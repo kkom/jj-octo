@@ -1,27 +1,22 @@
-import { afterAll, describe, expect } from "bun:test";
-import path from "node:path";
+import { describe, expect } from "bun:test";
 
-import { Array as EffectArray, Effect } from "effect";
+import { Array as EffectArray, Effect, Path } from "effect";
 
 import { gitClone } from "../../testing/git-clone";
 import { itEffect, provideSetup } from "../../testing/it-effect";
-import {
-  removeScratchRepositories,
-  scratchDirectory,
-  scratchRepository,
-} from "../../testing/scratch-repository";
+import { scratchDirectory } from "../../testing/scratch-process";
+import { scratchRepository } from "../../testing/scratch-repository";
 import { problems } from "./doctor";
 import { init } from "./init";
 import { NotSetUp } from "./setup";
-
-afterAll(removeScratchRepositories);
 
 const INIT = "; run `jj-octo init`";
 
 describe("problems", () => {
   itEffect("finds what init sets up in a plain git clone, and nothing once init has", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
       const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         `this checkout isn't a jj repository colocated with git${INIT}`,
@@ -34,10 +29,11 @@ describe("problems", () => {
 
   itEffect("takes jj's own trunk() alias for the default branch", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
       // Jj sets `trunk()` to `main@origin`, without the quotes init writes.
-      clone.jj("git", "init", "--colocate");
-      clone.jj("bookmark", "track", "main", "--remote", "origin");
+      yield* clone.jj("git", "init", "--colocate");
+      yield* clone.jj("bookmark", "track", "main", "--remote", "origin");
       // The changes jj made without an identity count as part of the identity's problem.
       const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
@@ -50,9 +46,12 @@ describe("problems", () => {
 
   itEffect("finds only that a git worktree isn't a jj repository", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
-      const worktree = path.join(scratchDirectory("worktree-"), "checkout");
-      clone.git("worktree", "add", "--detach", worktree);
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
+      const path = yield* Path.Path;
+      const directory = yield* scratchDirectory("worktree-");
+      const worktree = path.join(directory, "checkout");
+      yield* clone.git("worktree", "add", "--detach", worktree);
       const found = yield* problems.pipe(provideSetup(clone.layerAt(worktree)));
       expect(found).toStrictEqual([
         "this is a git worktree, where jj would make a second repository; run `jj workspace add` in the main checkout instead",
@@ -62,9 +61,10 @@ describe("problems", () => {
 
   itEffect("tells to set an identity where neither jj nor git has one", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
-      clone.git("config", "--unset", "user.name");
-      clone.git("config", "--unset", "user.email");
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
+      yield* clone.git("config", "--unset", "user.name");
+      yield* clone.git("config", "--unset", "user.email");
       const identity = [
         "neither jj nor git has user.name; set it with `jj config set --user user.name`",
         "neither jj nor git has user.email; set it with `jj config set --user user.email`",
@@ -78,9 +78,10 @@ describe("problems", () => {
 
   itEffect("finds a trunk() that isn't the default branch", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
       yield* init.pipe(provideSetup(clone.layer));
-      clone.jj("config", "set", "--repo", 'revset-aliases."trunk()"', "root()");
+      yield* clone.jj("config", "set", "--repo", 'revset-aliases."trunk()"', "root()");
       const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         `trunk() isn't main@origin, GitHub's default branch, fetched and tracked${INIT}`,
@@ -90,9 +91,10 @@ describe("problems", () => {
 
   itEffect("runs the other checks where origin can't be read", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
       yield* init.pipe(provideSetup(clone.layer));
-      clone.git("remote", "set-url", "origin", "/nonexistent");
+      yield* clone.git("remote", "set-url", "origin", "/nonexistent");
       const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         EffectArray.join(

@@ -1,15 +1,13 @@
-import { afterAll, describe, expect } from "bun:test";
+import { describe, expect } from "bun:test";
 
 import { Effect } from "effect";
 
 import { fakeGitHub } from "../../../testing/fake-github";
 import { itEffect } from "../../../testing/it-effect";
 import { openPullRequest, stackNumbered, stackOf } from "../../../testing/pull-requests";
-import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
+import { scratchRepository } from "../../../testing/scratch-repository";
 import { githubWithThree, submitIn } from "../../../testing/submit";
 import { SeveralStacks } from "./stacks";
-
-afterAll(removeScratchRepositories);
 
 // How submit changes the GitHub stacks its pull requests are in.
 describe("submit's stacks", () => {
@@ -17,8 +15,8 @@ describe("submit's stacks", () => {
   // in its place: GitHub adds only above the closed one, whose head no new pull request is on.
   itEffect("registers the stack again where its top pull request was closed without merging", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
-      repository.stack("a", "b");
+      const repository = yield* scratchRepository;
+      yield* repository.stack("a", "b");
       const github = fakeGitHub({ a: openPullRequest("main", 1, "a") }, stackOf(1, 2));
       yield* submitIn(repository, github);
       expect(github.calls).toEqual(["unstack #7", "open b on a as a draft", "create stack 1,99"]);
@@ -32,8 +30,8 @@ describe("submit's stacks", () => {
     "reorders by dissolving, parking on the trunk, pushing, then rebasing and registering",
     () =>
       Effect.gen(function* () {
-        const repository = scratchRepository();
-        repository.stack("a", "c", "b");
+        const repository = yield* scratchRepository;
+        yield* repository.stack("a", "c", "b");
         const github = githubWithThree();
         yield* submitIn(repository, github);
         expect(github.calls).toEqual([
@@ -51,8 +49,8 @@ describe("submit's stacks", () => {
   // another stack would dissolve that stack, so it's left to an explicit `jj gh dissolve`.
   itEffect("fails without changing GitHub where the pull requests belong to several stacks", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
-      repository.stack("a", "b", "c");
+      const repository = yield* scratchRepository;
+      yield* repository.stack("a", "b", "c");
       const github = githubWithThree([stackNumbered(9, 1, 2), stackNumbered(7, 3)]);
       const failure = yield* Effect.flip(submitIn(repository, github));
       expect(failure).toStrictEqual(
@@ -67,8 +65,8 @@ describe("submit's stacks", () => {
 
   itEffect("appends to the stack that's left once the other is dissolved", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
-      repository.stack("a", "b", "c");
+      const repository = yield* scratchRepository;
+      yield* repository.stack("a", "b", "c");
       const github = githubWithThree([stackNumbered(9, 1, 2)]);
       yield* submitIn(repository, github);
       expect(github.calls).toStrictEqual(["add 3 to #9"]);

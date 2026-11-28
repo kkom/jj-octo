@@ -1,9 +1,10 @@
-import { type Effect, String as EffectString } from "effect";
+import { Effect, type Scope, String as EffectString } from "effect";
 
 import { type SubmitFailed, submit } from "../cli/gh/stack/push";
 import type { RemoteStack } from "../clients/github/types";
 import { fakeGitHub, type FakeGitHubOptions, inRepository } from "./fake-github";
 import { openPullRequest, stackOf } from "./pull-requests";
+import type { ScratchServices } from "./scratch-process";
 import { pushedStack, type ScratchRepository } from "./scratch-repository";
 
 /** Submits the revision in the repository, against the fake GitHub. */
@@ -26,16 +27,22 @@ export const submitIn = (
   submit(revision, { draft, overwriteDescriptions }).pipe(inRepository(repository, github, env));
 
 /** The revision's description. */
-export const description = (repository: ScratchRepository, revision: string): string =>
-  EffectString.trimEnd(repository.jj("log", "--no-graph", "-r", revision, "-T", "description"));
+export const description = (
+  repository: ScratchRepository,
+  revision: string,
+): Effect.Effect<string> =>
+  Effect.map(repository.jj("log", "--no-graph", "-r", revision, "-T", "description"), (printed) =>
+    EffectString.trimEnd(printed),
+  );
 
 /** A stack of `a` and `b`, pushed with `a` described as three paragraphs. */
-export const pushed = (): ScratchRepository => {
-  const repository = pushedStack("a", "b");
-  repository.jj("describe", "-r", "a", "-m", "a\n\nfirst\n\nsecond");
-  repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
-  return repository;
-};
+export const pushed: Effect.Effect<ScratchRepository, never, ScratchServices | Scope.Scope> =
+  Effect.gen(function* () {
+    const repository = yield* pushedStack("a", "b");
+    yield* repository.jj("describe", "-r", "a", "-m", "a\n\nfirst\n\nsecond");
+    yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+    return repository;
+  });
 
 /** A fake GitHub with pull requests #1 for `a`, with the title and body, and #2 for `b`. */
 export const githubWith = (title: string, body: string): ReturnType<typeof fakeGitHub> =>

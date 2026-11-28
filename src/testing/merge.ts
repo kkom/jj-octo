@@ -16,9 +16,9 @@ export const openPullRequestsAB = {
 /** GitHub reports the pull requests `squashMergeOnGitHub` merged, and merges as `onMerge` says. */
 export const mergingIn = (
   repository: ScratchRepository,
-  onMerge: () => void,
+  onMerge: Effect.Effect<void>,
 ): Pick<FakeGitHubOptions, "onMerge" | "pullRequestsFrom"> => ({
-  onMerge,
+  onMerge: () => onMerge,
   pullRequestsFrom: repository.pullRequestsFrom,
 });
 

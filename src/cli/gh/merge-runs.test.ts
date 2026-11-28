@@ -1,4 +1,4 @@
-import { afterAll, describe, expect } from "bun:test";
+import { describe, expect } from "bun:test";
 
 import { Effect } from "effect";
 
@@ -7,38 +7,42 @@ import { fakeGitHub, inRepository } from "../../testing/fake-github";
 import { itEffect } from "../../testing/it-effect";
 import { mergeIn, mergingIn, openPullRequestsAB } from "../../testing/merge";
 import { stackOf } from "../../testing/pull-requests";
-import { pushedStack, removeScratchRepositories } from "../../testing/scratch-repository";
+import { pushedStack } from "../../testing/scratch-repository";
 import { merge } from "./merge";
-
-afterAll(removeScratchRepositories);
 
 // A stack of `a` and `b`, merged up to `b`, whose head commits have workflow runs: one running and
 // one completed for `a`, and one queued for `b`. Cancelling `a`'s running one is forbidden where
 // `forbidden` says.
-const mergedWithRuns = (forbidden = false) => {
-  const repository = pushedStack("a", "b");
-  const github = fakeGitHub(openPullRequestsAB, stackOf(1, 2), {
-    ...mergingIn(repository, () => {
-      squashMergeOnGitHub(repository, "a", { deleted: false });
-      squashMergeOnGitHub(repository, "b", { deleted: false });
-    }),
-    runs: {
-      [repository.commitOf("a")]: [
-        { cancelForbidden: forbidden, completed: false, id: "11" },
-        { completed: true, id: "12" },
-      ],
-      [repository.commitOf("b")]: [{ completed: false, id: "21" }],
-    },
+const mergedWithRuns = (forbidden = false) =>
+  Effect.gen(function* () {
+    const repository = yield* pushedStack("a", "b");
+    const commitA = yield* repository.commitOf("a");
+    const commitB = yield* repository.commitOf("b");
+    const github = fakeGitHub(openPullRequestsAB, stackOf(1, 2), {
+      ...mergingIn(
+        repository,
+        Effect.gen(function* () {
+          yield* squashMergeOnGitHub(repository, "a", { deleted: false });
+          yield* squashMergeOnGitHub(repository, "b", { deleted: false });
+        }),
+      ),
+      runs: {
+        [commitA]: [
+          { cancelForbidden: forbidden, completed: false, id: "11" },
+          { completed: true, id: "12" },
+        ],
+        [commitB]: [{ completed: false, id: "21" }],
+      },
+    });
+    return { github, repository };
   });
-  return { github, repository };
-};
 
 describe("merge", () => {
   itEffect(
     "cancels every merged pull request's workflow runs that haven't completed, with --cancel-pr-runs",
     () =>
       Effect.gen(function* () {
-        const { github, repository } = mergedWithRuns();
+        const { github, repository } = yield* mergedWithRuns();
         yield* merge("b", { allWorkspaces: false, cancelPrRuns: true }).pipe(
           inRepository(repository, github),
         );
@@ -52,7 +56,7 @@ describe("merge", () => {
 
   itEffect("still cancels the other runs where one cancel fails, then fails", () =>
     Effect.gen(function* () {
-      const { github, repository } = mergedWithRuns(true);
+      const { github, repository } = yield* mergedWithRuns(true);
       const failure = yield* Effect.flip(
         merge("b", { allWorkspaces: false, cancelPrRuns: true }).pipe(
           inRepository(repository, github),
@@ -68,7 +72,7 @@ describe("merge", () => {
 
   itEffect("leaves the merged pull requests' workflow runs alone without --cancel-pr-runs", () =>
     Effect.gen(function* () {
-      const { github, repository } = mergedWithRuns();
+      const { github, repository } = yield* mergedWithRuns();
       yield* mergeIn(repository, github, "b");
       expect(github.calls).toEqual(["merge the stack up to #2"]);
     }),

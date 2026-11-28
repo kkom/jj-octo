@@ -1,4 +1,4 @@
-import { afterAll, describe, expect } from "bun:test";
+import { describe, expect } from "bun:test";
 
 import { Effect } from "effect";
 
@@ -6,18 +6,16 @@ import { conflictWithTrunk } from "../../testing/conflicts";
 import { fakeGitHub, inRepository } from "../../testing/fake-github";
 import { itEffect } from "../../testing/it-effect";
 import { openPullRequest } from "../../testing/pull-requests";
-import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
+import { scratchRepository } from "../../testing/scratch-repository";
 import { log } from "./log";
-
-afterAll(removeScratchRepositories);
 
 describe("log", () => {
   itEffect("prints each change top first, with its pull request and whether it is pushed", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
-      repository.stack("a", "b", "c");
-      repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
-      repository.jj("describe", "-r", "b", "-m", "b, reworded");
+      const repository = yield* scratchRepository;
+      yield* repository.stack("a", "b", "c");
+      yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+      yield* repository.jj("describe", "-r", "b", "-m", "b, reworded");
       const github = fakeGitHub(
         {
           a: { ...openPullRequest("main", 1, "a"), draft: false },
@@ -36,10 +34,10 @@ describe("log", () => {
 
   itEffect("marks the changes with conflicts, and shows them as any other", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
-      repository.stack("a", "b", "c");
-      repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
-      conflictWithTrunk(repository, "b", { pushed: ["a"] });
+      const repository = yield* scratchRepository;
+      yield* repository.stack("a", "b", "c");
+      yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+      yield* conflictWithTrunk(repository, "b", { pushed: ["a"] });
       const github = fakeGitHub(
         { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
         [],

@@ -1,12 +1,15 @@
 import {
   Array as EffectArray,
   Effect,
+  type FileSystem,
   Layer,
+  type Path,
   Option,
   Redacted,
   String as EffectString,
 } from "effect";
 import { FetchHttpClient } from "effect/http";
+import type { ChildProcessSpawner } from "effect/process";
 
 import { GitHub, GitHubLive } from "../clients/github/client";
 import type { GitHubFailed } from "../clients/github/failure";
@@ -21,7 +24,11 @@ export const withGitHub = <A, E>(
   respond: (request: InterceptedRequest) => unknown,
   use: (github: GitHub["Service"]) => Effect.Effect<A, E>,
   env: Readonly<Record<string, string>> = {},
-): Effect.Effect<{ readonly requests: readonly string[]; readonly result: A }, E> =>
+): Effect.Effect<
+  { readonly requests: readonly string[]; readonly result: A },
+  E,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+> =>
   throughProxy("api.github.com", respond, ({ ca, url }) => {
     const live = GitHubLive(
       { name: "name", owner: "owner" },

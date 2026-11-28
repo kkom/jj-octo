@@ -1,5 +1,4 @@
 import { describe, expect } from "bun:test";
-import path from "node:path";
 
 import {
   Array as EffectArray,
@@ -7,6 +6,7 @@ import {
   FileSystem,
   Option,
   Order,
+  Path,
   Record as EffectRecord,
   Schema,
   String as EffectString,
@@ -14,7 +14,7 @@ import {
 
 import { itEffect } from "../src/testing/it-effect";
 
-const root = path.join(import.meta.dirname, "..");
+const repositoryRoot = Effect.map(Path.Path, (path) => path.join(import.meta.dirname, ".."));
 
 const Severities = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -42,6 +42,8 @@ const PluginSchema = Schema.Struct({
 
 const listConfiguredRules = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const root = yield* repositoryRoot;
   const text = yield* fs.readFileString(path.join(root, "tsconfig.json"));
   // A parse failure is a defect, which fails the test.
   const parsed = yield* Effect.sync(() => Bun.JSONC.parse(text));
@@ -60,6 +62,8 @@ const listConfiguredRules = Effect.gen(function* () {
 // kept only for configs that still name it.
 const listCurrentPluginRules = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const root = yield* repositoryRoot;
   const manifest = Bun.resolveSync("@effect/tsgo/package.json", root);
   const json = yield* fs.readFileString(path.join(path.dirname(manifest), "schema.json"));
   const schema = yield* Schema.decodeEffect(Schema.fromJsonString(PluginSchema))(json);

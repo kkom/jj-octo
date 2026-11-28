@@ -1,8 +1,6 @@
-import { afterAll, describe, expect } from "bun:test";
-import { appendFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { describe, expect } from "bun:test";
 
-import { Array as EffectArray, Effect, String as EffectString } from "effect";
+import { Array as EffectArray, Effect, FileSystem, Path, String as EffectString } from "effect";
 
 import manifest from "../package.json" with { type: "json" };
 import { SET_UP_VERSION } from "./cli/gh/setup";
@@ -16,13 +14,8 @@ import {
   throughProxy,
 } from "./testing/intercepting-proxy";
 import { itEffect } from "./testing/it-effect";
-import {
-  isolatedEnv,
-  removeScratchRepositories,
-  scratchRepository,
-} from "./testing/scratch-repository";
-
-afterAll(removeScratchRepositories);
+import { isolatedEnv } from "./testing/scratch-process";
+import { scratchRepository } from "./testing/scratch-repository";
 
 // GitHub's answer to a request for the open pull requests from branch `a`.
 const pullRequestOfA = ({ path: requestPath }: InterceptedRequest) =>
@@ -71,14 +64,16 @@ const proxyEnv = ({ caFile, url }: InterceptingProxy) => ({
 // A repository with change `a` on `main`, whose `origin` is a GitHub repository, and the
 // environment that runs the file in it with its own configuration. It records this version as
 // the one that set it up, as `init` does, since `init` can't reach that `origin`.
-const checkoutOfA = () => {
-  const repository = scratchRepository();
-  repository.stack("a");
-  repository.jj("git", "remote", "set-url", "origin", "https://github.com/owner/name");
-  repository.jj("config", "set", "--repo", SET_UP_VERSION, formatJson(manifest.version));
-  const cwd = EffectString.trim(repository.jj("root"));
+const checkoutOfA = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const repository = yield* scratchRepository;
+  yield* repository.stack("a");
+  yield* repository.jj("git", "remote", "set-url", "origin", "https://github.com/owner/name");
+  yield* repository.jj("config", "set", "--repo", SET_UP_VERSION, formatJson(manifest.version));
+  const root = yield* repository.jj("root");
+  const cwd = EffectString.trim(root);
   return { cwd, env: isolatedEnv(path.dirname(cwd)), repository };
-};
+});
 
 describe.each(builds)("$name", ({ command }) => {
   itEffect("prints its version", () =>
@@ -122,25 +117,29 @@ describe.each(builds)("$name", ({ command }) => {
 
   itEffect("reads pull requests through git's proxy for github.com", () =>
     Effect.gen(function* () {
-      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) => {
-        const { cwd, env, repository } = checkoutOfA();
-        const git = (...args: readonly string[]) =>
-          repository.jj("util", "exec", "--", "git", "config", ...args);
-        git("http.https://github.com/.proxy", proxy.url);
-        git("http.https://github.com/.sslCAInfo", proxy.caFile);
-        repository.jj("config", "set", "--repo", "jj-octo.github-auth", "git-proxy");
-        return run(command, ["log"], { cwd, env });
-      });
+      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) =>
+        Effect.gen(function* () {
+          const { cwd, env, repository } = yield* checkoutOfA;
+          const git = (...args: readonly string[]) =>
+            repository.jj("util", "exec", "--", "git", "config", ...args);
+          yield* git("http.https://github.com/.proxy", proxy.url);
+          yield* git("http.https://github.com/.sslCAInfo", proxy.caFile);
+          yield* repository.jj("config", "set", "--repo", "jj-octo.github-auth", "git-proxy");
+          return yield* run(command, ["log"], { cwd, env });
+        }),
+      );
       expect(received).toStrictEqual(logOfA);
     }),
   );
 
   itEffect("links the pull requests GitHub lists for a branch", () =>
     Effect.gen(function* () {
-      const received = yield* throughProxy("api.github.com", listOfA, (proxy) => {
-        const { cwd, env } = checkoutOfA();
-        return run(command, ["links"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
-      });
+      const received = yield* throughProxy("api.github.com", listOfA, (proxy) =>
+        Effect.gen(function* () {
+          const { cwd, env } = yield* checkoutOfA;
+          return yield* run(command, ["links"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
+        }),
+      );
       expect(received).toStrictEqual({
         log: [
           "CONNECT api.github.com:443",
@@ -156,13 +155,15 @@ describe.each(builds)("$name", ({ command }) => {
     "tells the agent to reply with the links, with --copy in a Claude Code cloud session",
     () =>
       Effect.gen(function* () {
-        const received = yield* throughProxy("api.github.com", listOfA, (proxy) => {
-          const { cwd, env } = checkoutOfA();
-          return output(command, ["links", "--copy"], {
-            cwd,
-            env: { ...env, CLAUDE_CODE_REMOTE: "true", ...proxyEnv(proxy) },
-          });
-        });
+        const received = yield* throughProxy("api.github.com", listOfA, (proxy) =>
+          Effect.gen(function* () {
+            const { cwd, env } = yield* checkoutOfA;
+            return yield* output(command, ["links", "--copy"], {
+              cwd,
+              env: { ...env, CLAUDE_CODE_REMOTE: "true", ...proxyEnv(proxy) },
+            });
+          }),
+        );
         expect(received.result).toStrictEqual({
           stderr:
             "This Claude Code cloud session can't reach the user's clipboard. Copy the lines between the markers into your reply verbatim: without the markers, a code block or added backticks. They then show as links that paste into Slack.\n",
@@ -183,18 +184,19 @@ describe.each(builds)("$name", ({ command }) => {
     Effect.gen(function* () {
       const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) =>
         Effect.gen(function* () {
-          const { cwd, env, repository } = checkoutOfA();
-          repository.jj("config", "unset", "--repo", SET_UP_VERSION);
+          const { cwd, env, repository } = yield* checkoutOfA;
+          yield* repository.jj("config", "unset", "--repo", SET_UP_VERSION);
           const { stderr, stdout } = yield* output(command, ["log"], {
             cwd,
             env: { ...env, ...proxyEnv(proxy) },
           });
           // What git prints between them depends on the network, which the test doesn't control.
           const printed = EffectString.split(EffectString.trimEnd(stderr), "\n");
+          const recorded = yield* repository.jj("config", "get", SET_UP_VERSION);
           return {
             firstPrinted: printed.at(0),
             lastPrinted: printed.at(-1),
-            recorded: repository.jj("config", "get", SET_UP_VERSION),
+            recorded,
             stdout,
           };
         }),
@@ -215,10 +217,12 @@ describe.each(builds)("$name", ({ command }) => {
 
   itEffect("reads pull requests through the proxy HTTPS_PROXY names", () =>
     Effect.gen(function* () {
-      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) => {
-        const { cwd, env } = checkoutOfA();
-        return run(command, ["log"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
-      });
+      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) =>
+        Effect.gen(function* () {
+          const { cwd, env } = yield* checkoutOfA;
+          return yield* run(command, ["log"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
+        }),
+      );
       expect(received).toStrictEqual(logOfA);
     }),
   );
@@ -227,13 +231,19 @@ describe.each(builds)("$name", ({ command }) => {
   // jj-octo runs. Loaded, this `.env` would send the request past the proxy.
   itEffect("ignores a .env file in the checkout", () =>
     Effect.gen(function* () {
-      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) => {
-        const { cwd, env } = checkoutOfA();
-        // Excluded, so jj doesn't record it.
-        appendFileSync(path.join(cwd, ".git", "info", "exclude"), ".env\n");
-        writeFileSync(path.join(cwd, ".env"), "NO_PROXY=*\n");
-        return run(command, ["log"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
-      });
+      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const { cwd, env } = yield* checkoutOfA;
+          // Excluded, so jj doesn't record it.
+          yield* Effect.orDie(
+            fs.writeFileString(path.join(cwd, ".git", "info", "exclude"), ".env\n", { flag: "a" }),
+          );
+          yield* Effect.orDie(fs.writeFileString(path.join(cwd, ".env"), "NO_PROXY=*\n"));
+          return yield* run(command, ["log"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
+        }),
+      );
       expect(received).toStrictEqual(logOfA);
     }),
   );
@@ -241,17 +251,31 @@ describe.each(builds)("$name", ({ command }) => {
   // Loaded, the checkout's `bunfig.toml` would run its preload inside jj-octo, which fails the run.
   itEffect("ignores a bunfig.toml file in the checkout", () =>
     Effect.gen(function* () {
-      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) => {
-        const { cwd, env } = checkoutOfA();
-        // Excluded, so jj doesn't record them.
-        appendFileSync(path.join(cwd, ".git", "info", "exclude"), "bunfig.toml\npreload.ts\n");
-        writeFileSync(path.join(cwd, "bunfig.toml"), 'preload = ["./preload.ts"]\n');
-        writeFileSync(
-          path.join(cwd, "preload.ts"),
-          'console.error("ran the checkout\'s bunfig.toml preload");\nprocess.exit(3);\n',
-        );
-        return run(command, ["log"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
-      });
+      const received = yield* throughProxy("api.github.com", pullRequestOfA, (proxy) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const { cwd, env } = yield* checkoutOfA;
+          // Excluded, so jj doesn't record them.
+          yield* Effect.orDie(
+            fs.writeFileString(
+              path.join(cwd, ".git", "info", "exclude"),
+              "bunfig.toml\npreload.ts\n",
+              { flag: "a" },
+            ),
+          );
+          yield* Effect.orDie(
+            fs.writeFileString(path.join(cwd, "bunfig.toml"), 'preload = ["./preload.ts"]\n'),
+          );
+          yield* Effect.orDie(
+            fs.writeFileString(
+              path.join(cwd, "preload.ts"),
+              'console.error("ran the checkout\'s bunfig.toml preload");\nprocess.exit(3);\n',
+            ),
+          );
+          return yield* run(command, ["log"], { cwd, env: { ...env, ...proxyEnv(proxy) } });
+        }),
+      );
       expect(received).toStrictEqual(logOfA);
     }),
   );

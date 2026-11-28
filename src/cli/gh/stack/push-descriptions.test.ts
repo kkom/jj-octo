@@ -1,19 +1,16 @@
-import { afterAll, describe, expect } from "bun:test";
+import { describe, expect } from "bun:test";
 
 import { Effect } from "effect";
 
 import { itEffect } from "../../../testing/it-effect";
-import { removeScratchRepositories } from "../../../testing/scratch-repository";
 import { description, githubWith, pushed, submitIn } from "../../../testing/submit";
-
-afterAll(removeScratchRepositories);
 
 describe("submit", () => {
   describe("descriptions", () => {
     itEffect("sends a description changed locally to the pull request", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
+        const repository = yield* pushed;
+        yield* repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
         const github = githubWith("a", "first\n\nsecond");
         yield* submitIn(repository, github);
         expect(github.calls).toEqual(["describe #1 as a better"]);
@@ -22,12 +19,13 @@ describe("submit", () => {
 
     itEffect("sends a description changed locally and pushed without submit", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
-        repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+        const repository = yield* pushed;
+        yield* repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
+        yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
         const github = githubWith("a", "first\n\nsecond");
         yield* submitIn(repository, github);
-        expect(description(repository, "a")).toBe("a better\n\nfirst\n\nsecond");
+        const describedA = yield* description(repository, "a");
+        expect(describedA).toBe("a better\n\nfirst\n\nsecond");
         expect(github.calls).toEqual(["describe #1 as a better"]);
       }),
     );
@@ -36,23 +34,25 @@ describe("submit", () => {
       "sends an upstack description pushed without submit, after taking a lower one from GitHub",
       () =>
         Effect.gen(function* () {
-          const repository = pushed();
-          repository.jj("describe", "-r", "b", "-m", "b better");
-          repository.jj("git", "push", "--bookmark", "b");
+          const repository = yield* pushed;
+          yield* repository.jj("describe", "-r", "b", "-m", "b better");
+          yield* repository.jj("git", "push", "--bookmark", "b");
           const github = githubWith("a", "first\n\nsecond, reworded");
           yield* submitIn(repository, github);
-          expect(description(repository, "a")).toBe("a\n\nfirst\n\nsecond, reworded");
-          expect(description(repository, "b")).toBe("b better");
+          const describedA = yield* description(repository, "a");
+          expect(describedA).toBe("a\n\nfirst\n\nsecond, reworded");
+          const describedB = yield* description(repository, "b");
+          expect(describedB).toBe("b better");
           expect(github.calls).toEqual(["describe #2 as b better"]);
         }),
     );
 
     itEffect("sends a description changed again after a push without submit", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
-        repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
-        repository.jj("describe", "-r", "a", "-m", "a best\n\nfirst\n\nsecond");
+        const repository = yield* pushed;
+        yield* repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
+        yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+        yield* repository.jj("describe", "-r", "a", "-m", "a best\n\nfirst\n\nsecond");
         const github = githubWith("a", "first\n\nsecond");
         yield* submitIn(repository, github);
         expect(github.calls).toEqual(["describe #1 as a best"]);
@@ -61,32 +61,35 @@ describe("submit", () => {
 
     itEffect("takes GitHub's edit where its text came from a change squashed into this one", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("new", "main", "-m", "a\n\nfirst\n\nsecond, reworded");
-        repository.jj("squash", "--from", "@", "--into", "a", "--use-destination-message");
+        const repository = yield* pushed;
+        yield* repository.jj("new", "main", "-m", "a\n\nfirst\n\nsecond, reworded");
+        yield* repository.jj("squash", "--from", "@", "--into", "a", "--use-destination-message");
         const github = githubWith("a", "first\n\nsecond, reworded");
         yield* submitIn(repository, github, { revision: "b" });
-        expect(description(repository, "a")).toBe("a\n\nfirst\n\nsecond, reworded");
+        const describedA = yield* description(repository, "a");
+        expect(describedA).toBe("a\n\nfirst\n\nsecond, reworded");
         expect(github.calls).toEqual([]);
       }),
     );
 
     itEffect("writes a description changed on GitHub into the change", () =>
       Effect.gen(function* () {
-        const repository = pushed();
+        const repository = yield* pushed;
         const github = githubWith("a", "first\r\n\r\nsecond, reworded");
         yield* submitIn(repository, github);
-        expect(description(repository, "a")).toBe("a\n\nfirst\n\nsecond, reworded");
+        const describedA = yield* description(repository, "a");
+        expect(describedA).toBe("a\n\nfirst\n\nsecond, reworded");
         expect(github.calls).toEqual([]);
       }),
     );
 
     itEffect("writes the indent of a body's first line, set on GitHub, into the change", () =>
       Effect.gen(function* () {
-        const repository = pushed();
+        const repository = yield* pushed;
         const github = githubWith("a", "    first\n\nsecond");
         yield* submitIn(repository, github);
-        expect(description(repository, "a")).toBe("a\n\n    first\n\nsecond");
+        const describedA = yield* description(repository, "a");
+        expect(describedA).toBe("a\n\n    first\n\nsecond");
         expect(github.calls).toEqual([]);
       }),
     );
@@ -96,31 +99,45 @@ describe("submit", () => {
 
       itEffect("takes the footer into the change by default", () =>
         Effect.gen(function* () {
-          const repository = pushed();
+          const repository = yield* pushed;
           const github = githubWith("a", `first\n\nsecond${footer}`);
           yield* submitIn(repository, github);
-          expect(description(repository, "a")).toBe(`a\n\nfirst\n\nsecond${footer}`);
+          const describedA = yield* description(repository, "a");
+          expect(describedA).toBe(`a\n\nfirst\n\nsecond${footer}`);
           expect(github.calls).toEqual([]);
         }),
       );
 
       itEffect("leaves the change alone when told to ignore the footer", () =>
         Effect.gen(function* () {
-          const repository = pushed();
-          repository.jj("config", "set", "--repo", "jj-octo.ignore-claude-code-footer", "true");
+          const repository = yield* pushed;
+          yield* repository.jj(
+            "config",
+            "set",
+            "--repo",
+            "jj-octo.ignore-claude-code-footer",
+            "true",
+          );
           const github = githubWith("a", `first\n\nsecond${footer}`);
           yield* submitIn(repository, github);
-          expect(description(repository, "a")).toBe("a\n\nfirst\n\nsecond");
+          const describedA = yield* description(repository, "a");
+          expect(describedA).toBe("a\n\nfirst\n\nsecond");
           expect(github.calls).toEqual([]);
         }),
       );
 
       itEffect("sends a description pushed without submit when told to ignore the footer", () =>
         Effect.gen(function* () {
-          const repository = pushed();
-          repository.jj("config", "set", "--repo", "jj-octo.ignore-claude-code-footer", "true");
-          repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
-          repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+          const repository = yield* pushed;
+          yield* repository.jj(
+            "config",
+            "set",
+            "--repo",
+            "jj-octo.ignore-claude-code-footer",
+            "true",
+          );
+          yield* repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
+          yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
           const github = githubWith("a", `first\n\nsecond${footer}`);
           yield* submitIn(repository, github);
           expect(github.calls).toEqual(["describe #1 as a better"]);
@@ -129,10 +146,11 @@ describe("submit", () => {
 
       itEffect("leaves the change alone by default in a Claude Code cloud session", () =>
         Effect.gen(function* () {
-          const repository = pushed();
+          const repository = yield* pushed;
           const github = githubWith("a", `first\n\nsecond${footer}`);
           yield* submitIn(repository, github, { env: { CLAUDE_CODE_REMOTE: "true" } });
-          expect(description(repository, "a")).toBe("a\n\nfirst\n\nsecond");
+          const describedA = yield* description(repository, "a");
+          expect(describedA).toBe("a\n\nfirst\n\nsecond");
           expect(github.calls).toEqual([]);
         }),
       );
@@ -141,19 +159,32 @@ describe("submit", () => {
         "takes the footer into the change in a cloud session when told not to ignore it",
         () =>
           Effect.gen(function* () {
-            const repository = pushed();
-            repository.jj("config", "set", "--repo", "jj-octo.ignore-claude-code-footer", "false");
+            const repository = yield* pushed;
+            yield* repository.jj(
+              "config",
+              "set",
+              "--repo",
+              "jj-octo.ignore-claude-code-footer",
+              "false",
+            );
             const github = githubWith("a", `first\n\nsecond${footer}`);
             yield* submitIn(repository, github, { env: { CLAUDE_CODE_REMOTE: "true" } });
-            expect(description(repository, "a")).toBe(`a\n\nfirst\n\nsecond${footer}`);
+            const describedA = yield* description(repository, "a");
+            expect(describedA).toBe(`a\n\nfirst\n\nsecond${footer}`);
             expect(github.calls).toEqual([]);
           }),
       );
 
       itEffect("fails for a value of the setting other than true or false", () =>
         Effect.gen(function* () {
-          const repository = pushed();
-          repository.jj("config", "set", "--repo", "jj-octo.ignore-claude-code-footer", "yes");
+          const repository = yield* pushed;
+          yield* repository.jj(
+            "config",
+            "set",
+            "--repo",
+            "jj-octo.ignore-claude-code-footer",
+            "yes",
+          );
           const github = githubWith("a", `first\n\nsecond${footer}`);
           const failure = yield* Effect.flip(submitIn(repository, github));
           expect(failure.message).toBe(
@@ -166,33 +197,35 @@ describe("submit", () => {
 
     itEffect("merges edits made to different lines on both sides", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
+        const repository = yield* pushed;
+        yield* repository.jj("describe", "-r", "a", "-m", "a better\n\nfirst\n\nsecond");
         const github = githubWith("a", "first\n\nsecond, reworded");
         yield* submitIn(repository, github);
-        expect(description(repository, "a")).toBe("a better\n\nfirst\n\nsecond, reworded");
+        const describedA = yield* description(repository, "a");
+        expect(describedA).toBe("a better\n\nfirst\n\nsecond, reworded");
         expect(github.calls).toEqual(["describe #1 as a better"]);
       }),
     );
 
     itEffect("stops before changing GitHub where both sides edited the same line", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("describe", "-r", "a", "-m", "a, locally\n\nfirst\n\nsecond");
+        const repository = yield* pushed;
+        yield* repository.jj("describe", "-r", "a", "-m", "a, locally\n\nfirst\n\nsecond");
         const github = githubWith("a, on GitHub", "first\n\nsecond");
-        const branches = repository.branches();
+        const branches = yield* repository.branches;
         const failure = yield* Effect.flip(submitIn(repository, github));
         expect(failure.message).toContain("<<<<<<< local\na, locally\n");
         expect(failure.message).toContain("a, on GitHub\n>>>>>>> GitHub");
         expect(github.calls).toEqual([]);
-        expect(repository.branches()).toEqual(branches);
+        const branchesAfter = yield* repository.branches;
+        expect(branchesAfter).toEqual(branches);
       }),
     );
 
     itEffect("sends the local description over a conflicting one when told to", () =>
       Effect.gen(function* () {
-        const repository = pushed();
-        repository.jj("describe", "-r", "a", "-m", "a, locally\n\nfirst\n\nsecond");
+        const repository = yield* pushed;
+        yield* repository.jj("describe", "-r", "a", "-m", "a, locally\n\nfirst\n\nsecond");
         const github = githubWith("a, on GitHub", "first\n\nsecond");
         yield* submitIn(repository, github, { overwriteDescriptions: true });
         expect(github.calls).toEqual(["describe #1 as a, locally"]);

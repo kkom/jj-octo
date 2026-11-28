@@ -1,25 +1,24 @@
-import { afterAll, describe, expect } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { describe, expect } from "bun:test";
 
-import { Array as EffectArray, Effect } from "effect";
+import { Array as EffectArray, Effect, FileSystem } from "effect";
 
 import { gitClone } from "../testing/git-clone";
 import { itEffect, provideSetup } from "../testing/it-effect";
-import { removeScratchRepositories, scratchRepository } from "../testing/scratch-repository";
+import { scratchRepository } from "../testing/scratch-repository";
 import { Jj, JjFailed, jjConfig } from "./jj";
-
-afterAll(removeScratchRepositories);
 
 describe("jjConfig", () => {
   itEffect(
     "reads a key without a value as an empty string, and fails on a config jj can't read",
     () =>
       Effect.gen(function* () {
-        const clone = gitClone(scratchRepository());
+        const fs = yield* FileSystem.FileSystem;
+        const repository = yield* scratchRepository;
+        const clone = yield* gitClone(repository);
         const value = yield* jjConfig("jj-octo.no-such-key").pipe(provideSetup(clone.layer));
         expect(value).toBe("");
         const config = clone.jjConfigFile;
-        writeFileSync(config, "[");
+        yield* Effect.orDie(fs.writeFileString(config, "["));
         const failure = yield* Effect.flip(jjConfig("jj-octo.no-such-key")).pipe(
           provideSetup(clone.layer),
         );
@@ -46,10 +45,14 @@ describe("jjConfig", () => {
 
   itEffect("reads strings, and fails on a value of another type", () =>
     Effect.gen(function* () {
-      const clone = gitClone(scratchRepository());
-      writeFileSync(
-        clone.jjConfigFile,
-        '[jj-octo]\non = true\nword = "true"\ntable = { a = "x" }\n',
+      const fs = yield* FileSystem.FileSystem;
+      const repository = yield* scratchRepository;
+      const clone = yield* gitClone(repository);
+      yield* Effect.orDie(
+        fs.writeFileString(
+          clone.jjConfigFile,
+          '[jj-octo]\non = true\nword = "true"\ntable = { a = "x" }\n',
+        ),
       );
       const read = <A>(program: Effect.Effect<A, JjFailed, Jj>) =>
         program.pipe(
@@ -77,10 +80,10 @@ describe("Jj.dryRun", () => {
   // prints first.
   itEffect("leaves the repository as it is, and returns the operation that holds the result", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
-      repository.jj("config", "set", "--repo", "ui.quiet", "true");
-      const operations = repository.jj("operation", "log", "--no-graph", "-T", "id");
-      repository.write("edited.txt", "edited\n");
+      const repository = yield* scratchRepository;
+      yield* repository.jj("config", "set", "--repo", "ui.quiet", "true");
+      const operations = yield* repository.jj("operation", "log", "--no-graph", "-T", "id");
+      yield* repository.write("edited.txt", "edited\n");
       const operation = yield* dryRun(["describe", "-m", "tried"]).pipe(
         provideSetup(repository.layer),
       );
@@ -93,17 +96,31 @@ describe("Jj.dryRun", () => {
         "-T",
         "description",
       ];
-      expect([
-        repository.jj("operation", "log", "--ignore-working-copy", "--no-graph", "-T", "id"),
-        repository.jj(...description),
-        repository.jj("--at-operation", operation, ...description),
-      ]).toStrictEqual([operations, "", "tried\n"]);
+      const operationsAfter = yield* repository.jj(
+        "operation",
+        "log",
+        "--ignore-working-copy",
+        "--no-graph",
+        "-T",
+        "id",
+      );
+      const descriptionBefore = yield* repository.jj(...description);
+      const descriptionInOperation = yield* repository.jj(
+        "--at-operation",
+        operation,
+        ...description,
+      );
+      expect([operationsAfter, descriptionBefore, descriptionInOperation]).toStrictEqual([
+        operations,
+        "",
+        "tried\n",
+      ]);
     }),
   );
 
   itEffect("fails where the command changes nothing", () =>
     Effect.gen(function* () {
-      const repository = scratchRepository();
+      const repository = yield* scratchRepository;
       const failure = yield* Effect.flip(dryRun(["describe", "-m", ""])).pipe(
         provideSetup(repository.layer),
       );
