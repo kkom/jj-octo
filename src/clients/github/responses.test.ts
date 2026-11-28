@@ -33,16 +33,16 @@ const stacked = (number: number, mergedAt: string | null) => ({
 
 describe("listedPullRequest", () => {
   it("reads an open pull request as a draft or ready for review", () => {
-    expect(listedPullRequest(listed("open", true, null))).toEqual(link("draft"));
-    expect(listedPullRequest(listed("open", false, null))).toEqual(link("ready"));
-    expect(listedPullRequest(listed("open", undefined, null))).toEqual(link("ready"));
+    expect(listedPullRequest(listed("open", true, null))).toStrictEqual(link("draft"));
+    expect(listedPullRequest(listed("open", false, null))).toStrictEqual(link("ready"));
+    expect(listedPullRequest(listed("open", undefined, null))).toStrictEqual(link("ready"));
   });
 
   it("reads a closed pull request as merged or closed unmerged", () => {
-    expect(listedPullRequest(listed("closed", false, "2026-10-24T12:00:00Z"))).toEqual(
+    expect(listedPullRequest(listed("closed", false, "2026-10-24T12:00:00Z"))).toStrictEqual(
       link("merged"),
     );
-    expect(listedPullRequest(listed("closed", false, null))).toEqual(link("closed"));
+    expect(listedPullRequest(listed("closed", false, null))).toStrictEqual(link("closed"));
   });
 });
 
@@ -75,7 +75,7 @@ describe("remoteStack", () => {
         number: StackNumberSchema.make(7),
         pull_requests: [stacked(1, "2026-10-24T12:00:00Z"), stacked(2, null), stacked(3, null)],
       }),
-    ).toEqual({
+    ).toStrictEqual({
       number: StackNumberSchema.make(7),
       unmerged: [PullRequestNumberSchema.make(2), PullRequestNumberSchema.make(3)],
     });

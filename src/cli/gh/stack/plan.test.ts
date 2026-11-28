@@ -17,7 +17,7 @@ import {
 
 describe("basesFor", () => {
   it("targets the trunk under the bottom and the branch below everywhere else", () => {
-    expect(basesFor(["a", "b", "c"], "main")).toEqual(["main", "a", "b"]);
+    expect(basesFor(["a", "b", "c"], "main")).toStrictEqual(["main", "a", "b"]);
   });
 });
 
@@ -98,24 +98,28 @@ describe("mustDissolve", () => {
 
 describe("registrationFor", () => {
   it("creates a stack for two or more pull requests in none", () => {
-    expect(registrationFor(Option.none(), pullRequests(1, 2))).toEqual({
+    expect(registrationFor(Option.none(), pullRequests(1, 2))).toStrictEqual({
       _tag: "Create",
       pullRequests: pullRequests(1, 2),
     });
   });
 
   it("registers nothing for a single pull request", () => {
-    expect(registrationFor(Option.none(), pullRequests(1))).toEqual({ _tag: "Unchanged" });
+    expect(registrationFor(Option.none(), pullRequests(1))).toStrictEqual({ _tag: "Unchanged" });
   });
 
   it("leaves a stack that already holds the pull requests", () => {
-    expect(registrationFor(Option.some(stackNumbered(7, 1, 2, 3)), pullRequests(1, 2))).toEqual({
+    expect(
+      registrationFor(Option.some(stackNumbered(7, 1, 2, 3)), pullRequests(1, 2)),
+    ).toStrictEqual({
       _tag: "Unchanged",
     });
   });
 
   it("appends pull requests added on top", () => {
-    expect(registrationFor(Option.some(stackNumbered(7, 1, 2)), pullRequests(1, 2, 3))).toEqual({
+    expect(
+      registrationFor(Option.some(stackNumbered(7, 1, 2)), pullRequests(1, 2, 3)),
+    ).toStrictEqual({
       _tag: "Append",
       pullRequests: pullRequests(3),
       stack: StackNumberSchema.make(7),

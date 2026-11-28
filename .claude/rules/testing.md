@@ -80,9 +80,12 @@ That's because a written-in value checks the field exactly. A matcher also keeps
 
 In TypeScript, oxlint's `no-restricted-properties` and `no-restricted-imports` rules fail on these, in any file:
 
-- Partial matchers: `toMatchObject`, `objectContaining` and `arrayContaining`.
-- Mock-call matchers: `toHaveBeenCalled`, `toHaveBeenCalledTimes`, `toHaveBeenCalledWith`, `toHaveBeenLastCalledWith`, `toHaveBeenNthCalledWith`, `toHaveReturned`, `toHaveReturnedTimes`, `toHaveReturnedWith`, `toHaveLastReturnedWith` and `toHaveNthReturnedWith`.
-- Mocking APIs: `vi.mock`, `vi.doMock`, `vi.fn` and `vi.spyOn`, and `mock` and `spyOn` imported from `bun:test`.
+- Partial matchers: `toMatchObject`, `objectContaining`, `arrayContaining`, the `toContain…` matchers, `toInclude`, `toIncludeRepeated`, `toEqualIgnoringWhitespace`, `toHaveProperty`, `toMatch`, `toStartWith`, `toEndWith`, `toHaveLength`, `toBeArrayOfSize` and `toSatisfy`.
+- `toEqual`, which ignores `undefined` fields and class types.
+- `toThrow`, `toThrowError` and the `toThrowErrorMatching…` matchers, which match part of a failure.
+- Matchers that check only one property of a value, such as `toBeInstanceOf`, `toBeDefined`, `toBeTruthy` and `toBeEmpty`.
+- Mock-call matchers: `toHaveBeenCalled`, `toHaveBeenCalledOnce`, `toHaveBeenCalledTimes`, `toHaveBeenCalledWith`, `toHaveBeenLastCalledWith`, `toHaveBeenNthCalledWith`, `toHaveReturned`, `toHaveReturnedTimes`, `toHaveReturnedWith`, `toHaveLastReturnedWith` and `toHaveNthReturnedWith`, and their aliases `toBeCalled`, `toBeCalledTimes`, `toBeCalledWith`, `lastCalledWith` and `nthCalledWith`.
+- Mocking APIs: `vi.mock`, `vi.doMock`, `vi.fn` and `vi.spyOn`, and `jest`, `mock` and `spyOn` imported from `bun:test`.
 
 Where a test needs one of them, disable the rule on that line, and say why in the comment. That's because the comment tells a reviewer the use is deliberate, rather than a check someone skipped.
 
