@@ -11,8 +11,9 @@ import { pushedStack } from "../../testing/scratch-repository";
 import { merge } from "./merge";
 
 // A stack of `a` and `b`, merged up to `b`, whose head commits have workflow runs: one running and
-// one completed for `a`, and one queued for `b`. Cancelling `a`'s running one is forbidden where
-// `forbidden` says.
+// one completed for `a`, and one queued for `b`. `b`'s commit also has a running push run on
+// `main`, as the trunk has after a merge fast-forwards it to `b`. Cancelling `a`'s running one is
+// forbidden where `forbidden` says.
 const mergedWithRuns = (forbidden = false) =>
   Effect.gen(function* () {
     const repository = yield* pushedStack("a", "b");
@@ -28,10 +29,13 @@ const mergedWithRuns = (forbidden = false) =>
       ),
       runs: {
         [commitA]: [
-          { cancelForbidden: forbidden, completed: false, id: "11" },
-          { completed: true, id: "12" },
+          { branch: "a", cancelForbidden: forbidden, completed: false, id: "11" },
+          { branch: "a", completed: true, id: "12" },
         ],
-        [commitB]: [{ completed: false, id: "21" }],
+        [commitB]: [
+          { branch: "b", completed: false, id: "21" },
+          { branch: "main", completed: false, id: "22" },
+        ],
       },
     });
     return { github, repository };
@@ -39,7 +43,7 @@ const mergedWithRuns = (forbidden = false) =>
 
 describe("merge", () => {
   itEffect(
-    "cancels every merged pull request's workflow runs that haven't completed, with --cancel-pr-runs",
+    "with --cancel-pr-runs, cancels every merged pull request's workflow runs that haven't completed, and not the trunk's push run",
     () =>
       Effect.gen(function* () {
         const { github, repository } = yield* mergedWithRuns();
