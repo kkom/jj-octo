@@ -74,9 +74,15 @@
   ],
   packageRules: [
     {
-      // bun resolves to whatever is newest itself, so there's no age to gate here.
+      // Renovate doesn't apply minimumReleaseAge to lock file maintenance. bun, npm, uv and cargo skip the releases
+      // younger than it themselves, through bunfig.toml, .npmrc, pyproject.toml and .cargo/config.toml.
       matchUpdateTypes: ["lockFileMaintenance"],
       minimumReleaseAge: null,
+    },
+    {
+      // Terraform's lock files are the one lock file that none of those settings cover
+      matchManagers: ["terraform"],
+      matchUpdateTypes: ["lockFileMaintenance"],
       prBodyNotes: [
         "⚠️ minimumReleaseAge doesn't apply to lock file maintenance — check release age yourself before merging.",
       ],
