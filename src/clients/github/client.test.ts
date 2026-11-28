@@ -58,7 +58,7 @@ layer(gitHubThroughProxy)("unfinishedRuns", (it) => {
 const pullsPath = (page: number) =>
   `/repos/owner/name/pulls?head=owner%3Aclaude%2Fa&state=all&per_page=100&page=${page}`;
 
-// Pull request `number` from branch `claude/a`, as GitHub lists it, and as `pullRequestsFrom` reads it.
+// Pull request `number` from branch `claude/a`, as GitHub lists it and `pullRequestsFrom` reads it.
 const listed = (number: number, state: "closed" | "open") => ({
   github: {
     created_at: "2026-01-01T00:00:00Z",
@@ -95,8 +95,8 @@ layer(gitHubThroughProxy)("pullRequestsFrom", (it) => {
     }));
 });
 
-// Cancels run 7 where GitHub answers the cancel with the status, and returns the result, with the
-// requests GitHub received.
+// Cancels run 7 where GitHub answers with the status. Returns the result and the requests GitHub
+// received.
 const cancel = (status: number) =>
   callGitHub(
     () => new Reply(status, { message: `answered ${status}` }),
@@ -140,7 +140,7 @@ layer(gitHubThroughProxy)("cancelRun", (it) => {
     }));
 });
 
-// The bodies of the requests GitHub received at the path, or at every path, as JSON.
+// The JSON bodies of the requests GitHub received at the path, or at every path.
 const bodiesSent = (path?: string) =>
   InterceptingProxy.use(({ requests }) => requests).pipe(
     Effect.map((requests) =>
@@ -152,7 +152,7 @@ const bodiesSent = (path?: string) =>
   );
 
 layer(gitHubThroughProxy)("closing a pull request", (it) => {
-  it("sets the pull request's state to closed, then comments on the pull request's issue", () =>
+  it("sets the pull request's state to closed, then comments on its issue", () =>
     Effect.gen(function* () {
       const { requests } = yield* callGitHub(
         () => ({}),
@@ -173,8 +173,8 @@ layer(gitHubThroughProxy)("closing a pull request", (it) => {
     }));
 });
 
-// Marks #7 ready for review, against a GitHub whose GraphQL API answers with `graphql`, and returns
-// the result, with the body of each GraphQL request and the requests GitHub received.
+// Marks #7 ready for review where GitHub's GraphQL API answers with `graphql`. Returns the result,
+// each GraphQL request's body and the requests GitHub received.
 const markReady = (graphql: unknown, env: Readonly<Record<string, string>> = {}) =>
   Effect.gen(function* () {
     const outcome = yield* callGitHub(

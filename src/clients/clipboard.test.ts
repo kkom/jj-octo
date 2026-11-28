@@ -30,8 +30,8 @@ const writeWith = (platform: string, env: Readonly<Record<string, string>> = {})
   });
 
 /**
- * A directory holding a stand-in for the command, which records its arguments and stdin, and
- * leaves a process behind as xclip and wl-copy do to hold the clipboard.
+ * A directory with a stand-in for the command. It records its arguments and stdin, and leaves a
+ * process behind to hold the clipboard, as xclip and wl-copy do.
  */
 const standIn = (command: string, exitCode = 0) =>
   Effect.gen(function* () {
@@ -160,7 +160,7 @@ describe("clipboardLayer", () => {
     }),
   );
 
-  // On a platform it has no command for, reporting rather than failing shows that nothing ran.
+  // There's no command for win32, so reporting rather than failing shows that nothing ran.
   itEffect("runs no command in a Claude Code cloud session, which can't reach the clipboard", () =>
     Effect.gen(function* () {
       const reported = yield* writeWith("win32", { CLAUDE_CODE_REMOTE: "true" });

@@ -30,7 +30,7 @@ const Tsconfig = Schema.Struct({
   }),
 });
 
-// The part of the schema @effect/tsgo publishes for its tsconfig entry that names its rules.
+// The part of @effect/tsgo's tsconfig schema that names its rules.
 const Rule = Schema.Struct({ description: Schema.optionalKey(Schema.String) });
 const PluginSchema = Schema.Struct({
   definitions: Schema.Struct({
@@ -58,8 +58,8 @@ const listConfiguredRules = Effect.gen(function* () {
   return EffectArray.sort(EffectRecord.keys(severities), Order.String);
 });
 
-// The plugin's rules but the deprecated ones. A rule whose description opens with "Deprecated" is
-// kept only for configs that still name it.
+// The plugin keeps a rule whose description opens with "Deprecated" only for configs that still
+// name it.
 const listCurrentPluginRules = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -81,9 +81,9 @@ const listCurrentPluginRules = Effect.gen(function* () {
 });
 
 describe("tsconfig.json's Effect diagnostics", () => {
-  // A rule the map leaves out runs at the plugin's default, which is on for some, so a rule a new
-  // release adds would otherwise run without anyone deciding so. A deprecated rule is left out,
-  // since the type check warns on a config that names one.
+  // A rule the map leaves out runs at the plugin's default, which is on for some. So without this
+  // test, a rule a new release adds would run without anyone choosing it. The type check warns on a
+  // config that names a deprecated rule.
   itEffect("sets every rule of the plugin but the deprecated ones, and no other", () =>
     Effect.gen(function* () {
       const [configured, rules] = yield* Effect.all([listConfiguredRules, listCurrentPluginRules], {

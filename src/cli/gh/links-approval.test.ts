@@ -10,8 +10,8 @@ import { pullRequest, pullRequests } from "../../testing/pull-requests";
 import { ScratchRepository, scratchRepository } from "../../testing/scratch-repository";
 import { stackPullRequests } from "./links";
 
-// The pull request of each change of the repository's stack, top first, against a GitHub with the
-// pull requests given, whose search lists those of the numbers given that it's asked about.
+// The pull request of each change of the stack, top first. GitHub has the pull requests given, and
+// its search lists the asked-about ones among `approved`.
 const linkedWithApproved = (
   byBranch: Readonly<Record<string, readonly ListedPullRequest[]>>,
   approved: readonly number[],

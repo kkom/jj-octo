@@ -25,53 +25,43 @@ import {
 import { templateOf } from "./templates";
 
 /**
- * A jj repository with `main` pushed to a bare `origin`, for tests that run the real jj. A git
- * worktree of `origin` stands in for GitHub changing branches by itself. A command that fails is a
- * defect, since it's the test's own setup that failed.
+ * A jj repository with `main` pushed to a bare `origin`. A git worktree of `origin` stands in for
+ * GitHub changing branches. A failed command is a defect, since the test's own setup failed.
  */
 export class ScratchRepository extends Context.Service<
   ScratchRepository,
   {
-    /** The names of the branches on `origin`, with the commit each points at. */
+    /** The commit each branch on `origin` points at, by branch name. */
     readonly branches: Effect.Effect<Readonly<Record<string, string>>>;
     /** The directory of the jj repository. */
     readonly checkout: string;
-    /**
-     * Builds the git, jj and pull request description clients in the directory, such as a
-     * workspace's, for `Effect.provide`.
-     */
+    /** Builds the `RepositoryClients` in a directory, such as a workspace's. */
     readonly clientsIn: (
       directory: string,
     ) => Effect.Effect<Context.Context<RepositoryClients>, never, Scope.Scope>;
-    /** The id of the commit the revision names. */
     readonly commitOf: (revision: string) => Effect.Effect<string>;
-    /** The label of each change with conflicts, as `labels` gives it, top first. */
+    /** The `labels` of the changes with conflicts, top first. */
     readonly conflicted: Effect.Effect<string>;
     /** The revision's description, without its trailing newline. */
     readonly description: (revision: string) => Effect.Effect<string>;
     /**
-     * Runs jj in a second jj clone of `origin`, made on first use. It stands in for another
-     * checkout of the same person, whose pushes keep each change's id.
+     * Runs jj in a second jj clone of `origin`, made on first use. It stands in for the same
+     * person's other checkout, whose pushes keep each change's id.
      */
     readonly elsewhere: (...args: readonly string[]) => Effect.Effect<string>;
-    /** The environment that jj and the clients run in, in the jj repository. */
     readonly env: Readonly<Record<string, string>>;
     /** The files in the revision, sorted. */
     readonly files: (revision: string) => Effect.Effect<readonly string[]>;
     /** Runs git in the worktree standing in for GitHub. */
     readonly git: (...args: readonly string[]) => Effect.Effect<string>;
-    /** Runs jj in the repository, and returns what it printed. */
     readonly jj: (...args: readonly string[]) => Effect.Effect<string>;
-    /**
-     * The change each revision names, as a command lists it: its short id and its description's
-     * first line. One line per revision, in the order given.
-     */
+    /** One line per revision, in order: its change's short id and its description's first line. */
     readonly labels: (...revisions: readonly string[]) => Effect.Effect<string>;
     /** Each described change above the trunk, bottom to top, as `description [bookmarks]`. */
     readonly log: Effect.Effect<readonly string[]>;
     /** The path of the bare `origin.git`. */
     readonly origin: string;
-    /** What the jj commands that the clients ran to change something printed, in order. */
+    /** What the clients' jj commands that change something printed, in order. */
     readonly printed: Effect.Effect<string>;
     /** Adds one change per name on top of `main`, each with a file and a bookmark of that name. */
     readonly stack: (...names: readonly string[]) => Effect.Effect<void>;
@@ -84,11 +74,9 @@ export class ScratchRepository extends Context.Service<
   }
 >()("jj-octo/testing/scratch-repository/ScratchRepository") {}
 
-// A change's label: its short id and its description's first line.
 const LABEL = String.raw`change_id.shortest(8) ++ " " ++ description.first_line() ++ "\n"`;
 
-// The repository in a directory that already holds one: `origin.git`, `repository`, `github`
-// and the jj configuration.
+// Opens the `origin.git`, `repository`, `github` and jj configuration that a directory holds.
 const open = (root: string): Effect.Effect<ScratchRepository["Service"], never, ScratchServices> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -237,10 +225,7 @@ const withRepositoryClients = (
     repository,
   );
 
-/**
- * The repository of `scratchRepository`, without its clients, for a fixture that provides clients
- * of its own.
- */
+/** `scratchRepository` without its clients, for a fixture that provides its own. */
 export const scratchRepositoryWithoutClients: Layer.Layer<
   ScratchRepository,
   never,
@@ -251,8 +236,8 @@ export const scratchRepositoryWithoutClients: Layer.Layer<
 );
 
 /**
- * A repository with only `main`, pushed, and the git, jj and pull request description clients in
- * its checkout. Its directory is removed when the layer's scope closes.
+ * A repository with only `main`, pushed, and the `RepositoryClients` in its checkout. The layer's
+ * scope removes its directory.
  */
 export const scratchRepository: Layer.Layer<
   RepositoryClients | ScratchRepository,
@@ -281,9 +266,7 @@ const pushedStackWithoutClients = (
   );
 
 /**
- * A repository with one change per name stacked on `main`, each pushed with its bookmark, and the
- * git, jj and pull request description clients in its checkout. Its directory is removed when the
- * layer's scope closes.
+ * `scratchRepository` with one change per name stacked on `main`, each with its bookmark, pushed.
  */
 export const pushedStack = (
   ...names: readonly string[]

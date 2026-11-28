@@ -10,12 +10,11 @@ import { problems } from "./doctor";
 import { init, setUpOnUpgrade } from "./init";
 import { SET_UP_VERSION } from "./setup";
 
-/** The version the clone's repository config records setting it up with, as jj lists it. */
+/** The version that set the clone up, as its repository config records it. */
 const recorded: Effect.Effect<string, never, GitClone> = GitClone.use((clone) =>
   clone.jj("config", "list", "--repo", SET_UP_VERSION),
 );
 
-/** The repository's `jj gh` alias, as jj lists it. */
 const alias: Effect.Effect<string, never, GitClone> = GitClone.use((clone) =>
   clone.jj("config", "list", "--repo", "aliases.gh"),
 );
@@ -23,7 +22,6 @@ const alias: Effect.Effect<string, never, GitClone> = GitClone.use((clone) =>
 const THIS_VERSION = `${SET_UP_VERSION} = "${manifest.version}"\n`;
 const ALIAS = 'aliases.gh = ["util","exec","--","jj-octo"]\n';
 
-/** Sets the clone up with init, then records the version given and removes the alias. */
 const setUpBy = (version: string) =>
   Effect.gen(function* () {
     const clone = yield* GitClone;
@@ -79,7 +77,7 @@ layer(gitClone())("the version that set the checkout up", (it) => {
     }),
   );
 
-  it("records this version, and leaves what's left to doctor, where init can't set the checkout up", () =>
+  it("records this version and leaves the rest to doctor, where init can't set the checkout up", () =>
     Effect.gen(function* () {
       const clone = yield* GitClone;
       yield* clone.git("config", "--unset", "user.email");

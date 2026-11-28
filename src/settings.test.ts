@@ -18,10 +18,7 @@ const mode: Setting<"fast" | "slow"> = {
   key: "jj-octo.mode",
 };
 
-/**
- * Writes `config` as the clone's jj config, then reads the setting with `env` as the environment,
- * and returns its result.
- */
+/** Writes `config` as the clone's jj config, and reads the setting in an environment of `env`. */
 const readWith = <A extends boolean | string>(
   setting: Setting<A>,
   config: string,

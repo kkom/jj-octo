@@ -18,7 +18,6 @@ import {
   stackOf,
 } from "./pull-requests";
 
-/** A workflow run, by its id, the branch it ran on, and whether it has completed. */
 export interface FakeRun {
   readonly branch: string;
   /** GitHub answers 403 to a cancel where the token can't write to Actions. */
@@ -28,34 +27,28 @@ export interface FakeRun {
 }
 
 export interface FakeGitHubOptions<R = never> {
-  /** The open pull requests GitHub's search lists as approved. None by default. */
+  /** The open pull requests GitHub's search lists as approved. */
   readonly approved?: readonly PullRequestNumber[];
-  /** The latest result of each check of each commit. None by default. */
+  /** The latest result of each check, by commit. */
   readonly checks?: Readonly<Record<string, readonly Check[]>>;
   /** GitHub answers 403 to a comment where the token can't write to issues. */
   readonly commentForbidden?: boolean;
-  /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
+  /** What GitHub does to the repository when it merges, since the fake has no repository. */
   readonly onMerge?: (pullRequest: PullRequestNumber) => Effect.Effect<void, never, R>;
-  /**
-   * The pull requests from the branch in any state, newest first, after the ones
-   * `recordMerge` recorded. None by default.
-   */
+  /** The branch's pull requests in any state, newest first, after those `recordMerge` recorded. */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
   /** The checks each branch requires. A branch not named here doesn't exist. */
   readonly required?: Readonly<Record<string, RequiredChecks>>;
-  /** Each commit's workflow runs, on any branch. None by default. */
+  /** Each commit's workflow runs, on any branch. */
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
 
-/** What the fake GitHub holds: the open pull requests by branch, the stacks, and the rest. */
 export interface FakeGitHubSetUp<R = never> extends FakeGitHubOptions<R> {
-  /** The open pull requests, by the branch each is from. None by default. */
+  /** The open pull requests, by head branch. */
   readonly open?: Readonly<Record<string, PullRequest>>;
-  /** The stacks. None by default. */
   readonly stacks?: readonly RemoteStack[];
 }
 
-/** A merge that `FakeGitHub`'s `recordMerge` records. */
 export interface RecordedMerge {
   readonly branch: string;
   readonly deleted: boolean;
@@ -63,28 +56,23 @@ export interface RecordedMerge {
   readonly into: string;
 }
 
-/**
- * A GitHub that holds the pull requests and stacks `setUp` gives it, and records every call that
- * changes something. It holds none until then.
- */
+/** A GitHub that holds what `setUp` gives it, and records every call that changes something. */
 export class FakeGitHub extends Context.Service<
   FakeGitHub,
   {
     /** The calls that changed something, in order. */
     readonly calls: Effect.Effect<readonly string[]>;
     /**
-     * Records that GitHub merged the pull request from `branch` into `into`, with `head` as its
-     * head commit. As GitHub does, closes that pull request and drops it from its stack. With
-     * `deleted`, the merge deleted the branch, so the open pull requests based on it are retargeted
-     * to `into`. Returns the pull request as it was open. Dies where `branch` has no open pull request.
+     * Records that GitHub merged the pull request from `branch` into `into` at `head`. Closes it
+     * and drops it from its stack. With `deleted`, retargets the pull requests based on `branch` to
+     * `into`. Returns the pull request as it was open, and dies where there is none.
      */
     readonly recordMerge: (merge: RecordedMerge) => Effect.Effect<PullRequest>;
-    /** Sets the open pull requests by branch, the stacks, and the rest of what GitHub holds. */
     readonly setUp: (setUp: FakeGitHubSetUp) => Effect.Effect<void>;
   }
 >()("jj-octo/testing/fake-github/FakeGitHub") {}
 
-/** The fake GitHub, and the `GitHub` client that reads and changes what it holds. */
+/** The fake GitHub, and the `GitHub` client that reads and changes it. */
 export const fakeGitHub: Layer.Layer<FakeGitHub | GitHub> = Layer.unwrap(
   Effect.gen(function* () {
     const state = yield* Ref.make<State>({
@@ -149,10 +137,7 @@ export const fakeGitHub: Layer.Layer<FakeGitHub | GitHub> = Layer.unwrap(
   }),
 );
 
-/**
- * Sets what the fake GitHub holds, as `FakeGitHub`'s `setUp` does. `onMerge` runs with the
- * services that the setup ran with.
- */
+/** Calls `FakeGitHub`'s `setUp`, and runs `onMerge` with the services this setup runs with. */
 export const setUpGitHub = <R = never>({
   onMerge,
   ...options
@@ -168,26 +153,20 @@ export const setUpGitHub = <R = never>({
     });
   });
 
-/** The calls to the fake GitHub that changed something, in order. */
+/** `FakeGitHub`'s `calls`. */
 export const gitHubCalls: Effect.Effect<readonly string[], never, FakeGitHub> = Effect.flatMap(
   FakeGitHub,
   ({ calls }) => calls,
 );
 
-/**
- * Sets the fake GitHub up with draft pull requests #1 for `a` and #2 for `b`, as stack #7 unless
- * `stacks` says otherwise.
- */
+/** Sets up draft pull requests #1 for `a` and #2 for `b`, as stack #7 by default. */
 export const setUpPullRequestsAB = <R = never>({
   stacks = stackOf(1, 2),
   ...options
 }: Omit<FakeGitHubSetUp<R>, "open"> = {}): Effect.Effect<void, never, FakeGitHub | R> =>
   setUpGitHub({ ...options, open: openPullRequestsAB, stacks });
 
-/**
- * Sets the fake GitHub up with draft pull requests #1 for `a`, with the title and body, and #2 for
- * `b`, as stack #7.
- */
+/** Sets up draft pull requests #1 for `a`, with the title and body, and #2 for `b`, as stack #7. */
 export const setUpPullRequestsABWithA = (
   title: string,
   body: string,
@@ -197,10 +176,7 @@ export const setUpPullRequestsABWithA = (
     stacks: stackOf(1, 2),
   });
 
-/**
- * Sets the fake GitHub up with draft pull requests #1 for `a`, #2 for `b` and #3 for `c`, as stack
- * #7 unless `stacks` says otherwise.
- */
+/** Sets up draft pull requests #1 for `a`, #2 for `b` and #3 for `c`, as stack #7 by default. */
 export const setUpPullRequestsABC = <R = never>({
   stacks = stackOf(1, 2, 3),
   ...options

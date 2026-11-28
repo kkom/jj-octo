@@ -13,10 +13,7 @@ import {
 } from "../clients/github/types";
 import type { FakeGitHubOptions } from "./fake-github";
 
-/**
- * What the fake GitHub holds. Opening a pull request, marking one ready, setting a base and setting
- * a description change what `openPullRequest` returns afterwards.
- */
+/** What the fake GitHub holds. */
 export interface State {
   readonly calls: readonly string[];
   /** How many pull requests the fake opened. */
@@ -28,7 +25,7 @@ export interface State {
   readonly stacks: readonly RemoteStack[];
 }
 
-/** The number of the first pull request a fake GitHub opens. The next ones count up from it. */
+/** The number of the first pull request the fake opens. */
 const FIRST_CREATED = 99;
 
 const rejected = (request: string, status: number) =>
@@ -42,7 +39,6 @@ const inAStack = (stacks: readonly RemoteStack[], pullRequests: readonly PullReq
 const listed = (pullRequests: readonly PullRequestNumber[]) =>
   EffectArray.join(EffectArray.map(pullRequests, String), ",");
 
-// Replaces the pull request numbered `number`, where it's open.
 const updateOpen = (
   open: Readonly<Record<string, PullRequest>>,
   number: PullRequestNumber,
@@ -52,7 +48,7 @@ const updateOpen = (
     pullRequest.number === number ? update(pullRequest) : pullRequest,
   );
 
-/** The `GitHub` client, reading and changing what the fake GitHub holds. */
+/** The `GitHub` client of the fake GitHub. */
 export const fakeGitHubClient = (state: Ref.Ref<State>): GitHub["Service"] => {
   const read = <A>(f: (current: State) => A) => Effect.map(Ref.get(state), f);
   const record = (call: string, update: (current: State) => State = (current) => current) =>
@@ -125,7 +121,7 @@ export const fakeGitHubClient = (state: Ref.Ref<State>): GitHub["Service"] => {
           open: { ...current.open, [head]: { base, body, draft, number, title } },
         })).pipe(Effect.as(number));
       }),
-    // GitHub rejects a stack with a pull request that is already in another.
+    // GitHub rejects a stack with a pull request already in another.
     createStack: (pullRequests) =>
       Effect.flatMap(Ref.get(state), ({ stacks }) => {
         if (inAStack(stacks, pullRequests)) {

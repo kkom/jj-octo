@@ -4,8 +4,8 @@ import { scratchDirectory } from "./scratch-process";
 import { ScratchRepository } from "./scratch-repository";
 
 /**
- * Adds a workspace named `other`, whose working copy is a new change on the revision. Returns its
- * directory, which is removed when the test's scope closes.
+ * Adds a workspace named `other`, with a new change on the revision, and returns its scoped
+ * directory.
  */
 export const addWorkspace = (
   revision: string,

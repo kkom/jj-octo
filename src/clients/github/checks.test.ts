@@ -15,7 +15,7 @@ const checkRunsPath = (page: number) =>
 const statusPath = (page: number) =>
   `/repos/owner/name/commits/abc/status?per_page=100&page=${page}`;
 
-// A check run as GitHub lists it, from GitHub Actions unless another app is given.
+// A check run as GitHub lists it.
 const checkRun = ({
   app = ACTIONS,
   conclusion = null,
@@ -43,8 +43,8 @@ const listing =
     return new Reply(404, { message: "Not Found" });
   };
 
-// The checks of commit `abc` against a GitHub that answers as `respond` does, with the requests
-// it received sorted, since the check runs and the statuses are read at once.
+// The checks of commit `abc`, and the requests GitHub received. They're sorted, since the check
+// runs and the statuses are read at once.
 const readLatestChecks = (respond: (request: InterceptedRequest) => unknown) =>
   callGitHub(respond, (github) => github.latestChecks("abc")).pipe(
     Effect.map(({ requests, result }) => ({

@@ -18,8 +18,7 @@ import { pullRequest } from "../../testing/pull-requests";
 import { ScratchRepository, scratchRepository } from "../../testing/scratch-repository";
 import { htmlLinks, links, markdownLinks, NoPullRequests, stackPullRequests } from "./links";
 
-// A clipboard that keeps the content of each write, and answers it as `answer` last set, `copied`
-// by default.
+// A clipboard that keeps each write's content and answers as `answer` last set.
 class FakeClipboard extends Context.Service<
   FakeClipboard,
   {

@@ -23,13 +23,13 @@ import {
 import { itEffect, layer } from "./testing/it-effect";
 import { ScratchRepository, scratchRepository } from "./testing/scratch-repository";
 
-// GitHub's answer to a request for the open pull requests from branch `a`.
+// GitHub's open pull requests from branch `a`.
 const pullRequestOfA = ({ path: requestPath }: InterceptedRequest) =>
   requestPath === "/repos/owner/name/pulls?head=owner%3Aa&state=open"
     ? [{ base: { ref: "main" }, body: "", draft: true, number: 7, title: "a" }]
     : [];
 
-// What the proxy receives and `log` prints when `log` reads that pull request.
+// What the proxy receives and `log` prints for that pull request.
 const logOfA = {
   log: [
     "CONNECT api.github.com:443",
@@ -41,8 +41,8 @@ const logOfA = {
 // The search for whether #7 is open and approved.
 const searchOfA = searchPath("7 created:2026-01-01T00:00:00Z..2026-01-01T00:00:00Z");
 
-// GitHub's answers to a request for every pull request from branch `a`, which lists #7 ready for
-// review, and to the search, which lists #7 as approved.
+// GitHub lists every pull request from branch `a`, with #7 ready for review, and the search lists
+// #7 as approved.
 const answersOfA: Readonly<Record<string, unknown>> = {
   "/repos/owner/name/pulls?head=owner%3Aa&state=all&per_page=100&page=1": [
     {
@@ -60,16 +60,16 @@ const answersOfA: Readonly<Record<string, unknown>> = {
 };
 const listOfA = ({ path: requestPath }: InterceptedRequest) => answersOfA[requestPath] ?? [];
 
-// The environment that sends jj-octo's requests through the proxy, with a token it can pass on.
+// The environment that sends jj-octo's requests through the proxy, with a token.
 const proxyEnv = ({ caFile, url }: InterceptingProxy["Service"]) => ({
   GH_TOKEN: "test-token",
   HTTPS_PROXY: url,
   NODE_EXTRA_CA_CERTS: caFile,
 });
 
-// A repository with change `a` on `main`, whose `origin` is a GitHub repository, and the
-// environment that runs the file in it with its own configuration. It records this version as
-// the one that set it up, as `init` does, since `init` can't reach that `origin`.
+// A repository with change `a` on `main` and a GitHub `origin`, and the environment that runs
+// jj-octo in it with its own configuration. It records this version as the one that set it up,
+// as `init` would, since `init` can't reach that `origin`.
 const checkoutOfA = Effect.gen(function* () {
   const repository = yield* ScratchRepository;
   yield* repository.stack("a");
@@ -185,7 +185,7 @@ describe.each(builds)("$name", ({ command }) => {
           });
         }));
 
-      it("tries to set a checkout up before a command where no version is recorded", () =>
+      it("tries to set up a checkout with no recorded version before a command", () =>
         Effect.gen(function* () {
           const proxy = yield* InterceptingProxy;
           yield* proxy.answer(pullRequestOfA);
@@ -204,8 +204,7 @@ describe.each(builds)("$name", ({ command }) => {
             recorded,
             stdout,
           };
-          // `init` can't reach this `origin` with git, so it says what's left and the command
-          // carries on.
+          // `init` can't reach `origin` with git, so it says what's left and the command continues.
           expect({ log: yield* proxy.log, result }).toStrictEqual({
             // The first is `init`'s `git ls-remote`, which the proxy doesn't answer for github.com.
             log: ["CONNECT github.com:443", ...logOfA.log],
@@ -227,8 +226,8 @@ describe.each(builds)("$name", ({ command }) => {
           expect({ log: yield* proxy.log, result }).toStrictEqual(logOfA);
         }));
 
-      // The checkout is someone else's, so neither its `.env` nor its `bunfig.toml` may change how
-      // jj-octo runs. Loaded, this `.env` would send the request past the proxy.
+      // A checkout is someone else's, so its `.env` and `bunfig.toml` mustn't change how jj-octo
+      // runs. This `.env` would send the request past the proxy.
       it("ignores a .env file in the checkout", () =>
         Effect.gen(function* () {
           const proxy = yield* InterceptingProxy;
@@ -245,8 +244,7 @@ describe.each(builds)("$name", ({ command }) => {
           expect({ log: yield* proxy.log, result }).toStrictEqual(logOfA);
         }));
 
-      // Loaded, the checkout's `bunfig.toml` would run its preload inside jj-octo, which fails the
-      // run.
+      // This `bunfig.toml` would run its preload inside jj-octo and fail the run.
       it("ignores a bunfig.toml file in the checkout", () =>
         Effect.gen(function* () {
           const proxy = yield* InterceptingProxy;

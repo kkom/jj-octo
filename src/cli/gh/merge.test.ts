@@ -122,8 +122,8 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
       }));
   });
 
-  // The stack merges as one commit, on a trunk that moved since the stack was pushed, and with an
-  // unpushed change above it. Rebased onto the trunk, `a` would conflict with `b`'s edit.
+  // The stack merges as one commit, on a trunk that moved since the push, with an unpushed change
+  // above it. Rebased onto the trunk, `a` would conflict with `b`'s edit.
   it("drops the merged changes of a stack merged as one commit, and rebases the change above", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
@@ -164,8 +164,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
       });
     }));
 
-  // Where GitHub keeps the merged branch, it doesn't move the pull requests based on it, so the
-  // republish does.
+  // GitHub doesn't move the pull requests based on a merged branch it keeps, so the republish does.
   it("moves the next pull request onto the trunk, where GitHub keeps the merged branch", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
@@ -251,9 +250,9 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
 });
 
 layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHub))("merge, with three changes", (it) => {
-  // Rebased onto the trunk, the first merged change would conflict with the second's edit of
-  // the same file, rather than coming out empty. GitHub may delete the merged branches only
-  // after the fetch, so the fetch can't be relied on to drop them either.
+  // Rebased onto the trunk, the first merged change would conflict with the second's edit, not come
+  // out empty. GitHub may delete the merged branches after the fetch, so the fetch may not drop
+  // them either.
   it("drops every merged change, where a later one edited what an earlier one wrote", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;

@@ -4,10 +4,9 @@ import { moveTrunkOnGitHub } from "./branch-changes";
 import { ScratchRepository } from "./scratch-repository";
 
 /**
- * Gives the change of the bookmark `conflicted` a conflict with the trunk. Moves `main` on GitHub
- * with a file that the change adds too, then rebases the working copy's stack onto it, which gives
- * the changes above it the conflict too. Then pushes the bookmarks of `pushed` again, which must
- * have no conflicts.
+ * Gives bookmark `conflicted`'s change a conflict with the trunk: moves `main` on GitHub with a
+ * file that change adds too, then rebases the working copy's stack onto it. The changes above get
+ * the conflict too. Then pushes the bookmarks of `pushed` again, which must have no conflicts.
  */
 export const conflictWithTrunk = (
   conflicted: string,

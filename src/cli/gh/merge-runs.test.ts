@@ -10,10 +10,8 @@ import { merging } from "../../testing/merge";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { merge } from "./merge";
 
-// Sets up the stack of `a` and `b` to merge up to `b`, whose head commits have workflow runs: one
-// running and one completed for `a`, and one queued for `b`. `b`'s commit also has a running push
-// run on `main`, as the trunk has after a merge fast-forwards it to `b`. Cancelling `a`'s running
-// one is forbidden where `forbidden` says.
+// Sets up the stack of `a` and `b` to merge up to `b`. `b`'s commit also has a running push run on
+// `main`, as after a merge fast-forwards the trunk to `b`.
 const mergedWithRuns = (forbidden = false) =>
   Effect.gen(function* () {
     const repository = yield* ScratchRepository;
@@ -39,7 +37,7 @@ const mergedWithRuns = (forbidden = false) =>
   });
 
 layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
-  it("with --cancel-pr-runs, cancels every merged pull request's workflow runs that haven't completed, and not the trunk's push run", () =>
+  it("with --cancel-pr-runs, cancels the merged pull requests' unfinished runs, and not the trunk's push run", () =>
     Effect.gen(function* () {
       yield* mergedWithRuns();
       yield* merge("b", { allWorkspaces: false, cancelPrRuns: true });

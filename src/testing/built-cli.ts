@@ -11,8 +11,8 @@ import { readOutput } from "../clients/process";
 const dist = new URL("../../dist", import.meta.url).pathname;
 
 /**
- * What `bun run test` builds first: the file npm publishes, run through its shebang as an
- * installed command is, and the standalone executable, which carries Bun, for this platform.
+ * What `bun run test` builds first: the file npm publishes, run through its shebang, and this
+ * platform's standalone executable, which carries Bun.
  */
 export const builds: readonly {
   readonly command: readonly [string, ...string[]];
@@ -22,8 +22,8 @@ export const builds: readonly {
   { command: [`${dist}/jj-octo`], name: "the standalone executable" },
 ];
 
-// The environment of the tests, without the proxy settings it may hold, which would otherwise
-// route requests past the proxy under test.
+// The tests' environment without its proxy settings, which would route requests past the proxy
+// under test.
 const proxySettings = new Set(["http_proxy", "https_proxy", "no_proxy", "node_extra_ca_certs"]);
 const inherited = EffectRecord.filter(
   process.env,
@@ -36,9 +36,8 @@ export interface RunOptions {
 }
 
 /**
- * Runs a build with `args`, and returns what it prints. It dies with what the build prints to
- * stderr where it exits with another status than 0. It waits for the build without blocking, so a
- * proxy in this process can answer while the build runs, and kills the build if interrupted.
+ * Runs a build with `args`. Where it exits non-zero, dies with its stderr. It waits without
+ * blocking, so a proxy in this process can answer, and kills the build if interrupted.
  */
 export const output = (
   command: readonly [string, ...string[]],
@@ -71,7 +70,7 @@ export const output = (
     }),
   ).pipe(Effect.orDie);
 
-/** Runs a build with `args`, as `output` does, and returns what it prints to stdout. */
+/** `output`'s stdout. */
 export const run = (
   command: readonly [string, ...string[]],
   args: readonly string[],

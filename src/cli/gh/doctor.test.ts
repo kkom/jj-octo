@@ -48,7 +48,7 @@ layer(gitClone())("problems", (it) => {
       ]);
     }));
 
-  it("tells to set an identity where neither jj nor git has one", () =>
+  it("says to set an identity where neither jj nor git has one", () =>
     Effect.gen(function* () {
       const clone = yield* GitClone;
       yield* clone.git("config", "--unset", "user.name");

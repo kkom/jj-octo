@@ -11,8 +11,8 @@ import { lines } from "./stack/changes";
 
 const OPERATION = String.raw`description.first_line() ++ "\n"`;
 
-// A second stack, `c`, on the trunk the stack of `a` and `b` started from, which conflicts with
-// what `moveTrunkOnGitHub` adds to the trunk.
+// A second stack, `c`, on the trunk `a` and `b` started from. It conflicts with what
+// `moveTrunkOnGitHub` adds to the trunk.
 const addConflictingStack = Effect.gen(function* () {
   const repository = yield* ScratchRepository;
   yield* repository.jj("new", "main", "-m", "c");
