@@ -114,8 +114,11 @@ const searchBatch = (
         );
       }
       const half = Math.ceil(batch.length / 2);
-      return Effect.forEach([batch.slice(0, half), batch.slice(half)], (part) =>
-        searchBatch(requests, repository, part),
+      // In turn, under search's own low secondary rate limit.
+      return Effect.forEach(
+        [batch.slice(0, half), batch.slice(half)],
+        (part) => searchBatch(requests, repository, part),
+        { concurrency: 1 },
       ).pipe(Effect.map((found) => found.flat()));
     }),
   );
@@ -149,6 +152,8 @@ export const approvedPullRequests = (
       ),
     ),
     (batch) => searchBatch(requests, repository, batch),
+    // In turn, under search's own low secondary rate limit.
+    { concurrency: 1 },
   ).pipe(
     Effect.map((found) => {
       const asked = new Set(EffectArray.map(pullRequests, ({ number }) => number));

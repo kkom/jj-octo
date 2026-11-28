@@ -120,10 +120,13 @@ const requiredChecks = (
 ): Effect.Effect<RequiredChecks, GitHubFailed> => {
   const encoded = encodeURIComponent(branch);
   // One after the other, so where both fail, the first failure is the one reported.
-  return Effect.all([
-    everyPage(HttpClientRequest.get(repo(`/rules/branches/${encoded}`)), json(BranchRules)),
-    json(BranchProtection)(HttpClientRequest.get(repo(`/branches/${encoded}`))),
-  ]).pipe(
+  return Effect.all(
+    [
+      everyPage(HttpClientRequest.get(repo(`/rules/branches/${encoded}`)), json(BranchRules)),
+      json(BranchProtection)(HttpClientRequest.get(repo(`/branches/${encoded}`))),
+    ],
+    { concurrency: 1 },
+  ).pipe(
     Effect.map(([rules, branchDetails]): RequiredChecks => {
       const unread = EffectArray.dedupe(
         EffectArray.filter(

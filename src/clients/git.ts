@@ -60,8 +60,10 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
               const directory = yield* fs.makeTempDirectoryScoped();
               // `git merge-file` merges lines, and treats a last line with no newline as changed.
               const written = { base: `${base}\n`, github: `${remote}\n`, local: `${local}\n` };
-              yield* Effect.forEach(EffectRecord.toEntries(written), ([name, text]) =>
-                fs.writeFileString(path.join(directory, name), text),
+              yield* Effect.forEach(
+                EffectRecord.toEntries(written),
+                ([name, text]) => fs.writeFileString(path.join(directory, name), text),
+                { concurrency: "unbounded" },
               );
               const handle = yield* spawner.spawn(
                 ChildProcess.make(

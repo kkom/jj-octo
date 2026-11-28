@@ -16,10 +16,13 @@ describe("dissolve", () => {
         Effect.andThen(
           Effect.gen(function* () {
             const client = yield* GitHub;
-            return yield* Effect.all([
-              client.stackOf(PullRequestNumberSchema.make(1)),
-              client.stackOf(PullRequestNumberSchema.make(3)),
-            ]);
+            return yield* Effect.all(
+              [
+                client.stackOf(PullRequestNumberSchema.make(1)),
+                client.stackOf(PullRequestNumberSchema.make(3)),
+              ],
+              { concurrency: "unbounded" },
+            );
           }),
         ),
         Effect.provide(github.layer),
