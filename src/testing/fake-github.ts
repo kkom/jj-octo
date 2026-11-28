@@ -1,24 +1,30 @@
-import { Array as EffectArray, Effect, Layer, Option, Record as EffectRecord } from "effect";
-
-import type { Git } from "../clients/git";
-import { GitHub } from "../clients/github/client";
-import { GitHubFailed } from "../clients/github/failure";
 import {
-  type Check,
-  type PullRequest,
-  type ListedPullRequest,
-  type PullRequestNumber,
-  PullRequestNumberSchema,
-  type RemoteStack,
-  type RequiredChecks,
-  StackNumberSchema,
-  WorkflowRunIdSchema,
+  Array as EffectArray,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Record as EffectRecord,
+  Ref,
+} from "effect";
+
+import { GitHub } from "../clients/github/client";
+import type {
+  Check,
+  PullRequest,
+  ListedPullRequest,
+  PullRequestNumber,
+  RemoteStack,
+  RequiredChecks,
 } from "../clients/github/types";
-import type { Jj } from "../clients/jj";
-import type { PrDescriptions } from "../clients/pr-descriptions";
-import { environment } from "./environment";
-import { provideSetup } from "./it-effect";
-import type { ScratchRepository } from "./scratch-repository";
+import { fakeGitHubClient, type State } from "./fake-github-client";
+import {
+  openPullRequest,
+  openPullRequestsAB,
+  openPullRequestsABC,
+  pullRequest,
+  stackOf,
+} from "./pull-requests";
 
 /** A workflow run, by its id, the branch it ran on, and whether it has completed. */
 export interface FakeRun {
@@ -29,7 +35,7 @@ export interface FakeRun {
   readonly id: string;
 }
 
-export interface FakeGitHubOptions {
+export interface FakeGitHubOptions<R = never> {
   /** The open pull requests GitHub's search lists as approved. None by default. */
   readonly approved?: readonly PullRequestNumber[];
   /** The latest result of each check of each commit. None by default. */
@@ -37,8 +43,11 @@ export interface FakeGitHubOptions {
   /** GitHub answers 403 to a comment where the token can't write to issues. */
   readonly commentForbidden?: boolean;
   /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
-  readonly onMerge?: (pullRequest: PullRequestNumber) => Effect.Effect<void>;
-  /** The pull requests from the branch in any state, newest first. None by default. */
+  readonly onMerge?: (pullRequest: PullRequestNumber) => Effect.Effect<void, never, R>;
+  /**
+   * The pull requests from the branch in any state, newest first, after the ones
+   * `recordMerge` recorded. None by default.
+   */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
   /** The checks each branch requires. A branch not named here doesn't exist. */
   readonly required?: Readonly<Record<string, RequiredChecks>>;
@@ -46,217 +55,158 @@ export interface FakeGitHubOptions {
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
 
-/** The number of the first pull request a fake GitHub opens. The next ones count up from it. */
-const FIRST_CREATED = 99;
+/** What the fake GitHub holds: the open pull requests by branch, the stacks, and the rest. */
+export interface FakeGitHubSetUp<R = never> extends FakeGitHubOptions<R> {
+  /** The open pull requests, by the branch each is from. None by default. */
+  readonly open?: Readonly<Record<string, PullRequest>>;
+  /** The stacks. None by default. */
+  readonly stacks?: readonly RemoteStack[];
+}
 
-const rejected = (request: string, status: number) =>
-  Effect.fail(GitHubFailed.make({ message: `${request} returned ${status}`, status }));
+/** A merge that `FakeGitHub`'s `recordMerge` records. */
+export interface RecordedMerge {
+  readonly branch: string;
+  readonly deleted: boolean;
+  readonly head: string;
+  readonly into: string;
+}
 
-// A GitHub with the given open pull requests and stacks, recording every call that changes
-// something.
-export const fakeGitHub = (
-  open: Readonly<Record<string, PullRequest>>,
-  stacks: readonly RemoteStack[],
+/**
+ * A GitHub that holds the pull requests and stacks `setUp` gives it, and records every call that
+ * changes something. It holds none until then.
+ */
+export class FakeGitHub extends Context.Service<
+  FakeGitHub,
   {
-    approved = [],
-    checks = {},
-    commentForbidden = false,
-    onMerge,
-    pullRequestsFrom = () => [],
-    required = {},
-    runs = {},
-  }: FakeGitHubOptions = {},
-): { readonly calls: readonly string[]; readonly layer: Layer.Layer<GitHub> } => {
-  const calls: string[] = [];
-  // Opening a pull request, marking one ready and setting a base change what `openPullRequest`
-  // returns afterwards.
-  const opened = new Map(EffectRecord.toEntries(open));
-  let created = 0;
-  let registered = stacks;
-  const record = (call: string) =>
-    Effect.sync(() => {
-      calls.push(call);
-    });
-  const layer = Layer.succeed(GitHub, {
-    // GitHub rejects adding to a stack that doesn't exist, or a pull request in another stack.
-    addToStack: (number, pullRequests) => {
-      if (!EffectArray.some(registered, (stack) => stack.number === number)) {
-        return rejected(`POST /stacks/${number}/add`, 404);
-      }
-      if (
-        EffectArray.some(registered, ({ unmerged }) =>
-          EffectArray.some(unmerged, (pr) => pullRequests.includes(pr)),
-        )
-      ) {
-        return rejected(`POST /stacks/${number}/add`, 422);
-      }
-      return record(
-        `add ${EffectArray.join(EffectArray.map(pullRequests, String), ",")} to #${number}`,
-      ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            registered = EffectArray.map(registered, (stack) =>
-              stack.number === number
-                ? { ...stack, unmerged: [...stack.unmerged, ...pullRequests] }
-                : stack,
-            );
-          }),
-        ),
-      );
-    },
-    approvedPullRequests: (pullRequests) =>
-      Effect.succeed(
-        new Set(
-          EffectArray.filter(
-            EffectArray.map(pullRequests, ({ number }) => number),
-            (number) => approved.includes(number),
-          ),
-        ),
-      ),
-    cancelRun: (run) => {
-      const found = EffectArray.findFirst(EffectRecord.values(runs).flat(), ({ id }) => id === run);
-      const failed = (status: number) => rejected(`cancel run ${run}`, status);
-      if (Option.isNone(found)) {
-        return failed(404);
-      }
-      if (found.value.cancelForbidden === true) {
-        return failed(403);
-      }
-      return found.value.completed
-        ? Effect.succeed("finished" as const)
-        : record(`cancel run ${run}`).pipe(Effect.as("cancelled" as const));
-    },
-    closePullRequest: (number) =>
-      record(`close #${number}`).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            for (const [branch, pullRequest] of opened) {
-              if (pullRequest.number === number) {
-                opened.delete(branch);
-              }
-            }
-          }),
-        ),
-      ),
-    commentOnPullRequest: (number, body) =>
-      commentForbidden
-        ? rejected(`POST /issues/${number}/comments`, 403)
-        : record(`comment on #${number}: ${body}`),
-    createPullRequest: ({ base, body, draft, head, title }) => {
-      const number = PullRequestNumberSchema.make(FIRST_CREATED + created);
-      created += 1;
-      return record(`open ${head} on ${base}${draft ? " as a draft" : ""}`).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            opened.set(head, { base, body, draft, number, title });
-          }),
-        ),
-        Effect.as(number),
-      );
-    },
-    // GitHub rejects a stack with a pull request that is already in another.
-    createStack: (pullRequests) => {
-      if (
-        EffectArray.some(registered, ({ unmerged }) =>
-          EffectArray.some(unmerged, (pr) => pullRequests.includes(pr)),
-        )
-      ) {
-        return rejected("POST /stacks", 422);
-      }
-      const number = StackNumberSchema.make(
-        Math.max(7, ...EffectArray.map(registered, (stack) => stack.number)) + 1,
-      );
-      return record(
-        `create stack ${EffectArray.join(EffectArray.map(pullRequests, String), ",")}`,
-      ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            registered = [...registered, { number, unmerged: pullRequests }];
-          }),
-        ),
-        Effect.as(number),
-      );
-    },
-    defaultBranch: Effect.succeed("main"),
-    latestChecks: (commit) => Effect.succeed(checks[commit] ?? []),
-    markReadyForReview: (number) => {
-      const found = EffectArray.findFirst(
-        [...opened.entries()],
-        ([, pullRequest]) => pullRequest.number === number,
-      );
-      if (Option.isNone(found)) {
-        return rejected(`GET /pulls/${number}`, 404);
-      }
-      const [branch, pullRequest] = found.value;
-      return record(`publish #${number}`).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            opened.set(branch, { ...pullRequest, draft: false });
-          }),
-        ),
-      );
-    },
-    mergePullRequest: (number) =>
-      record(`merge #${number}`).pipe(Effect.tap(() => onMerge?.(number) ?? Effect.void)),
-    mergeStack: (number) =>
-      record(`merge the stack up to #${number}`).pipe(
-        Effect.tap(() => onMerge?.(number) ?? Effect.void),
-        Effect.as("merged"),
-      ),
-    openPullRequest: (branch) => Effect.sync(() => Option.fromNullishOr(opened.get(branch))),
-    pullRequestsFrom: (branch) => Effect.sync(() => pullRequestsFrom(branch)),
-    // GitHub answers 404 for a branch it doesn't have, which the client reads as unknown.
-    requiredChecks: (branch) =>
-      Effect.succeed(
-        required[branch] ?? {
-          _tag: "Unknown" as const,
-          reason: `couldn't read the rules of ${branch}: GET /branches/${branch} returned 404`,
-        },
-      ),
-    setBase: (number, base) =>
-      record(`base #${number} → ${base}`).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            for (const [branch, pullRequest] of opened) {
-              if (pullRequest.number === number) {
-                opened.set(branch, { ...pullRequest, base });
-              }
-            }
-          }),
-        ),
-      ),
-    setDescription: (number, { title }) => record(`describe #${number} as ${title}`),
-    stackOf: (pullRequest) =>
-      Effect.sync(() =>
-        EffectArray.findFirst(registered, ({ unmerged }) => unmerged.includes(pullRequest)),
-      ),
-    unfinishedRuns: ({ branch, commit }) =>
-      Effect.succeed(
-        EffectArray.map(
-          EffectArray.filter(runs[commit] ?? [], (run) => run.branch === branch && !run.completed),
-          ({ id }) => WorkflowRunIdSchema.make(id),
-        ),
-      ),
-    unstack: (number) =>
-      EffectArray.some(registered, (stack) => stack.number === number)
-        ? record(`unstack #${number}`).pipe(
-            Effect.tap(() =>
-              Effect.sync(() => {
-                registered = EffectArray.filter(registered, (stack) => stack.number !== number);
-              }),
-            ),
-          )
-        : rejected(`POST /stacks/${number}/unstack`, 404),
-  });
-  return { calls, layer };
-};
+    /** The calls that changed something, in order. */
+    readonly calls: Effect.Effect<readonly string[]>;
+    /**
+     * Records that GitHub merged the pull request from `branch` into `into`, with `head` as its
+     * head commit. As GitHub does, closes that pull request and drops it from its stack. With
+     * `deleted`, the merge deleted the branch, so the open pull requests based on it are retargeted
+     * to `into`.
+     */
+    readonly recordMerge: (merge: RecordedMerge) => Effect.Effect<void>;
+    /** Sets the open pull requests by branch, the stacks, and the rest of what GitHub holds. */
+    readonly setUp: (setUp: FakeGitHubSetUp) => Effect.Effect<void>;
+  }
+>()("jj-octo/testing/fake-github/FakeGitHub") {}
 
-/** Runs a program against the scratch repository and the fake GitHub, with `env` as its environment. */
-export const inRepository =
-  (
-    repository: ScratchRepository,
-    github: { readonly layer: Layer.Layer<GitHub> },
-    env: Readonly<Record<string, string>> = {},
-  ) =>
-  <A, E>(program: Effect.Effect<A, E, Git | GitHub | Jj | PrDescriptions>): Effect.Effect<A, E> =>
-    program.pipe(provideSetup(Layer.mergeAll(repository.layer, github.layer, environment(env))));
+/** The fake GitHub, and the `GitHub` client that reads and changes what it holds. */
+export const fakeGitHub: Layer.Layer<FakeGitHub | GitHub> = Layer.unwrap(
+  Effect.gen(function* () {
+    const state = yield* Ref.make<State>({
+      calls: [],
+      created: 0,
+      merged: [],
+      open: {},
+      options: {},
+      stacks: [],
+    });
+    return Layer.mergeAll(
+      Layer.succeed(FakeGitHub, {
+        calls: Effect.map(Ref.get(state), ({ calls }) => calls),
+        recordMerge: ({ branch, deleted, head, into }) =>
+          Ref.update(state, (current) => {
+            const merging = Option.fromNullishOr(current.open[branch]);
+            // A test may merge a branch it gave no open pull request, so the number comes from
+            // the count of merges, which keeps it unique among them.
+            const number = Option.match(merging, {
+              onNone: () => current.merged.length + 1,
+              onSome: (open) => open.number,
+            });
+            const others = EffectRecord.filter(current.open, (_, from) => from !== branch);
+            return {
+              ...current,
+              merged: [
+                {
+                  branch,
+                  pullRequest: {
+                    ...pullRequest(number, "merged", head),
+                    title: Option.match(merging, {
+                      onNone: () => branch,
+                      onSome: (open) => open.title,
+                    }),
+                  },
+                },
+                ...current.merged,
+              ],
+              open: deleted
+                ? EffectRecord.map(others, (open) =>
+                    open.base === branch ? { ...open, base: into } : open,
+                  )
+                : others,
+              stacks: EffectArray.map(current.stacks, (stack) => ({
+                ...stack,
+                unmerged: EffectArray.filter(
+                  stack.unmerged,
+                  (unmerged) => !Option.exists(merging, (open) => open.number === unmerged),
+                ),
+              })),
+            };
+          }),
+        setUp: ({ open = {}, stacks = [], ...options }) =>
+          Ref.update(state, (current) => ({ ...current, open, options, stacks })),
+      }),
+      Layer.succeed(GitHub, fakeGitHubClient(state)),
+    );
+  }),
+);
+
+/**
+ * Sets what the fake GitHub holds, as `FakeGitHub`'s `setUp` does. `onMerge` runs with the
+ * services that the setup ran with.
+ */
+export const setUpGitHub = <R = never>({
+  onMerge,
+  ...options
+}: FakeGitHubSetUp<R>): Effect.Effect<void, never, FakeGitHub | R> =>
+  Effect.gen(function* () {
+    const github = yield* FakeGitHub;
+    const context = yield* Effect.context<R>();
+    yield* github.setUp({
+      ...options,
+      ...(onMerge === undefined
+        ? {}
+        : { onMerge: (number) => Effect.provideContext(onMerge(number), context) }),
+    });
+  });
+
+/** The calls to the fake GitHub that changed something, in order. */
+export const gitHubCalls: Effect.Effect<readonly string[], never, FakeGitHub> = Effect.flatMap(
+  FakeGitHub,
+  ({ calls }) => calls,
+);
+
+/**
+ * Sets the fake GitHub up with draft pull requests #1 for `a` and #2 for `b`, as stack #7 unless
+ * `stacks` says otherwise.
+ */
+export const setUpPullRequestsAB = <R = never>({
+  stacks = stackOf(1, 2),
+  ...options
+}: Omit<FakeGitHubSetUp<R>, "open"> = {}): Effect.Effect<void, never, FakeGitHub | R> =>
+  setUpGitHub({ ...options, open: openPullRequestsAB, stacks });
+
+/**
+ * Sets the fake GitHub up with draft pull requests #1 for `a`, with the title and body, and #2 for
+ * `b`, as stack #7.
+ */
+export const setUpPullRequestsABWithA = (
+  title: string,
+  body: string,
+): Effect.Effect<void, never, FakeGitHub> =>
+  setUpGitHub({
+    open: { ...openPullRequestsAB, a: { ...openPullRequest("main", 1, title), body } },
+    stacks: stackOf(1, 2),
+  });
+
+/**
+ * Sets the fake GitHub up with draft pull requests #1 for `a`, #2 for `b` and #3 for `c`, as stack
+ * #7 unless `stacks` says otherwise.
+ */
+export const setUpPullRequestsABC = <R = never>({
+  stacks = stackOf(1, 2, 3),
+  ...options
+}: Omit<FakeGitHubSetUp<R>, "open"> = {}): Effect.Effect<void, never, FakeGitHub | R> =>
+  setUpGitHub({ ...options, open: openPullRequestsABC, stacks });

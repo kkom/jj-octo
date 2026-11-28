@@ -1,67 +1,27 @@
-import { Effect, type Scope, String as EffectString } from "effect";
+import { Effect } from "effect";
 
 import { type SubmitFailed, submit } from "../cli/gh/stack/push";
-import type { RemoteStack } from "../clients/github/types";
-import { fakeGitHub, type FakeGitHubOptions, inRepository } from "./fake-github";
-import { openPullRequest, stackOf } from "./pull-requests";
-import type { ScratchServices } from "./scratch-process";
-import { pushedStack, type ScratchRepository } from "./scratch-repository";
+import type { GitHub } from "../clients/github/client";
+import type { RepositoryClients } from "./scratch-process";
+import { ScratchRepository } from "./scratch-repository";
 
-/** Submits the revision in the repository, against the fake GitHub. */
-export const submitIn = (
-  repository: ScratchRepository,
-  github: ReturnType<typeof fakeGitHub>,
-  {
-    draft = true,
-    env = {},
-    overwriteDescriptions = false,
-    revision = "@",
-  }: {
-    readonly draft?: boolean;
-    /** The environment the submit runs in. */
-    readonly env?: Readonly<Record<string, string>>;
-    readonly overwriteDescriptions?: boolean;
-    readonly revision?: string;
-  } = {},
-): Effect.Effect<void, SubmitFailed> =>
-  submit(revision, { draft, overwriteDescriptions }).pipe(inRepository(repository, github, env));
+/** Submits the revision, `@` by default, as drafts unless `draft` is false. */
+export const submitting = ({
+  draft = true,
+  overwriteDescriptions = false,
+  revision = "@",
+}: {
+  readonly draft?: boolean;
+  readonly overwriteDescriptions?: boolean;
+  readonly revision?: string;
+} = {}): Effect.Effect<void, SubmitFailed, GitHub | RepositoryClients> =>
+  submit(revision, { draft, overwriteDescriptions });
 
-/** The revision's description. */
-export const description = (
-  repository: ScratchRepository,
-  revision: string,
-): Effect.Effect<string> =>
-  Effect.map(repository.jj("log", "--no-graph", "-r", revision, "-T", "description"), (printed) =>
-    EffectString.trimEnd(printed),
-  );
-
-/** A stack of `a` and `b`, pushed with `a` described as three paragraphs. */
-export const pushed: Effect.Effect<ScratchRepository, never, ScratchServices | Scope.Scope> =
-  Effect.gen(function* () {
-    const repository = yield* pushedStack("a", "b");
-    yield* repository.jj("describe", "-r", "a", "-m", "a\n\nfirst\n\nsecond");
-    yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
-    return repository;
-  });
-
-/** A fake GitHub with pull requests #1 for `a`, with the title and body, and #2 for `b`. */
-export const githubWith = (title: string, body: string): ReturnType<typeof fakeGitHub> =>
-  fakeGitHub(
-    { a: { ...openPullRequest("main", 1, title), body }, b: openPullRequest("a", 2, "b") },
-    stackOf(1, 2),
-  );
-
-/** A fake GitHub with draft pull requests #1 for `a`, #2 for `b` and #3 for `c`, as stack #7 by default. */
-export const githubWithThree = (
-  stacks: readonly RemoteStack[] = stackOf(1, 2, 3),
-  options?: FakeGitHubOptions,
-): ReturnType<typeof fakeGitHub> =>
-  fakeGitHub(
-    {
-      a: openPullRequest("main", 1, "a"),
-      b: openPullRequest("a", 2, "b"),
-      c: openPullRequest("b", 3, "c"),
-    },
-    stacks,
-    options,
+/** Describes `a`, of the pushed stack `a`, `b`, as three paragraphs, and pushes it again. */
+export const describeAInParagraphs: Effect.Effect<void, never, ScratchRepository> =
+  ScratchRepository.use((repository) =>
+    Effect.gen(function* () {
+      yield* repository.jj("describe", "-r", "a", "-m", "a\n\nfirst\n\nsecond");
+      yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
+    }),
   );

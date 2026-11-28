@@ -1,12 +1,11 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
-import { Effect, FileSystem, Layer } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting, type Setting } from "./settings";
-import { environment } from "./testing/environment";
-import { gitClone } from "./testing/git-clone";
-import { itEffect, provideSetup } from "./testing/it-effect";
-import { scratchRepository } from "./testing/scratch-repository";
+import { withEnvironment } from "./testing/environment";
+import { GitClone, gitClone } from "./testing/git-clone";
+import { layer } from "./testing/it-effect";
 
 const mode: Setting<"fast" | "slow"> = {
   choices: [
@@ -18,60 +17,62 @@ const mode: Setting<"fast" | "slow"> = {
   key: "jj-octo.mode",
 };
 
-/** A clone whose jj config holds `config`, and reads settings with `env` as the environment. */
-const reader = (config: string, env: Readonly<Record<string, string>> = {}) =>
+/**
+ * Writes `config` as the clone's jj config, then reads the setting with `env` as the environment.
+ */
+const readWith = <A extends boolean | string>(
+  setting: Setting<A>,
+  config: string,
+  env: Readonly<Record<string, string>> = {},
+) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const repository = yield* scratchRepository;
-    const clone = yield* gitClone(repository);
+    const clone = yield* GitClone;
     yield* Effect.orDie(fs.writeFileString(clone.jjConfigFile, config));
-    return <A extends boolean | string>(setting: Setting<A>) =>
-      readSetting(setting).pipe(
-        Effect.map((value) => ({ value })),
-        Effect.catch(({ message }) => Effect.succeed({ message })),
-        provideSetup(Layer.merge(clone.layer, environment(env))),
-      );
+    return yield* readSetting(setting).pipe(
+      Effect.map((value) => ({ value })),
+      Effect.catch(({ message }) => Effect.succeed({ message })),
+      withEnvironment(env),
+    );
   });
 
-describe("readSetting", () => {
-  itEffect("reads a choice, the default where the key has none, and fails on any other value", () =>
+layer(gitClone())("readSetting", (it) => {
+  it("reads a choice, the default where the key has none, and fails on any other value", () =>
     Effect.gen(function* () {
-      const set = yield* reader('[jj-octo]\nmode = "fast"\nignore-claude-code-footer = "yes"\n');
-      const unset = yield* reader("");
-      expect([
-        yield* set(mode),
-        yield* unset(mode),
-        yield* set(IGNORE_CLAUDE_CODE_FOOTER),
-      ]).toStrictEqual([
+      const config = '[jj-octo]\nmode = "fast"\nignore-claude-code-footer = "yes"\n';
+      const set = yield* readWith(mode, config);
+      const unset = yield* readWith(mode, "");
+      const invalid = yield* readWith(IGNORE_CLAUDE_CODE_FOOTER, config);
+      expect([set, unset, invalid]).toStrictEqual([
         { value: "fast" },
         { value: "slow" },
         { message: 'jj-octo.ignore-claude-code-footer is "yes"; set it to true or false' },
       ]);
-    }),
-  );
+    }));
 
-  itEffect("reads a choice of another type as a value it doesn't know", () =>
+  it("reads a choice of another type as a value it doesn't know", () =>
     Effect.gen(function* () {
-      const read = yield* reader("[jj-octo]\nmode = true\n");
-      const result = yield* read(mode);
+      const result = yield* readWith(mode, "[jj-octo]\nmode = true\n");
       expect(result).toStrictEqual({
         message: "jj-octo.mode is true; set it to fast or slow",
       });
-    }),
-  );
+    }));
 
-  itEffect("reads a default that depends on the environment", () =>
+  it("reads a default that depends on the environment", () =>
     Effect.gen(function* () {
-      const inCloudSession = yield* reader("", { CLAUDE_CODE_REMOTE: "true" });
-      const elsewhere = yield* reader("");
-      const overridden = yield* reader("[jj-octo]\nignore-claude-code-footer = false\n", {
+      const inCloudSession = yield* readWith(IGNORE_CLAUDE_CODE_FOOTER, "", {
         CLAUDE_CODE_REMOTE: "true",
       });
-      expect([
-        yield* inCloudSession(IGNORE_CLAUDE_CODE_FOOTER),
-        yield* elsewhere(IGNORE_CLAUDE_CODE_FOOTER),
-        yield* overridden(IGNORE_CLAUDE_CODE_FOOTER),
-      ]).toStrictEqual([{ value: true }, { value: false }, { value: false }]);
-    }),
-  );
+      const elsewhere = yield* readWith(IGNORE_CLAUDE_CODE_FOOTER, "");
+      const overridden = yield* readWith(
+        IGNORE_CLAUDE_CODE_FOOTER,
+        "[jj-octo]\nignore-claude-code-footer = false\n",
+        { CLAUDE_CODE_REMOTE: "true" },
+      );
+      expect([inCloudSession, elsewhere, overridden]).toStrictEqual([
+        { value: true },
+        { value: false },
+        { value: false },
+      ]);
+    }));
 });

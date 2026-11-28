@@ -1,6 +1,6 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
-import { Array as EffectArray, Effect, Exit, Layer } from "effect";
+import { Array as EffectArray, Context, Effect, Exit, Layer, Ref } from "effect";
 import { TestConsole } from "effect/testing";
 
 import {
@@ -11,30 +11,48 @@ import {
 } from "../../clients/clipboard";
 import type { ListedPullRequest } from "../../clients/github/types";
 import { conflictWithTrunk } from "../../testing/conflicts";
-import { fakeGitHub, inRepository } from "../../testing/fake-github";
-import { itEffect, provideSetup } from "../../testing/it-effect";
+import { fakeGitHub, setUpGitHub } from "../../testing/fake-github";
+import { layer } from "../../testing/it-effect";
 import { inStack, linked } from "../../testing/links";
 import { pullRequest } from "../../testing/pull-requests";
-import { scratchRepository } from "../../testing/scratch-repository";
+import { ScratchRepository, scratchRepository } from "../../testing/scratch-repository";
 import { htmlLinks, links, markdownLinks, NoPullRequests, stackPullRequests } from "./links";
 
-// A clipboard that keeps what is written to it, and reports the given outcome.
-const fakeClipboard = (outcome: ClipboardWrite = "copied") => {
-  const copied: RichText[] = [];
-  const layer = Layer.succeed(Clipboard, {
-    write: (content) =>
-      Effect.sync(() => {
-        copied.push(content);
-        return outcome;
-      }),
-  });
-  return { copied, layer };
-};
+// A clipboard that keeps the content of each write, and answers it as `answer` last set, `copied`
+// by default.
+class FakeClipboard extends Context.Service<
+  FakeClipboard,
+  {
+    readonly answer: (write: Effect.Effect<ClipboardWrite, ClipboardFailed>) => Effect.Effect<void>;
+    readonly written: Effect.Effect<readonly RichText[]>;
+  }
+>()("jj-octo/cli/gh/links.test/FakeClipboard") {}
 
-describe("stackPullRequests", () => {
-  itEffect("finds each change's pull request, top first", () =>
+const fakeClipboard: Layer.Layer<Clipboard | FakeClipboard> = Layer.unwrap(
+  Effect.gen(function* () {
+    const answer = yield* Ref.make<Effect.Effect<ClipboardWrite, ClipboardFailed>>(
+      Effect.succeed("copied"),
+    );
+    const written = yield* Ref.make<readonly RichText[]>([]);
+    return Layer.mergeAll(
+      Layer.succeed(FakeClipboard, {
+        answer: (write) => Ref.set(answer, write),
+        written: Ref.get(written),
+      }),
+      Layer.succeed(Clipboard, {
+        write: (content) =>
+          Ref.update(written, (before) => [...before, content]).pipe(
+            Effect.andThen(Effect.flatten(Ref.get(answer))),
+          ),
+      }),
+    );
+  }),
+);
+
+layer(Layer.merge(scratchRepository, fakeGitHub))("stackPullRequests", (it) => {
+  it("finds each change's pull request, top first", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
       yield* repository.stack("a", "b", "c", "d", "e", "f");
       yield* repository.jj("git", "push", "--bookmark", "a");
       const pushedA = yield* repository.commitOf("a");
@@ -50,39 +68,34 @@ describe("stackPullRequests", () => {
         d: [pullRequest(4, "closed", commitD)],
         e: [pullRequest(5, "merged", "a head from an earlier branch named e")],
       };
-      const github = fakeGitHub({}, [], {
-        pullRequestsFrom: (branch) => byBranch[branch] ?? [],
-      });
-      const found = yield* stackPullRequests("@").pipe(inRepository(repository, github));
+      yield* setUpGitHub({ pullRequestsFrom: (branch) => byBranch[branch] ?? [] });
+      const found = yield* stackPullRequests("@");
       expect(found).toStrictEqual([
         linked(pullRequest(4, "closed", commitD), 4, 1),
         linked(pullRequest(3, "draft", "anything")),
         linked(pullRequest(2, "ready", "anything")),
         linked(pullRequest(1, "merged", pushedA)),
       ]);
-    }),
-  );
+    }));
 
-  itEffect("finds the pull requests of changes with conflicts, and says they have them", () =>
+  it("finds the pull requests of changes with conflicts, and says they have them", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
       yield* repository.stack("a", "b", "c");
       yield* repository.jj("git", "push", "--bookmark", "a", "--bookmark", "b");
       const pushedBranches = yield* repository.branches;
       const pushedB = pushedBranches["b"] ?? "";
-      yield* conflictWithTrunk(repository, "b", { pushed: ["a"] });
+      yield* conflictWithTrunk("b", { pushed: ["a"] });
       const byBranch: Readonly<Record<string, readonly ListedPullRequest[]>> = {
         a: [pullRequest(1, "ready", "anything")],
         b: [pullRequest(2, "draft", pushedB)],
       };
-      const github = fakeGitHub({}, [], {
-        pullRequestsFrom: (branch) => byBranch[branch] ?? [],
-      });
+      yield* setUpGitHub({ pullRequestsFrom: (branch) => byBranch[branch] ?? [] });
       const count = (bookmark: string, total: string) =>
         repository
           .jj("log", "--no-graph", "-r", bookmark, "-T", `diff.stat().${total}()`)
           .pipe(Effect.map(Number));
-      const found = yield* stackPullRequests("@").pipe(inRepository(repository, github));
+      const found = yield* stackPullRequests("@");
       const added = yield* count("b", "total_added");
       const removed = yield* count("b", "total_removed");
       expect(found).toStrictEqual([
@@ -92,14 +105,13 @@ describe("stackPullRequests", () => {
         },
         linked(pullRequest(1, "ready", "anything")),
       ]);
-    }),
-  );
+    }));
 });
 
-describe("links", () => {
+layer(Layer.mergeAll(scratchRepository, fakeGitHub, fakeClipboard))("links", (it) => {
   const draft = linked(pullRequest(1, "draft", "anything"));
 
-  itEffect.each([
+  it.each([
     {
       outcome: "copied",
       report: "copied the links to the clipboard",
@@ -122,19 +134,17 @@ describe("links", () => {
     "writes the links to the clipboard as HTML and Markdown when asked, and reports $outcome",
     ({ outcome, report, stdout }) =>
       Effect.gen(function* () {
-        const repository = yield* scratchRepository;
+        const repository = yield* ScratchRepository;
+        const clipboard = yield* FakeClipboard;
         yield* repository.stack("a");
         const listed = pullRequest(1, "draft", "anything");
-        const github = fakeGitHub({}, [], {
+        yield* setUpGitHub({
           pullRequestsFrom: (branch) => (branch === "a" ? [listed] : []),
         });
-        const clipboard = fakeClipboard(outcome);
-        yield* links({ copy: true, revision: "@" }).pipe(
-          provideSetup(clipboard.layer),
-          inRepository(repository, github),
-        );
+        yield* clipboard.answer(Effect.succeed(outcome));
+        yield* links({ copy: true, revision: "@" });
         expect({
-          copied: clipboard.copied,
+          copied: yield* clipboard.written,
           stderr: yield* TestConsole.errorLines,
           stdout: yield* TestConsole.logLines,
         }).toStrictEqual({
@@ -145,21 +155,18 @@ describe("links", () => {
       }),
   );
 
-  itEffect("prints the links where the clipboard fails", () =>
+  it("prints the links where the clipboard fails", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
+      const clipboard = yield* FakeClipboard;
       yield* repository.stack("a");
       const listed = pullRequest(1, "draft", "anything");
-      const github = fakeGitHub({}, [], {
+      yield* setUpGitHub({
         pullRequestsFrom: (branch) => (branch === "a" ? [listed] : []),
       });
       const failure = ClipboardFailed.make({ message: "xclip exited with 1" });
-      const exit = yield* Effect.exit(
-        links({ copy: true, revision: "@" }).pipe(
-          Effect.provideService(Clipboard, { write: () => Effect.fail(failure) }),
-          inRepository(repository, github),
-        ),
-      );
+      yield* clipboard.answer(Effect.fail(failure));
+      const exit = yield* Effect.exit(links({ copy: true, revision: "@" }));
       expect({
         exit,
         stderr: yield* TestConsole.errorLines,
@@ -169,38 +176,30 @@ describe("links", () => {
         stderr: [],
         stdout: [markdownLinks([linked(listed)])],
       });
-    }),
-  );
+    }));
 
-  itEffect("fails, copying nothing, where no change has a pull request", () =>
+  it("fails, copying nothing, where no change has a pull request", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
+      const clipboard = yield* FakeClipboard;
       yield* repository.stack("a");
-      const clipboard = fakeClipboard();
-      const failure = yield* Effect.flip(links({ copy: true, revision: "@" })).pipe(
-        provideSetup(clipboard.layer),
-        inRepository(repository, fakeGitHub({}, [])),
-      );
-      expect({ copied: clipboard.copied, failure }).toStrictEqual({
+      const failure = yield* Effect.flip(links({ copy: true, revision: "@" }));
+      expect({ copied: yield* clipboard.written, failure }).toStrictEqual({
         copied: [],
         failure: NoPullRequests.make({ message: "no change of the stack has a pull request" }),
       });
-    }),
-  );
+    }));
 
-  itEffect("prints the GitHub stack the pull requests are in above them", () =>
+  it("prints the GitHub stack the pull requests are in above them", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
       yield* repository.stack("a", "b");
-      const github = fakeGitHub({}, [], {
+      yield* setUpGitHub({
         pullRequestsFrom: (branch) => [
           inStack(pullRequest(branch === "a" ? 1 : 2, "ready", "anything"), 5),
         ],
       });
-      yield* links({ copy: false, revision: "@" }).pipe(
-        provideSetup(fakeClipboard().layer),
-        inRepository(repository, github),
-      );
+      yield* links({ copy: false, revision: "@" });
       expect({
         stderr: yield* TestConsole.errorLines,
         stdout: yield* TestConsole.logLines,
@@ -217,22 +216,18 @@ describe("links", () => {
           ),
         ],
       });
-    }),
-  );
+    }));
 
-  itEffect("copies nothing unless asked", () =>
+  it("copies nothing unless asked", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
+      const clipboard = yield* FakeClipboard;
       yield* repository.stack("a");
       const listed = pullRequest(1, "draft", "anything");
-      const github = fakeGitHub({}, [], { pullRequestsFrom: () => [listed] });
-      const clipboard = fakeClipboard();
-      yield* links({ copy: false, revision: "@" }).pipe(
-        provideSetup(clipboard.layer),
-        inRepository(repository, github),
-      );
+      yield* setUpGitHub({ pullRequestsFrom: () => [listed] });
+      yield* links({ copy: false, revision: "@" });
       expect({
-        copied: clipboard.copied,
+        copied: yield* clipboard.written,
         stderr: yield* TestConsole.errorLines,
         stdout: yield* TestConsole.logLines,
       }).toStrictEqual({
@@ -240,6 +235,5 @@ describe("links", () => {
         stderr: [],
         stdout: [markdownLinks([linked(listed)])],
       });
-    }),
-  );
+    }));
 });

@@ -1,7 +1,7 @@
 import { Array as EffectArray, Effect } from "effect";
 
 import { moveTrunkOnGitHub } from "./branch-changes";
-import type { ScratchRepository } from "./scratch-repository";
+import { ScratchRepository } from "./scratch-repository";
 
 /**
  * Gives the change of the bookmark `conflicted` a conflict with the trunk. Moves `main` on GitHub
@@ -10,12 +10,12 @@ import type { ScratchRepository } from "./scratch-repository";
  * have no conflicts.
  */
 export const conflictWithTrunk = (
-  repository: ScratchRepository,
   conflicted: string,
   { pushed = [] }: { readonly pushed?: readonly string[] } = {},
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, ScratchRepository> =>
   Effect.gen(function* () {
-    yield* moveTrunkOnGitHub(repository, `${conflicted}.txt`);
+    const repository = yield* ScratchRepository;
+    yield* moveTrunkOnGitHub(`${conflicted}.txt`);
     yield* repository.jj("git", "fetch");
     yield* repository.jj("rebase", "-b", "@", "-d", "main");
     if (pushed.length > 0) {
@@ -26,25 +26,3 @@ export const conflictWithTrunk = (
       );
     }
   });
-
-/** The change of each bookmark as a command lists it: its short id and its description's first line. */
-export const labelsOf = (
-  repository: ScratchRepository,
-  ...bookmarks: readonly string[]
-): Effect.Effect<string> =>
-  Effect.map(
-    Effect.forEach(
-      bookmarks,
-      (bookmark) =>
-        repository.jj(
-          "log",
-          "--no-graph",
-          "-r",
-          bookmark,
-          "-T",
-          'change_id.shortest(8) ++ " " ++ description.first_line()',
-        ),
-      { concurrency: 1 },
-    ),
-    (labels) => EffectArray.join(labels, "\n"),
-  );

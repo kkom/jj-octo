@@ -16,25 +16,12 @@ export type FixtureServices =
 /** What every test's effect may ask for, besides the services its fixtures provide. */
 export type TestServices = FixtureServices | Scope.Scope;
 
-// The environment holds nothing, so whatever the tests run in can't change what the code reads
-// through `Config`.
 const testServices = Layer.mergeAll(
   BunServices.layer,
   TestConsole.layer,
   TestClock.layer(),
-  environment(),
+  environment,
 );
-
-/**
- * Provides a test's program with the services its own setup built, such as a scratch repository's
- * clients or a fake GitHub. Tests and testing modules provide those through this, not
- * `Effect.provide`.
- */
-export const provideSetup =
-  <ROut, E2, RIn>(layer: Layer.Layer<ROut, E2, RIn>) =>
-  <A, E, R>(program: Effect.Effect<A, E, R>): Effect.Effect<A, E | E2, Exclude<R, ROut> | RIn> =>
-    // @effect-diagnostics-next-line strictEffectProvide:off -- a test's program runs here, with the services its own setup built
-    program.pipe(Effect.provide(layer));
 
 /**
  * Sets the `TestClock` to the real time, for a test whose code compares the clock with a time

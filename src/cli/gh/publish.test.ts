@@ -1,28 +1,23 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 
 import { GitHub } from "../../clients/github/client";
-import { conflictWithTrunk, labelsOf } from "../../testing/conflicts";
-import { fakeGitHub, inRepository } from "../../testing/fake-github";
-import { itEffect } from "../../testing/it-effect";
-import { openPullRequest, stackOf } from "../../testing/pull-requests";
-import { pushedStack, type ScratchRepository } from "../../testing/scratch-repository";
-import { githubWithThree } from "../../testing/submit";
+import { conflictWithTrunk } from "../../testing/conflicts";
+import {
+  fakeGitHub,
+  gitHubCalls,
+  setUpGitHub,
+  setUpPullRequestsAB,
+  setUpPullRequestsABC,
+} from "../../testing/fake-github";
+import { layer } from "../../testing/it-effect";
+import { openPullRequestsAB, openPullRequestsABC, stackOf } from "../../testing/pull-requests";
+import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { publish } from "./publish";
 
-const publishIn = (
-  repository: ScratchRepository,
-  github: ReturnType<typeof fakeGitHub>,
-  revision: string,
-) => publish(revision).pipe(inRepository(repository, github));
-
 // Whether each bookmark's open pull request is a draft, as the fake GitHub reports it afterwards.
-const draftsIn = (
-  repository: ScratchRepository,
-  github: ReturnType<typeof fakeGitHub>,
-  bookmarks: readonly string[],
-) =>
+const draftsOf = (bookmarks: readonly string[]) =>
   Effect.forEach(
     bookmarks,
     (bookmark) =>
@@ -30,101 +25,86 @@ const draftsIn = (
         Effect.map((found) => Option.map(found, ({ draft }) => draft)),
       ),
     { concurrency: "unbounded" },
-  ).pipe(inRepository(repository, github));
-
-describe("publish", () => {
-  itEffect("publishes a change and the ones below it where a change above has conflicts", () =>
-    Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b", "c");
-      yield* conflictWithTrunk(repository, "c", { pushed: ["a", "b"] });
-      const github = githubWithThree();
-      yield* publishIn(repository, github, "b");
-      expect(github.calls).toStrictEqual(["publish #1", "publish #2"]);
-    }),
   );
 
-  itEffect("fails before publishing any where the change named has conflicts", () =>
+layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHub))("publish", (it) => {
+  it("publishes a change and the ones below it where a change above has conflicts", () =>
     Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b", "c");
-      yield* conflictWithTrunk(repository, "b", { pushed: ["a"] });
-      const github = githubWithThree();
-      const failure = yield* Effect.flip(publishIn(repository, github, "b"));
-      const labels = yield* labelsOf(repository, "b");
-      expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+      yield* conflictWithTrunk("c", { pushed: ["a", "b"] });
+      yield* setUpPullRequestsABC();
+      yield* publish("b");
+      const calls = yield* gitHubCalls;
+      expect(calls).toStrictEqual(["publish #1", "publish #2"]);
+    }));
+
+  it("fails before publishing any where the change named has conflicts", () =>
+    Effect.gen(function* () {
+      const repository = yield* ScratchRepository;
+      yield* conflictWithTrunk("b", { pushed: ["a"] });
+      yield* setUpPullRequestsABC();
+      const failure = yield* Effect.flip(publish("b"));
+      const labels = yield* repository.labels("b");
+      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
         calls: [],
         message: `resolve the conflicts first:\n${labels}`,
       });
-    }),
-  );
+    }));
 
-  itEffect("marks the drafts of a change and the ones below it ready, bottom to top", () =>
+  it("marks the drafts of a change and the ones below it ready, bottom to top", () =>
     Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b", "c");
-      const github = fakeGitHub(
-        {
-          a: openPullRequest("main", 1, "a"),
-          b: { ...openPullRequest("a", 2, "b"), draft: false },
-          c: openPullRequest("b", 3, "c"),
-        },
-        stackOf(1, 2, 3),
-      );
-      yield* publishIn(repository, github, "c");
+      yield* setUpGitHub({
+        open: { ...openPullRequestsABC, b: { ...openPullRequestsABC.b, draft: false } },
+        stacks: stackOf(1, 2, 3),
+      });
+      yield* publish("c");
       expect({
-        calls: github.calls,
-        drafts: yield* draftsIn(repository, github, ["a", "b", "c"]),
+        calls: yield* gitHubCalls,
+        drafts: yield* draftsOf(["a", "b", "c"]),
       }).toStrictEqual({
         calls: ["publish #1", "publish #3"],
         drafts: [Option.some(false), Option.some(false), Option.some(false)],
       });
-    }),
-  );
+    }));
+});
 
-  itEffect("leaves the changes above the one named as drafts", () =>
+layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("publish, with two changes", (it) => {
+  it("leaves the changes above the one named as drafts", () =>
     Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b");
-      const github = fakeGitHub(
-        { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
-        stackOf(1, 2),
-      );
-      yield* publishIn(repository, github, "a");
-      expect(github.calls).toStrictEqual(["publish #1"]);
-    }),
-  );
+      yield* setUpPullRequestsAB();
+      yield* publish("a");
+      const calls = yield* gitHubCalls;
+      expect(calls).toStrictEqual(["publish #1"]);
+    }));
 
-  itEffect("publishes nothing where every pull request is ready", () =>
+  it("publishes nothing while a change has edits that aren't pushed", () =>
     Effect.gen(function* () {
-      const repository = yield* pushedStack("a");
-      const github = fakeGitHub({ a: { ...openPullRequest("main", 1, "a"), draft: false } }, []);
-      yield* publishIn(repository, github, "a");
-      expect(github.calls).toStrictEqual([]);
-    }),
-  );
-
-  itEffect("publishes nothing while a change has edits that aren't pushed", () =>
-    Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b");
+      const repository = yield* ScratchRepository;
       yield* repository.jj("describe", "-r", "b", "-m", "b, reworded");
-      const github = fakeGitHub(
-        { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
-        stackOf(1, 2),
-      );
-      const failure = yield* Effect.flip(publishIn(repository, github, "b"));
-      expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+      yield* setUpPullRequestsAB();
+      const failure = yield* Effect.flip(publish("b"));
+      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
         calls: [],
         message: "these changes aren't pushed: b; run `jj gh submit --publish` instead",
       });
-    }),
-  );
+    }));
 
-  itEffect("publishes nothing where a change has no open pull request", () =>
+  it("publishes nothing where a change has no open pull request", () =>
     Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b");
-      const github = fakeGitHub({ b: openPullRequest("a", 2, "b") }, []);
-      const failure = yield* Effect.flip(publishIn(repository, github, "b"));
-      expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+      yield* setUpGitHub({ open: { b: openPullRequestsAB.b } });
+      const failure = yield* Effect.flip(publish("b"));
+      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
         calls: [],
         message: "no open pull request for a; run `jj gh submit --publish` instead",
       });
-    }),
-  );
+    }));
+});
+
+layer(Layer.merge(pushedStack("a"), fakeGitHub))("publish, with one change", (it) => {
+  it("publishes nothing where every pull request is ready", () =>
+    Effect.gen(function* () {
+      yield* setUpGitHub({ open: { a: { ...openPullRequestsAB.a, draft: false } } });
+      yield* publish("a");
+      const calls = yield* gitHubCalls;
+      expect(calls).toStrictEqual([]);
+    }));
 });

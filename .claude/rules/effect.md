@@ -67,12 +67,13 @@ That's because the test then composes the code under test as production does: it
 
 ## Provide a test's fixtures as layers
 
-`layer(fixture)` from `src/testing/it-effect.ts` defines a `describe` block. Its tests ask for the fixture's services with `yield*`. Each test builds its own fixture, so no two tests share its state. Set up a state that only some tests need inside those tests, such as the answers of the `InterceptingProxy`.
+`layer(fixture)` from `src/testing/it-effect.ts` defines a `describe` block. Its tests ask for the fixture's services with `yield*`. Each test builds its own fixture, so no two tests share its state. `scratchRepository` and `pushedStack(…)` provide a repository with its git, jj and pull request description clients, and `gitClone()` provides those clients in a plain git clone of its `origin`. A test that needs GitHub merges in `fakeGitHub`. Set up a state that only some tests need inside those tests, such as what `setUpGitHub` gives the fake GitHub. A program that runs in another directory, such as a workspace or a worktree, gets its clients there as a `Context` from `clientsIn`, which `Effect.provide` takes.
 
-That's because the test then gets its fixtures as production code gets its services. `strictEffectProvide` fails a layer provided with `Effect.provide` outside an entry point.
+That's because the test then gets its fixtures as production code gets its services. `strictEffectProvide` fails a layer provided with `Effect.provide` outside an entry point, and allows a `Context`.
 
 - ❌ `program.pipe(Effect.provide(fixtureLayer))` inside a test
 - ✅ `layer(gitHubThroughProxy)("cancelRun", (it) => { it("…", () => Effect.gen(function* () { const outcome = yield* callGitHub(…); … })) })`
+- ✅ `const clients = yield* repository.clientsIn(workspace); yield* program.pipe(Effect.provide(clients))`
 
 ## Use the real type where Effect code meets other code
 

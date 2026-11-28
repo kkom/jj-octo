@@ -1,22 +1,22 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
-import { Effect, FileSystem, Layer, Option, Path, Redacted } from "effect";
+import { Effect, FileSystem, Option, Path, Redacted } from "effect";
 
 import { GITHUB_AUTH } from "../../settings";
-import { environment } from "../../testing/environment";
-import { gitClone } from "../../testing/git-clone";
-import { itEffect, provideSetup } from "../../testing/it-effect";
+import { withEnvironment } from "../../testing/environment";
+import { GitClone, gitClone } from "../../testing/git-clone";
+import { layer } from "../../testing/it-effect";
 import { scratchDirectory } from "../../testing/scratch-process";
-import { scratchRepository } from "../../testing/scratch-repository";
 import { connection } from "./connection";
 
-/** A colocated jj repository, with the git and jj clients and an environment holding `env`. */
+/**
+ * Makes the clone a colocated jj repository, and returns the clone with the connection it resolves
+ * and the message it fails with, each in an environment holding `env`.
+ */
 const checkout = (env: Readonly<Record<string, string>> = {}) =>
   Effect.gen(function* () {
-    const repository = yield* scratchRepository;
-    const clone = yield* gitClone(repository);
+    const clone = yield* GitClone;
     yield* clone.jj("git", "init", "--colocate");
-    const layer = Layer.mergeAll(clone.layer, environment(env));
     const resolved = connection.pipe(
       Effect.map(({ proxy, token }) => ({
         proxy: Option.getOrUndefined(
@@ -24,24 +24,23 @@ const checkout = (env: Readonly<Record<string, string>> = {}) =>
         ),
         token: Redacted.value(token),
       })),
-      provideSetup(layer),
+      withEnvironment(env),
     );
-    const failure = Effect.flip(connection.pipe(provideSetup(layer))).pipe(
+    const failure = Effect.flip(connection.pipe(withEnvironment(env))).pipe(
       Effect.map(({ message }) => message),
     );
-    return { ...clone, failure, resolved };
+    return { failure, git: clone.git, jj: clone.jj, resolved };
   });
 
-describe("connection", () => {
-  itEffect("sends the token from the environment by default", () =>
+layer(gitClone())("connection", (it) => {
+  it("sends the token from the environment by default", () =>
     Effect.gen(function* () {
       const { resolved } = yield* checkout({ GH_TOKEN: "own-token" });
       const found = yield* resolved;
       expect(found).toStrictEqual({ proxy: undefined, token: "own-token" });
-    }),
-  );
+    }));
 
-  itEffect("sends a placeholder through git's proxy for github.com, trusting git's CA bundle", () =>
+  it("sends a placeholder through git's proxy for github.com, trusting git's CA bundle", () =>
     Effect.gen(function* () {
       const { git, jj, resolved } = yield* checkout();
       const fs = yield* FileSystem.FileSystem;
@@ -57,10 +56,9 @@ describe("connection", () => {
         proxy: { ca: "certificate\n", url: "http://127.0.0.1:1234" },
         token: "proxy-injected",
       });
-    }),
-  );
+    }));
 
-  itEffect("uses the system's certificate authorities where git names no CA bundle", () =>
+  it("uses the system's certificate authorities where git names no CA bundle", () =>
     Effect.gen(function* () {
       const { git, jj, resolved } = yield* checkout();
       yield* git("config", "http.proxy", "http://127.0.0.1:1234");
@@ -70,10 +68,9 @@ describe("connection", () => {
         proxy: { ca: undefined, url: "http://127.0.0.1:1234" },
         token: "proxy-injected",
       });
-    }),
-  );
+    }));
 
-  itEffect("reads a proxy without a scheme as an HTTP one, as git does", () =>
+  it("reads a proxy without a scheme as an HTTP one, as git does", () =>
     Effect.gen(function* () {
       const { git, jj, resolved } = yield* checkout();
       yield* git("config", "http.proxy", "127.0.0.1:1234");
@@ -83,10 +80,9 @@ describe("connection", () => {
         proxy: { ca: undefined, url: "http://127.0.0.1:1234" },
         token: "proxy-injected",
       });
-    }),
-  );
+    }));
 
-  itEffect("fails for git-proxy where git has no proxy for github.com", () =>
+  it("fails for git-proxy where git has no proxy for github.com", () =>
     Effect.gen(function* () {
       const { failure, git, jj } = yield* checkout({ GH_TOKEN: "own-token" });
       yield* git("config", "http.https://example.com/.proxy", "http://127.0.0.1:1234");
@@ -95,15 +91,13 @@ describe("connection", () => {
       expect(message).toBe(
         "jj-octo.github-auth is git-proxy, but git has no http.proxy for https://github.com",
       );
-    }),
-  );
+    }));
 
-  itEffect("fails for a value it doesn't know", () =>
+  it("fails for a value it doesn't know", () =>
     Effect.gen(function* () {
       const { failure, jj } = yield* checkout({ GH_TOKEN: "own-token" });
       yield* jj("config", "set", "--repo", GITHUB_AUTH.key, "proxy");
       const message = yield* failure;
       expect(message).toBe('jj-octo.github-auth is "proxy"; set it to token or git-proxy');
-    }),
-  );
+    }));
 });

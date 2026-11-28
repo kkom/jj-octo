@@ -2,6 +2,7 @@ import { describe, expect } from "bun:test";
 
 import {
   Array as EffectArray,
+  Context,
   Effect,
   FileSystem,
   Layer,
@@ -10,8 +11,8 @@ import {
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { environment } from "../testing/environment";
-import { itEffect, provideSetup } from "../testing/it-effect";
+import { withEnvironment } from "../testing/environment";
+import { itEffect } from "../testing/it-effect";
 import { scratchDirectory } from "../testing/scratch-process";
 import { Clipboard, ClipboardFailed, clipboardLayer, MACOS_SCRIPT } from "./clipboard";
 import { readOutput } from "./process";
@@ -21,11 +22,12 @@ const content = {
   text: "[#1 Add a](https://example.com)",
 };
 
-const writeWith = <R>(layer: Layer.Layer<Clipboard, never, R>) =>
-  Effect.flatMap(Clipboard, (clipboard) => clipboard.write(content)).pipe(provideSetup(layer));
-
-const layerFor = (platform: string, env: Readonly<Record<string, string>> = {}) =>
-  clipboardLayer({ platform }).pipe(Layer.provide(environment(env)));
+// Builds the clipboard for the platform in an environment holding `env`, and writes the content.
+const writeWith = (platform: string, env: Readonly<Record<string, string>> = {}) =>
+  Effect.gen(function* () {
+    const built = yield* Layer.build(clipboardLayer({ platform })).pipe(withEnvironment(env));
+    return yield* Context.get(built, Clipboard).write(content);
+  });
 
 /**
  * A directory holding a stand-in for the command, which records its arguments and stdin, and
@@ -88,7 +90,7 @@ describe("clipboardLayer", () => {
   itEffect("sets the HTML and the text with osascript on macOS", () =>
     Effect.gen(function* () {
       const osascript = yield* standIn("osascript");
-      const reported = yield* writeWith(layerFor("darwin", { PATH: osascript.PATH }));
+      const reported = yield* writeWith("darwin", { PATH: osascript.PATH });
       const recorded = yield* osascript.recorded;
       expect({ recorded, reported }).toStrictEqual({
         recorded: {
@@ -107,9 +109,10 @@ describe("clipboardLayer", () => {
   itEffect("pipes the HTML to wl-copy under Wayland, leaving its process running", () =>
     Effect.gen(function* () {
       const wlCopy = yield* standIn("wl-copy");
-      const reported = yield* writeWith(
-        layerFor("linux", { PATH: wlCopy.PATH, WAYLAND_DISPLAY: "wayland-0" }),
-      );
+      const reported = yield* writeWith("linux", {
+        PATH: wlCopy.PATH,
+        WAYLAND_DISPLAY: "wayland-0",
+      });
       const recorded = yield* wlCopy.recorded;
       expect({ recorded, reported }).toStrictEqual({
         recorded: {
@@ -125,9 +128,7 @@ describe("clipboardLayer", () => {
   itEffect("pipes the HTML to xclip under X, leaving its process running", () =>
     Effect.gen(function* () {
       const xclip = yield* standIn("xclip");
-      const reported = yield* writeWith(
-        layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }),
-      );
+      const reported = yield* writeWith("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" });
       const recorded = yield* xclip.recorded;
       expect({ recorded, reported }).toStrictEqual({
         recorded: {
@@ -143,9 +144,10 @@ describe("clipboardLayer", () => {
   itEffect("falls back to xclip under Wayland where wl-copy isn't installed", () =>
     Effect.gen(function* () {
       const xclip = yield* standIn("xclip");
-      const reported = yield* writeWith(
-        layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "wayland-0" }),
-      );
+      const reported = yield* writeWith("linux", {
+        PATH: xclip.PATH,
+        WAYLAND_DISPLAY: "wayland-0",
+      });
       const recorded = yield* xclip.recorded;
       expect({ recorded, reported }).toStrictEqual({
         recorded: {
@@ -161,7 +163,7 @@ describe("clipboardLayer", () => {
   // On a platform it has no command for, reporting rather than failing shows that nothing ran.
   itEffect("runs no command in a Claude Code cloud session, which can't reach the clipboard", () =>
     Effect.gen(function* () {
-      const reported = yield* writeWith(layerFor("win32", { CLAUDE_CODE_REMOTE: "true" }));
+      const reported = yield* writeWith("win32", { CLAUDE_CODE_REMOTE: "true" });
       expect(reported).toBe("unreachable");
     }),
   );
@@ -169,9 +171,8 @@ describe("clipboardLayer", () => {
   itEffect("fails naming the command where it exits non-zero", () =>
     Effect.gen(function* () {
       const xclip = yield* standIn("xclip", 1);
-      const failure = yield* layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }).pipe(
-        writeWith,
-        Effect.flip,
+      const failure = yield* Effect.flip(
+        writeWith("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }),
       );
       yield* xclip.recorded;
       expect(failure).toStrictEqual(ClipboardFailed.make({ message: "xclip exited with 1" }));
@@ -181,10 +182,7 @@ describe("clipboardLayer", () => {
   itEffect("fails naming the command where it isn't installed", () =>
     Effect.gen(function* () {
       const empty = yield* scratchDirectory("clipboard-");
-      const failure = yield* layerFor("linux", { PATH: empty, WAYLAND_DISPLAY: "" }).pipe(
-        writeWith,
-        Effect.flip,
-      );
+      const failure = yield* Effect.flip(writeWith("linux", { PATH: empty, WAYLAND_DISPLAY: "" }));
       expect(failure).toStrictEqual(
         ClipboardFailed.make({
           message: "couldn't find xclip",
@@ -195,7 +193,7 @@ describe("clipboardLayer", () => {
 
   itEffect("fails on a platform it has no command for", () =>
     Effect.gen(function* () {
-      const failure = yield* layerFor("win32").pipe(writeWith, Effect.flip);
+      const failure = yield* Effect.flip(writeWith("win32"));
       expect(failure).toStrictEqual(
         ClipboardFailed.make({
           message:
