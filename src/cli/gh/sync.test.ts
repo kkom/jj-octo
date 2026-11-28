@@ -3,12 +3,14 @@ import { describe, expect } from "bun:test";
 import { Effect, Layer, String as EffectString } from "effect";
 
 import { moveTrunkOnGitHub, squashMergeOnGitHub } from "../../testing/branch-changes";
-import { fakeGitHub } from "../../testing/fake-github";
+import { fakeGitHubHolding, setUpPullRequestsAB } from "../../testing/fake-github";
 import { layer } from "../../testing/it-effect";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { editLocally, syncing } from "../../testing/sync";
 
-layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync", (it) => {
+const fakeGitHubAB = fakeGitHubHolding(setUpPullRequestsAB());
+
+layer(Layer.merge(pushedStack("a", "b"), fakeGitHubAB))("sync", (it) => {
   it("rebases every stack onto the moved trunk, and pushes nothing", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;

@@ -149,7 +149,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
         bookmarks: "",
         conflicted: "",
         log: ["c []"],
-        merged: "b (#1)",
+        merged: "b (#2)",
       });
     }));
 

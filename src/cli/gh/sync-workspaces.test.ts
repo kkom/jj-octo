@@ -7,7 +7,7 @@ import {
   moveTrunkOnGitHub,
   squashMergeOnGitHub,
 } from "../../testing/branch-changes";
-import { fakeGitHub } from "../../testing/fake-github";
+import { fakeGitHubHolding, setUpPullRequestsAB } from "../../testing/fake-github";
 import { layer } from "../../testing/it-effect";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { syncing } from "../../testing/sync";
@@ -33,7 +33,9 @@ const addWorkspaceOnStack = Effect.gen(function* () {
   yield* repository.jj("bookmark", "create", "c", "-r", "@");
 });
 
-layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync with other workspaces", (it) => {
+const fakeGitHubAB = fakeGitHubHolding(setUpPullRequestsAB());
+
+layer(Layer.merge(pushedStack("a", "b"), fakeGitHubAB))("sync with other workspaces", (it) => {
   describe("where another workspace's working copy is on a stack", () => {
     it("leaves the stack and its branches as they were, and syncs the rest", () =>
       Effect.gen(function* () {

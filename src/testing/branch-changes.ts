@@ -90,8 +90,8 @@ export const rewriteElsewhere = (
 /**
  * Squash-merges a branch into `into`, `main` by default, as one commit, together with the
  * branches `below` it, as GitHub's stack merge does. Records each one's pull request as merged on
- * the fake GitHub, and with `deleted` also deletes the branches. Rebases the branches `above` it
- * onto the new `into` in order, as GitHub does for the rest of a stack.
+ * the fake GitHub, and dies where one has none. With `deleted`, also deletes the branches. Rebases
+ * the branches `above` it onto the new `into` in order, as GitHub does for the rest of a stack.
  */
 export const squashMergeOnGitHub = (
   branch: string,
@@ -113,18 +113,22 @@ export const squashMergeOnGitHub = (
     const headOf = (name: string) =>
       Effect.map(repository.git("rev-parse", `origin/${name}`), EffectString.trim);
     yield* repository.git("fetch", "--quiet");
+    const record = (name: string) =>
+      Effect.flatMap(headOf(name), (head) =>
+        github.recordMerge({ branch: name, deleted, head, into }),
+      );
+    yield* Effect.forEach(below, record, { concurrency: 1, discard: true });
+    // GitHub titles the squash commit with the pull request's title and number.
+    const pullRequest = yield* record(branch);
     yield* repository.git("checkout", "--quiet", "-B", into, `origin/${into}`);
     yield* repository.git("merge", "--quiet", "--squash", `origin/${branch}`);
-    yield* repository.git("commit", "--quiet", "-m", `${branch} (#1)`);
-    yield* repository.git("push", "--quiet", "origin", into);
-    yield* Effect.forEach(
-      [...below, branch],
-      (name) =>
-        Effect.flatMap(headOf(name), (head) =>
-          github.recordMerge({ branch: name, deleted, head, into }),
-        ),
-      { concurrency: 1, discard: true },
+    yield* repository.git(
+      "commit",
+      "--quiet",
+      "-m",
+      `${pullRequest.title} (#${pullRequest.number})`,
     );
+    yield* repository.git("push", "--quiet", "origin", into);
     // Each branch above moves onto the one rebased before it, and leaves the commits of the
     // branch below it behind.
     const top = yield* headOf(branch);

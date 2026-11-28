@@ -9,10 +9,11 @@ import {
   squashMergeOnGitHub,
 } from "../../../testing/branch-changes";
 import {
-  fakeGitHub,
+  fakeGitHubHolding,
   gitHubCalls,
   setUpGitHub,
   setUpPullRequestsAB,
+  setUpPullRequestsABC,
 } from "../../../testing/fake-github";
 import { layer } from "../../../testing/it-effect";
 import { openPullRequestsAB } from "../../../testing/pull-requests";
@@ -37,14 +38,13 @@ const deletedFailure = (...branches: readonly string[]): BranchesDeleted =>
     ),
   });
 
-layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
+layer(Layer.merge(pushedStack("a", "b"), fakeGitHubHolding(setUpPullRequestsAB())))(
   "submit, where the stack changed on GitHub",
   (it) => {
     it("keeps another workspace's empty working copy on the stack GitHub rebased", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
         yield* addWorkspace("b");
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         yield* submitting();
         const described = yield* repository.description("other@-");
@@ -66,7 +66,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         const repository = yield* ScratchRepository;
         const branchesBefore = yield* repository.branches;
         const pushed = branchesBefore["b"];
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("a");
         yield* moveTrunkOnGitHub("b.txt");
         const failure = yield* failureOf("b");
@@ -82,7 +81,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
     it("drops a merged change and takes the rest of the stack as GitHub rebased it", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         const onGitHub = yield* repository.branches;
         yield* submitting();
@@ -104,7 +102,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         yield* moveTrunkOnGitHub();
         yield* repository.jj("git", "fetch");
         yield* repository.jj("rebase", "--source", "a", "--destination", "main@origin");
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         yield* submitting();
         expect({ calls: yield* gitHubCalls, log: yield* repository.log }).toStrictEqual({
@@ -139,7 +136,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         yield* repository.jj("new", "main", "-m", "c");
         yield* repository.jj("bookmark", "create", "c", "-r", "@");
         yield* moveTrunkOnGitHub();
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         yield* submitting({ revision: "b" });
         expect({
@@ -166,7 +162,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
     it("submits what is left below a change whose pull request merged into its base", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("b", { deleted: false, into: "a" });
         const onGitHub = yield* repository.branches;
         yield* submitting({ revision: "b" });
@@ -204,7 +199,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
     it("stops where a branch merged, and its change was edited since", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
-        yield* setUpPullRequestsAB();
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         yield* repository.jj("edit", "a");
         yield* repository.write("a.txt", "a, edited\n");
@@ -217,7 +211,6 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
     it("stops where a branch merged with a commit added on GitHub", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
-        yield* setUpPullRequestsAB();
         yield* addCommitOnGitHub("a");
         yield* squashMergeOnGitHub("a", { above: ["b"] });
         const failure = yield* failureOf();
@@ -252,7 +245,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
         const log = yield* repository.log;
         expect(log).toStrictEqual(["c []"]);
         const below = yield* repository.description('description(exact:"c\n")-');
-        expect(below).toBe("b (#1)");
+        expect(below).toBe("b (#2)");
       }));
 
     it("submits nothing where the change named merged", () =>
@@ -264,12 +257,12 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
           below: yield* repository.description("@- & trunk()"),
           calls: yield* gitHubCalls,
           log: yield* repository.log,
-        }).toStrictEqual({ below: "b (#1)", calls: [], log: [] });
+        }).toStrictEqual({ below: "b (#2)", calls: [], log: [] });
       }));
   },
 );
 
-layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHub))(
+layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHubHolding(setUpPullRequestsABC())))(
   "submit, where the stack changed on GitHub, with three changes",
   (it) => {
     it("forgets the bookmarks above the one named that merged too", () =>
