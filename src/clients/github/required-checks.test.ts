@@ -2,9 +2,10 @@ import { expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Option, Order } from "effect";
 
-import { callGitHub, failureOf, gitHubThroughProxy } from "../../testing/github-client";
+import { callGitHub, gitHubThroughProxy } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
 import { layer } from "../../testing/it-effect";
+import { GitHubFailed } from "./failure";
 
 const ACTIONS = 15_368;
 
@@ -189,11 +190,11 @@ layer(gitHubThroughProxy)("requiredChecks", (it) => {
           [{ parameters: { unexpected: true }, type: "required_status_checks" }],
           unprotected,
         ),
-        (github) => failureOf(github.requiredChecks("main")),
+        (github) => Effect.flip(github.requiredChecks("main")),
       );
       expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
         requests: [`GET api.github.com${rulesPath}`],
-        result: {
+        result: GitHubFailed.make({
           message: EffectArray.join(
             [
               `unexpected response to ${rulesPath}: Missing key`,
@@ -203,8 +204,7 @@ layer(gitHubThroughProxy)("requiredChecks", (it) => {
             ],
             "\n",
           ),
-          status: undefined,
-        },
+        }),
       });
     }));
 });

@@ -2,6 +2,7 @@ import { expect } from "bun:test";
 
 import { Effect, Layer } from "effect";
 
+import { GitHubFailed } from "../../clients/github/failure";
 import { squashMergeOnGitHub } from "../../testing/branch-changes";
 import { fakeGitHub, gitHubCalls, setUpPullRequestsAB } from "../../testing/fake-github";
 import { layer } from "../../testing/it-effect";
@@ -50,10 +51,12 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("merge", (it) => {
     Effect.gen(function* () {
       yield* mergedWithRuns(true);
       const failure = yield* Effect.flip(merge("b", { allWorkspaces: false, cancelPrRuns: true }));
-      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
         calls: ["merge the stack up to #2", "cancel run 21"],
-        message:
-          "couldn't cancel 1 of the merged pull requests' workflow runs:\ncancel run 11 returned 403",
+        failure: GitHubFailed.make({
+          message:
+            "couldn't cancel 1 of the merged pull requests' workflow runs:\ncancel run 11 returned 403",
+        }),
       });
     }));
 

@@ -2,11 +2,13 @@ import { describe, expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Layer } from "effect";
 
+import { JjFailed } from "../../../clients/jj";
 import { withEnvironment } from "../../../testing/environment";
 import { fakeGitHub, gitHubCalls, setUpPullRequestsABWithA } from "../../../testing/fake-github";
 import { layer } from "../../../testing/it-effect";
 import { pushedStack, ScratchRepository } from "../../../testing/scratch-repository";
 import { describeAInParagraphs, submitting } from "../../../testing/submit";
+import { DescriptionConflict } from "./descriptions";
 
 layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("submit", (it) => {
   describe("descriptions", () => {
@@ -205,9 +207,11 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("submit", (it) => {
           );
           yield* setUpPullRequestsABWithA("a", `first\n\nsecond${footer}`);
           const failure = yield* Effect.flip(submitting());
-          expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
+          expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
             calls: [],
-            message: 'jj-octo.ignore-claude-code-footer is "yes"; set it to true or false',
+            failure: JjFailed.make({
+              message: 'jj-octo.ignore-claude-code-footer is "yes"; set it to true or false',
+            }),
           });
         }));
     });
@@ -239,28 +243,30 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("submit", (it) => {
         expect({
           branches: yield* repository.branches,
           calls: yield* gitHubCalls,
-          message: failure.message,
+          failure,
         }).toStrictEqual({
           branches,
           calls: [],
-          message: EffectArray.join(
-            [
-              "the description of a changed here and in #1, in the same lines:",
-              "",
-              "<<<<<<< local",
-              "a, locally",
-              "=======",
-              "a, on GitHub",
-              ">>>>>>> GitHub",
-              "",
-              "first",
-              "",
-              "second",
-              "",
-              "Write the one to keep with `jj describe -r a`, then run `jj gh submit --overwrite-descriptions`.",
-            ],
-            "\n",
-          ),
+          failure: DescriptionConflict.make({
+            message: EffectArray.join(
+              [
+                "the description of a changed here and in #1, in the same lines:",
+                "",
+                "<<<<<<< local",
+                "a, locally",
+                "=======",
+                "a, on GitHub",
+                ">>>>>>> GitHub",
+                "",
+                "first",
+                "",
+                "second",
+                "",
+                "Write the one to keep with `jj describe -r a`, then run `jj gh submit --overwrite-descriptions`.",
+              ],
+              "\n",
+            ),
+          }),
         });
       }));
 

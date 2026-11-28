@@ -14,7 +14,8 @@ import {
 import { layer } from "../../testing/it-effect";
 import { openPullRequestsAB, openPullRequestsABC, stackOf } from "../../testing/pull-requests";
 import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
-import { publish } from "./publish";
+import { NotPublishable, publish } from "./publish";
+import { NotAStack } from "./stack/changes";
 
 // Whether each bookmark's open pull request is a draft, as the fake GitHub reports it afterwards.
 const draftsOf = (bookmarks: readonly string[]) =>
@@ -44,9 +45,9 @@ layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHub))("publish", (it) => {
       yield* setUpPullRequestsABC();
       const failure = yield* Effect.flip(publish("b"));
       const labels = yield* repository.labels("b");
-      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
         calls: [],
-        message: `resolve the conflicts first:\n${labels}`,
+        failure: NotAStack.make({ message: `resolve the conflicts first:\n${labels}` }),
       });
     }));
 
@@ -82,9 +83,11 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("publish, with two changes
       yield* repository.jj("describe", "-r", "b", "-m", "b, reworded");
       yield* setUpPullRequestsAB();
       const failure = yield* Effect.flip(publish("b"));
-      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
         calls: [],
-        message: "these changes aren't pushed: b; run `jj gh submit --publish` instead",
+        failure: NotPublishable.make({
+          message: "these changes aren't pushed: b; run `jj gh submit --publish` instead",
+        }),
       });
     }));
 
@@ -92,9 +95,11 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("publish, with two changes
     Effect.gen(function* () {
       yield* setUpGitHub({ open: { b: openPullRequestsAB.b } });
       const failure = yield* Effect.flip(publish("b"));
-      expect({ calls: yield* gitHubCalls, message: failure.message }).toStrictEqual({
+      expect({ calls: yield* gitHubCalls, failure }).toStrictEqual({
         calls: [],
-        message: "no open pull request for a; run `jj gh submit --publish` instead",
+        failure: NotPublishable.make({
+          message: "no open pull request for a; run `jj gh submit --publish` instead",
+        }),
       });
     }));
 });

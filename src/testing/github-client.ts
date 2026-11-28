@@ -12,7 +12,6 @@ import { FetchHttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 
 import { GitHub, GitHubLive } from "../clients/github/client";
-import type { GitHubFailed } from "../clients/github/failure";
 import {
   type InterceptedRequest,
   InterceptingProxy,
@@ -61,14 +60,6 @@ export const callGitHub = <A, E>(
       result,
     };
   });
-
-// The effect's result, or the message and status it failed with.
-export const failureOf = <A, R>(
-  effect: Effect.Effect<A, GitHubFailed, R>,
-): Effect.Effect<A | { readonly message: string; readonly status: number | undefined }, never, R> =>
-  effect.pipe(
-    Effect.catchTag("GitHubFailed", ({ message, status }) => Effect.succeed({ message, status })),
-  );
 
 // The search for open and approved pull requests with the terms, and the page it reads.
 export const searchPath = (terms: string, page = 1): string =>
