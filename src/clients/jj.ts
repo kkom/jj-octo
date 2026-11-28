@@ -1,7 +1,6 @@
 import {
   Array as EffectArray,
   Context,
-  Data,
   Effect,
   Layer,
   Schema,
@@ -14,7 +13,10 @@ import { readOutput } from "./process";
 
 const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
-export class JjFailed extends Data.TaggedError("JjFailed")<{ readonly message: string }> {}
+export class JjFailed extends Schema.TaggedError<JjFailed, { readonly brand: unique symbol }>()(
+  "JjFailed",
+  { message: Schema.String },
+) {}
 
 export class Jj extends Context.Service<
   Jj,
@@ -37,7 +39,7 @@ export class Jj extends Context.Service<
 // What jj printed says what went wrong, so it's the message. The command is named only where jj
 // printed nothing to this program: it failed to start, or its output went to the terminal.
 const failed = (args: readonly string[], detail: string): JjFailed =>
-  new JjFailed({
+  JjFailed.make({
     message:
       EffectString.trim(detail) === ""
         ? `jj ${EffectArray.join(args, " ")} failed`
@@ -149,7 +151,7 @@ export const readJjConfig = (
     // For a table, jj lists the keys inside it.
     const prefix = `${formatJson(key)} `;
     if (EffectArray.some(lines, (line) => !EffectString.startsWith(prefix)(line))) {
-      return yield* new JjFailed({ message: `${key} is a table; set it to a single value` });
+      return yield* JjFailed.make({ message: `${key} is a table; set it to a single value` });
     }
     const [line] = lines;
     // Jj writes each value as JSON, so one it doesn't is a defect
@@ -165,7 +167,7 @@ export const jjConfig = (key: string): Effect.Effect<string, JjFailed, Jj> =>
     if (value === undefined || typeof value === "string") {
       return value ?? "";
     }
-    return yield* new JjFailed({
+    return yield* JjFailed.make({
       message: `${key} is ${formatJson(value)}; set it to a string`,
     });
   });

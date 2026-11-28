@@ -40,7 +40,7 @@ const checkMarkedReady = (
 ): Effect.Effect<void, GitHubFailed> => {
   if (errors.length > 0) {
     return Effect.fail(
-      new GitHubFailed({
+      GitHubFailed.make({
         message: `marking #${pullRequest} ready for review failed: ${EffectArray.join(
           EffectArray.map(errors, ({ message }) => message),
           "; ",
@@ -51,7 +51,7 @@ const checkMarkedReady = (
   return data?.markPullRequestReadyForReview?.pullRequest?.isDraft === false
     ? Effect.void
     : Effect.fail(
-        new GitHubFailed({ message: `marking #${pullRequest} ready for review left it a draft` }),
+        GitHubFailed.make({ message: `marking #${pullRequest} ready for review left it a draft` }),
       );
 };
 

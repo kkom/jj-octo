@@ -1,11 +1,14 @@
-import { Array as EffectArray, Data, Effect, FileSystem } from "effect";
+import { Array as EffectArray, Effect, FileSystem, Schema } from "effect";
 
 import { Git, GitFailed, gitConfig, gitDirectories } from "../../clients/git";
 import { Jj, type JjFailed, jjConfig, readJjConfig, setJjConfig } from "../../clients/jj";
 import { commitsAt, exactPattern } from "./stack/changes";
 import { trunkRevset } from "./stack/trunk";
 
-export class NotSetUp extends Data.TaggedError("NotSetUp")<{ readonly message: string }> {}
+export class NotSetUp extends Schema.TaggedError<NotSetUp, { readonly brand: unique symbol }>()(
+  "NotSetUp",
+  { message: Schema.String },
+) {}
 
 type SetupEffect<A> = Effect.Effect<A, GitFailed | JjFailed, FileSystem.FileSystem | Git | Jj>;
 
@@ -38,7 +41,7 @@ const defaultBranch = Effect.gen(function* () {
   const output = yield* git.read(["ls-remote", "--symref", "origin", "HEAD"]);
   const branch = /^ref: refs\/heads\/(?<branch>\S+)\tHEAD$/mu.exec(output)?.groups?.["branch"];
   if (branch === undefined) {
-    return yield* new GitFailed({ message: "origin names no default branch" });
+    return yield* GitFailed.make({ message: "origin names no default branch" });
   }
   return branch;
 });

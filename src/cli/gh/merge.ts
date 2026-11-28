@@ -1,4 +1,4 @@
-import { Array as EffectArray, Console, Data, Effect, Exit, Option } from "effect";
+import { Array as EffectArray, Console, Effect, Exit, Option, Schema } from "effect";
 import { Command, Flag } from "effect/cli";
 
 import type { Git } from "../../clients/git";
@@ -26,9 +26,10 @@ import type { NotCombined } from "./stack/reconcile";
 import { checkedTrunk } from "./stack/trunk";
 import { allWorkspacesFlag, sync } from "./sync";
 
-export class NotMergeable extends Data.TaggedError("NotMergeable")<{
-  readonly message: string;
-}> {}
+export class NotMergeable extends Schema.TaggedError<
+  NotMergeable,
+  { readonly brand: unique symbol }
+>()("NotMergeable", { message: Schema.String }) {}
 
 const numbered = (pullRequests: readonly PullRequestNumber[]): string =>
   EffectArray.join(
@@ -41,7 +42,7 @@ const openPullRequestOf = (bookmark: string) =>
     const github = yield* GitHub;
     const opened = yield* github.openPullRequest(bookmark);
     if (Option.isNone(opened)) {
-      return yield* new NotMergeable({
+      return yield* NotMergeable.make({
         message: `no open pull request for ${bookmark}; run \`jj gh submit\` first`,
       });
     }
@@ -61,7 +62,7 @@ const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
     // Outside a GitHub stack a merge goes into the pull request's base, and takes nothing below
     // it along.
     if (base !== trunk) {
-      return yield* new NotMergeable({
+      return yield* NotMergeable.make({
         message: `#${number} isn't in a GitHub stack, and its base is ${base}, so merging it wouldn't reach the trunk; run \`jj gh submit\` to register the stack, or merge the changes below it first`,
       });
     }
@@ -90,7 +91,7 @@ const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
       `cancelled ${cancelled} workflow ${cancelled === 1 ? "run" : "runs"} of the merged pull requests`,
     );
     if (failures.length > 0) {
-      return yield* new GitHubFailed({
+      return yield* GitHubFailed.make({
         message: EffectArray.join(
           [
             `couldn't cancel ${failures.length} of the merged pull requests' workflow runs:`,
@@ -133,7 +134,7 @@ export const merge = (
       (change) => pushedState(targets.get(change.bookmark), change) !== "pushed",
     );
     if (unpushed.length > 0) {
-      return yield* new NotMergeable({
+      return yield* NotMergeable.make({
         message: `these changes aren't pushed: ${EffectArray.join(
           EffectArray.map(unpushed, ({ bookmark }) => bookmark),
           ", ",

@@ -1,9 +1,9 @@
 import {
   Array as EffectArray,
   Console,
-  Data,
   Effect,
   Option,
+  Schema,
   String as EffectString,
 } from "effect";
 import { Command, Flag } from "effect/cli";
@@ -23,9 +23,10 @@ import { asUserError, revisionFlag, withHelp } from "../command";
 import { bookmarkTargets } from "./stack/bookmark-targets";
 import { anyOf, CONFLICTED, lines, type NotAStack, readLog, stackChanges } from "./stack/changes";
 
-export class NoPullRequests extends Data.TaggedError("NoPullRequests")<{
-  readonly message: string;
-}> {}
+export class NoPullRequests extends Schema.TaggedError<
+  NoPullRequests,
+  { readonly brand: unique symbol }
+>()("NoPullRequests", { message: Schema.String }) {}
 
 /**
  * Where a change's pull request is: a state GitHub lists it in, where `ready` is one ready for
@@ -214,7 +215,7 @@ export const stackPullRequests = (
       const changed = counts.get(commitId);
       if (Option.isSome(pullRequest)) {
         if (changed === undefined) {
-          return yield* new JjFailed({ message: `jj printed no line counts for ${commitId}` });
+          return yield* JjFailed.make({ message: `jj printed no line counts for ${commitId}` });
         }
         counted.push({ ...pullRequest.value, ...changed, conflict });
       }
@@ -244,7 +245,7 @@ export const links = ({
     const pullRequests = yield* stackPullRequests(revision).pipe(
       Effect.filterOrFail(
         (found) => found.length > 0,
-        () => new NoPullRequests({ message: "no change of the stack has a pull request" }),
+        () => NoPullRequests.make({ message: "no change of the stack has a pull request" }),
       ),
     );
     const text = markdownLinks(pullRequests);

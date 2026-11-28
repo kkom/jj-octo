@@ -4,18 +4,21 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import {
   Array as EffectArray,
-  Data,
   Effect,
   FileSystem,
   pipe,
+  Schema,
   String as EffectString,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-class CompileFailed extends Data.TaggedError("CompileFailed")<{
-  readonly cause?: unknown;
-  readonly message: string;
-}> {}
+class CompileFailed extends Schema.TaggedError<CompileFailed, { readonly brand: unique symbol }>()(
+  "CompileFailed",
+  {
+    cause: Schema.optionalKey(Schema.Defect()),
+    message: Schema.String,
+  },
+) {}
 
 // The x64 build is Bun's baseline one, which runs on CPUs without AVX2.
 const targets: readonly Bun.Build.CompileTarget[] = [
@@ -34,7 +37,7 @@ const compile = (target: Bun.Build.CompileTarget) =>
     );
     const directory = `dist/compile/${platform}`;
     const built = yield* Effect.tryPromise({
-      catch: (cause) => new CompileFailed({ cause, message: `compiling for ${target} failed` }),
+      catch: (cause) => CompileFailed.make({ cause, message: `compiling for ${target} failed` }),
       try: () =>
         Bun.build({
           // Jj-octo runs in other people's checkouts, whose `.env` and `bunfig.toml` aren't its own.
@@ -49,7 +52,7 @@ const compile = (target: Bun.Build.CompileTarget) =>
         }),
     });
     if (!built.success) {
-      return yield* new CompileFailed({
+      return yield* CompileFailed.make({
         message: `compiling for ${target} failed:\n${EffectArray.join(EffectArray.map(built.logs, String), "\n")}`,
       });
     }
@@ -63,7 +66,7 @@ const compile = (target: Bun.Build.CompileTarget) =>
       ),
     );
     if (code !== 0) {
-      return yield* new CompileFailed({ message: `tar exited ${code} writing ${archive}` });
+      return yield* CompileFailed.make({ message: `tar exited ${code} writing ${archive}` });
     }
   });
 

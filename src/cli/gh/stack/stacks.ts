@@ -1,13 +1,14 @@
-import { Array as EffectArray, Console, Data, Effect, Match, Option } from "effect";
+import { Array as EffectArray, Console, Effect, Match, Option, Schema } from "effect";
 
 import { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
 import type { PullRequestNumber, RemoteStack } from "../../../clients/github/types";
 import { registrationFor } from "./plan";
 
-export class SeveralStacks extends Data.TaggedError("SeveralStacks")<{
-  readonly message: string;
-}> {}
+export class SeveralStacks extends Schema.TaggedError<
+  SeveralStacks,
+  { readonly brand: unique symbol }
+>()("SeveralStacks", { message: Schema.String }) {}
 
 /**
  * The one GitHub stack containing any of the pull requests, bottom to top, if there is one. Submit
@@ -38,7 +39,7 @@ export const stackContaining = (
             ", ",
           )})`,
       );
-      return yield* new SeveralStacks({
+      return yield* SeveralStacks.make({
         message: `the pull requests are in GitHub stacks ${EffectArray.join(listed, ", ")}, and submit won't take a pull request out of another stack; to keep #${bottom.number}, which holds the bottom one, run ${EffectArray.join(
           EffectArray.map(others, ({ number }) => `\`jj gh dissolve ${number}\``),
           " and ",

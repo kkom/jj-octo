@@ -78,7 +78,10 @@ describe("submit after a change left the stack", () => {
       const failure = yield* Effect.flip(submitIn(repository, github, { revision: "c" }));
       expect({ calls: github.calls, failure }).toStrictEqual({
         calls: ["close #2"],
-        failure: new GitHubFailed({ message: "POST /issues/2/comments returned 403", status: 403 }),
+        failure: GitHubFailed.make({
+          message: "POST /issues/2/comments returned 403",
+          status: 403,
+        }),
       });
     }),
   );

@@ -70,7 +70,7 @@ describe("problems", () => {
         "neither jj nor git has user.email; set it with `jj config set --user user.email`",
       ];
       const failure = yield* Effect.flip(init).pipe(provideClients(clone.layer));
-      expect(failure).toStrictEqual(new NotSetUp({ message: EffectArray.join(identity, "\n") }));
+      expect(failure).toStrictEqual(NotSetUp.make({ message: EffectArray.join(identity, "\n") }));
       const found = yield* problems.pipe(provideClients(clone.layer));
       expect(found).toStrictEqual(identity);
     }),

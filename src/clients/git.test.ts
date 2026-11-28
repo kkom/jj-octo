@@ -29,7 +29,7 @@ describe("gitConfig", () => {
         );
         const badLine = EffectString.split(readFileSync(config, "utf8"), "\n").length - 1;
         expect(failure).toStrictEqual(
-          new GitFailed({
+          GitFailed.make({
             exitCode: 128,
             message: `git config jj-octo.no-such-key failed: fatal: bad config line ${badLine} in file .git/config`,
           }),

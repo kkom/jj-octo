@@ -45,8 +45,8 @@ const ownToken = Effect.gen(function* () {
     .pipe(Effect.map(EffectString.trim));
   return stored === "" ? yield* Effect.fail("no token") : Redacted.make(stored);
 }).pipe(
-  Effect.mapError(
-    () => new GitHubFailed({ message: "no GitHub token: set GH_TOKEN, or run `gh auth login`" }),
+  Effect.mapError(() =>
+    GitHubFailed.make({ message: "no GitHub token: set GH_TOKEN, or run `gh auth login`" }),
   ),
 );
 
@@ -54,7 +54,7 @@ const ownToken = Effect.gen(function* () {
 const gitSetting = (name: string) =>
   Effect.gen(function* () {
     const value = yield* gitConfig(["--get-urlmatch", name, "https://github.com"]).pipe(
-      Effect.mapError(({ message }) => new GitHubFailed({ message })),
+      Effect.mapError(({ message }) => GitHubFailed.make({ message })),
     );
     return value === "" ? Option.none<string>() : Option.some(value);
   });
@@ -69,7 +69,7 @@ const gitProxy = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const url = yield* gitSetting("http.proxy");
   if (Option.isNone(url)) {
-    return yield* new GitHubFailed({
+    return yield* GitHubFailed.make({
       message: `${GITHUB_AUTH.key} is git-proxy, but git has no http.proxy for https://github.com`,
     });
   }
@@ -77,11 +77,10 @@ const gitProxy = Effect.gen(function* () {
   const ca = Option.isNone(caFile)
     ? Option.none<string>()
     : yield* fs.readFileString(caFile.value).pipe(
-        Effect.mapError(
-          (error) =>
-            new GitHubFailed({
-              message: `can't read git's http.sslCAInfo ${caFile.value}: ${error.message}`,
-            }),
+        Effect.mapError((error) =>
+          GitHubFailed.make({
+            message: `can't read git's http.sslCAInfo ${caFile.value}: ${error.message}`,
+          }),
         ),
         Effect.asSome,
       );
@@ -101,7 +100,7 @@ export const connection: Effect.Effect<
   ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Git | Jj
 > = Effect.gen(function* () {
   const auth = yield* readSetting(GITHUB_AUTH).pipe(
-    Effect.mapError(({ message }) => new GitHubFailed({ message })),
+    Effect.mapError(({ message }) => GitHubFailed.make({ message })),
   );
   return yield* Match.value(auth).pipe(
     Match.when("token", () =>

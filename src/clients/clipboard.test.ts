@@ -147,7 +147,7 @@ describe("clipboardLayer", () => {
         Effect.flip,
       );
       xclip.recorded();
-      expect(failure).toStrictEqual(new ClipboardFailed({ message: "xclip exited with 1" }));
+      expect(failure).toStrictEqual(ClipboardFailed.make({ message: "xclip exited with 1" }));
     }),
   );
 
@@ -159,7 +159,7 @@ describe("clipboardLayer", () => {
         Effect.flip,
       );
       expect(failure).toStrictEqual(
-        new ClipboardFailed({
+        ClipboardFailed.make({
           message: "couldn't find xclip",
         }),
       );
@@ -170,7 +170,7 @@ describe("clipboardLayer", () => {
     Effect.gen(function* () {
       const failure = yield* layerFor("win32").pipe(writeWith, Effect.flip);
       expect(failure).toStrictEqual(
-        new ClipboardFailed({
+        ClipboardFailed.make({
           message:
             "copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not win32",
         }),

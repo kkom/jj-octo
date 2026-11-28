@@ -1,11 +1,12 @@
-import { Array as EffectArray, Config, Context, Data, Effect, Layer, Stream } from "effect";
+import { Array as EffectArray, Config, Context, Effect, Layer, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { claudeCodeCloudSession, WAYLAND_DISPLAY } from "../settings";
 
-export class ClipboardFailed extends Data.TaggedError("ClipboardFailed")<{
-  readonly message: string;
-}> {}
+export class ClipboardFailed extends Schema.TaggedError<
+  ClipboardFailed,
+  { readonly brand: unique symbol }
+>()("ClipboardFailed", { message: Schema.String }) {}
 
 /** Text with formatting, and the same text without it for apps that take only plain text. */
 export interface RichText {
@@ -128,7 +129,7 @@ export const clipboardLayer = ({ platform = process.platform }: ClipboardOptions
           const commands = commandsFor(content, platform, wayland);
           if (commands.length === 0) {
             return Effect.fail(
-              new ClipboardFailed({
+              ClipboardFailed.make({
                 message: `copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not ${platform}`,
               }),
             );
@@ -142,18 +143,18 @@ export const clipboardLayer = ({ platform = process.platform }: ClipboardOptions
               EffectArray.map(commands, ({ name }) => name),
               " or ",
             );
-            return Effect.fail(new ClipboardFailed({ message: `couldn't find ${names}` }));
+            return Effect.fail(ClipboardFailed.make({ message: `couldn't find ${names}` }));
           }
           const { command, executable } = installed;
           const { name } = command;
           return spawner.exitCode(childProcess(command, executable, content.html)).pipe(
             Effect.catchTag("PlatformError", (error) =>
-              Effect.fail(new ClipboardFailed({ message: `${name} failed: ${error.message}` })),
+              Effect.fail(ClipboardFailed.make({ message: `${name} failed: ${error.message}` })),
             ),
             Effect.flatMap((code) =>
               code === 0
                 ? Effect.succeed("copied" as const)
-                : Effect.fail(new ClipboardFailed({ message: `${name} exited with ${code}` })),
+                : Effect.fail(ClipboardFailed.make({ message: `${name} exited with ${code}` })),
             ),
           );
         },

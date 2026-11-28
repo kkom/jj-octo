@@ -40,7 +40,7 @@ describe("dissolve", () => {
         dissolve(StackNumberSchema.make(77)).pipe(Effect.provide(github.layer)),
       );
       expect(failure).toStrictEqual(
-        new NoSuchStack({ message: "this repository has no stack #77" }),
+        NoSuchStack.make({ message: "this repository has no stack #77" }),
       );
       expect(github.calls).toStrictEqual([]);
     }),

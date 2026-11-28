@@ -50,7 +50,7 @@ describe("stackBookmarks", () => {
       );
       const failure = yield* Effect.flip(withoutConflicts(stack));
       expect(failure).toStrictEqual(
-        new NotAStack({
+        NotAStack.make({
           message: EffectArray.join(
             ["resolve the conflicts first:", `${shortOf("b")} b`, `${shortOf("c")} c`],
             "\n",

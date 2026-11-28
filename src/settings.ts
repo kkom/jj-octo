@@ -140,7 +140,7 @@ export const readSetting = <A extends boolean | string>(
         EffectArray.map(setting.choices, (candidate) => String(candidate.value)),
         " or ",
       );
-      return yield* new JjFailed({
+      return yield* JjFailed.make({
         message: `${setting.key} is ${formatJson(value)}; set it to ${values}`,
       });
     }

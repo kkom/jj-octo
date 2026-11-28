@@ -1,4 +1,4 @@
-import { Array as EffectArray, Data, Effect, Order } from "effect";
+import { Array as EffectArray, Effect, Order, Schema } from "effect";
 import { HttpClientRequest } from "effect/http";
 
 import { GitHubFailed, urlOf } from "./failure";
@@ -18,10 +18,13 @@ const MAX_SEARCH_RESULTS = 1000;
 export type SearchedPullRequest = Pick<ListedPullRequest, "createdAt" | "number">;
 
 /** A search that matched more pull requests than it can list. */
-class TooManyResults extends Data.TaggedError("TooManyResults")<{
-  readonly count: number;
-  readonly url: string;
-}> {}
+class TooManyResults extends Schema.TaggedError<
+  TooManyResults,
+  { readonly brand: unique symbol }
+>()("TooManyResults", {
+  count: Schema.Finite,
+  url: Schema.String,
+}) {}
 
 /**
  * Splits the pull requests into batches whose numbers, separated by spaces, fit in one search's
@@ -73,12 +76,12 @@ const search = (
             // Exactly as many results as the limit fill the last page, so a request follows for
             // the one after it, which fails.
             if (total_count >= MAX_SEARCH_RESULTS) {
-              return Effect.fail(new TooManyResults({ count: total_count, url: urlOf(request) }));
+              return Effect.fail(TooManyResults.make({ count: total_count, url: urlOf(request) }));
             }
             // GitHub answers a search that timed out with what it found so far.
             if (incomplete_results) {
               return Effect.fail(
-                new GitHubFailed({
+                GitHubFailed.make({
                   message: `GET ${urlOf(request)} timed out, and listed only some pull requests`,
                 }),
               );
@@ -108,7 +111,7 @@ const searchBatch = (
       const [only, ...others] = batch;
       if (only !== undefined && others.length === 0) {
         return Effect.fail(
-          new GitHubFailed({
+          GitHubFailed.make({
             message: `GET ${url} matched ${count} pull requests, at least the ${MAX_SEARCH_RESULTS} that search lists, so whether #${only.number} is approved is unknown`,
           }),
         );

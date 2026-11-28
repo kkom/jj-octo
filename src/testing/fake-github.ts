@@ -48,7 +48,7 @@ export interface FakeGitHubOptions {
 const FIRST_CREATED = 99;
 
 const rejected = (request: string, status: number) =>
-  Effect.fail(new GitHubFailed({ message: `${request} returned ${status}`, status }));
+  Effect.fail(GitHubFailed.make({ message: `${request} returned ${status}`, status }));
 
 // A GitHub with the given open pull requests and stacks, recording every call that changes
 // something.
