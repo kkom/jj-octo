@@ -10,7 +10,13 @@ import { table } from "../command";
 type RequirementState = CheckState | "unknown";
 
 // The states, the furthest from passing first.
-const FURTHEST_FIRST: readonly RequirementState[] = ["failed", "unknown", "pending", "passed"];
+const FURTHEST_FIRST: readonly RequirementState[] = [
+  "failed",
+  "unknown",
+  "pending",
+  "skipped",
+  "passed",
+];
 
 /**
  * How a check relates to a required check: its `result`, or `maybe` its result, for a commit status
@@ -139,6 +145,7 @@ export const checkReport = (required: RequiredChecks, checks: readonly Check[]):
               Match.whenOr(
                 "failed",
                 "pending",
+                "skipped",
                 "unknown",
                 (notPassed) =>
                   `${notPassed}: ${names(

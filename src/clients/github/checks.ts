@@ -30,8 +30,12 @@ export interface CheckReads {
 
 type CheckRun = (typeof CheckRuns.Type)["check_runs"][number];
 
-// The conclusions that satisfy a required check. GitHub counts every other one as a failure.
-const PASSING_CONCLUSIONS: ReadonlySet<string> = new Set(["neutral", "skipped", "success"]);
+// The state of each conclusion. Every other one is `failed`, as GitHub counts it.
+const CONCLUSION_STATES: Readonly<Record<string, CheckState>> = {
+  neutral: "passed",
+  skipped: "skipped",
+  success: "passed",
+};
 
 // A commit status's states. GitHub documents the field as any string, so one it adds counts as a
 // failure.
@@ -46,7 +50,7 @@ const checkRunState = ({ conclusion, status }: CheckRun): CheckState => {
   if (status !== "completed") {
     return "pending";
   }
-  return PASSING_CONCLUSIONS.has(conclusion ?? "") ? "passed" : "failed";
+  return CONCLUSION_STATES[conclusion ?? ""] ?? "failed";
 };
 
 /**

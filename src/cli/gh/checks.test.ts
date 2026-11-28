@@ -27,7 +27,7 @@ const checkedStack = (required: RequiredChecks = requiring("CI")) =>
     };
     yield* setUpGitHub({
       checks: {
-        [commitA]: [run("CI", "success", "passed"), run("Cleanup", "skipped", "passed")],
+        [commitA]: [run("CI", "success", "passed"), run("Cleanup", "skipped", "skipped")],
         [pushedEarlier]: [run("CI", "cancelled", "failed")],
       },
       pullRequestsFrom: (branch) => byBranch[branch] ?? [],
