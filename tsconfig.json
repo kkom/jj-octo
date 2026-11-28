@@ -183,21 +183,7 @@
         // A pipe reads better than nesting only from three steps. At two, the rule also
         // pipes a call whose argument is a key rather than the value that flows through,
         // such as `Effect.service(Tag)` as `Tag.pipe(Effect.service)`.
-        "pipeableMinArgCount": 3,
-        "overrides": [
-          {
-            // Tests, the testing modules they use, and the scripts that check the repository.
-            // They pass async callbacks to the test runner and call Bun's promise-based APIs,
-            // and keep their async functions until they move to Effect together, with the
-            // tests' move to `it.effect`.
-            "include": ["scripts/**/*.ts", "src/**/*.test.ts", "src/testing/**/*.ts"],
-            "options": {
-              "diagnosticSeverity": {
-                "asyncFunction": "off"
-              }
-            }
-          }
-        ]
+        "pipeableMinArgCount": 3
       }
     ]
   },

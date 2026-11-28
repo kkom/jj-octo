@@ -55,6 +55,16 @@ Decoded types are readonly by construction, so they need no wrapper for the read
 
 Code that still validates with another schema library keeps it until it's migrated. ❌ Don't advertise one schema and validate with another.
 
+## Write a test's body as an Effect with `itEffect`
+
+`itEffect` from `src/testing/it-effect.ts` runs the test's effect on bun's runner, in a scope that closes when it ends, with a `TestClock` that starts at 0 and a `TestConsole`. A failure fails the test. Where bun stops waiting, such as at the test's timeout, the effect is interrupted and its finalizers run. A test with no effect stays a plain `it`.
+
+That's because the test then composes the code under test as production does: it provides layers, and reads a failure as a value. bun's `it.each` spreads an array row, so `itEffect.each` takes object rows.
+
+- ❌ `it("…", async () => { const failure = await Effect.runPromise(Effect.flip(program)); … })`
+- ✅ `itEffect("…", () => Effect.gen(function* () { const failure = yield* Effect.flip(program); … }))`
+- ✅ `TestClock.adjust` in the test, where the code under test sleeps or repeats on a `Schedule`
+
 ## Use the real type where Effect code meets other code
 
 If you're tempted to wrap a value in `Promise.resolve`, narrow the type instead. A genuinely asynchronous API is different: its real type is a promise. Convert it with `tryPromise` wherever the call can reject with a failure the caller can act on, and with `Effect.promise` only where every rejection is a defect, leaving the failure channel `never`.
