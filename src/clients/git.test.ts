@@ -1,33 +1,32 @@
-import { afterAll, describe, expect } from "bun:test";
-import { appendFileSync, readFileSync } from "node:fs";
-import path from "node:path";
+import { describe, expect } from "bun:test";
 
-import { Effect, String as EffectString } from "effect";
+import { Effect, FileSystem, Path, String as EffectString } from "effect";
 
 import { gitClone } from "../testing/git-clone";
 import { itEffect, provideSetup } from "../testing/it-effect";
-import { removeScratchRepositories, scratchRepository } from "../testing/scratch-repository";
+import { scratchRepository } from "../testing/scratch-repository";
 import { GitFailed, gitConfig } from "./git";
-
-afterAll(removeScratchRepositories);
 
 describe("gitConfig", () => {
   itEffect(
     "reads a key without a value as an empty string, and fails on a config git can't read",
     () =>
       Effect.gen(function* () {
-        const clone = gitClone(scratchRepository());
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const repository = yield* scratchRepository;
+        const clone = yield* gitClone(repository);
         const value = yield* gitConfig(["jj-octo.no-such-key"]).pipe(provideSetup(clone.layer));
         expect(value).toBe("");
-        const config = path.join(
-          EffectString.trim(clone.git("rev-parse", "--absolute-git-dir")),
-          "config",
-        );
-        appendFileSync(config, "[\n");
+        const gitDirectory = yield* clone.git("rev-parse", "--absolute-git-dir");
+        const config = path.join(EffectString.trim(gitDirectory), "config");
+        const original = yield* Effect.orDie(fs.readFileString(config));
+        yield* Effect.orDie(fs.writeFileString(config, `${original}[\n`));
         const failure = yield* Effect.flip(gitConfig(["jj-octo.no-such-key"])).pipe(
           provideSetup(clone.layer),
         );
-        const badLine = EffectString.split(readFileSync(config, "utf8"), "\n").length - 1;
+        const written = yield* Effect.orDie(fs.readFileString(config));
+        const badLine = EffectString.split(written, "\n").length - 1;
         expect(failure).toStrictEqual(
           GitFailed.make({
             exitCode: 128,

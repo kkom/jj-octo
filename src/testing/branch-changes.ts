@@ -1,4 +1,4 @@
-import { Array as EffectArray, String as EffectString } from "effect";
+import { Array as EffectArray, Effect, String as EffectString } from "effect";
 
 import type { ScratchRepository } from "./scratch-repository";
 
@@ -9,24 +9,29 @@ export const addCommitOnGitHub = (
   repository: ScratchRepository,
   branch: string,
   file = "suggestion.txt",
-): void => {
-  repository.git("fetch", "--quiet");
-  repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
-  repository.writeOnGitHub(file, "suggestion\n");
-  repository.git("add", ".");
-  repository.git("commit", "--quiet", "-m", "apply a suggestion");
-  repository.git("push", "--quiet", "origin", branch);
-};
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* repository.git("fetch", "--quiet");
+    yield* repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
+    yield* repository.writeOnGitHub(file, "suggestion\n");
+    yield* repository.git("add", ".");
+    yield* repository.git("commit", "--quiet", "-m", "apply a suggestion");
+    yield* repository.git("push", "--quiet", "origin", branch);
+  });
 
 /** Adds a commit to `main`. */
-export const moveTrunkOnGitHub = (repository: ScratchRepository, file = "trunk.txt"): void => {
-  repository.git("fetch", "--quiet");
-  repository.git("checkout", "--quiet", "-B", "main", "origin/main");
-  repository.writeOnGitHub(file, "trunk\n");
-  repository.git("add", ".");
-  repository.git("commit", "--quiet", "-m", "trunk moves");
-  repository.git("push", "--quiet", "origin", "main");
-};
+export const moveTrunkOnGitHub = (
+  repository: ScratchRepository,
+  file = "trunk.txt",
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* repository.git("fetch", "--quiet");
+    yield* repository.git("checkout", "--quiet", "-B", "main", "origin/main");
+    yield* repository.writeOnGitHub(file, "trunk\n");
+    yield* repository.git("add", ".");
+    yield* repository.git("commit", "--quiet", "-m", "trunk moves");
+    yield* repository.git("push", "--quiet", "origin", "main");
+  });
 
 /**
  * Moves `main`, then rebases a branch onto it and force-pushes it, as the "Update branch" button
@@ -36,17 +41,18 @@ export const rebaseOnGitHub = (
   repository: ScratchRepository,
   branch: string,
   { extra = false }: { readonly extra?: boolean } = {},
-): void => {
-  moveTrunkOnGitHub(repository);
-  repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
-  repository.git("rebase", "--quiet", "main");
-  if (extra) {
-    repository.writeOnGitHub("extra.txt", "extra\n");
-    repository.git("add", ".");
-    repository.git("commit", "--quiet", "--amend", "--no-edit");
-  }
-  repository.git("push", "--quiet", "--force", "origin", branch);
-};
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* moveTrunkOnGitHub(repository);
+    yield* repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
+    yield* repository.git("rebase", "--quiet", "main");
+    if (extra) {
+      yield* repository.writeOnGitHub("extra.txt", "extra\n");
+      yield* repository.git("add", ".");
+      yield* repository.git("commit", "--quiet", "--amend", "--no-edit");
+    }
+    yield* repository.git("push", "--quiet", "--force", "origin", branch);
+  });
 
 /**
  * Adds a file to the change of each branch in another jj checkout, and force-pushes them. Unlike
@@ -55,21 +61,22 @@ export const rebaseOnGitHub = (
 export const rewriteElsewhere = (
   repository: ScratchRepository,
   ...branches: readonly string[]
-): void => {
-  repository.elsewhere("git", "fetch");
-  for (const branch of branches) {
-    repository.elsewhere("bookmark", "track", `${branch}@origin`);
-  }
-  for (const branch of branches) {
-    repository.elsewhere("edit", branch);
-    repository.writeElsewhere(`${branch}-elsewhere.txt`, "elsewhere\n");
-  }
-  repository.elsewhere(
-    "git",
-    "push",
-    ...EffectArray.flatMap(branches, (branch) => ["--bookmark", branch]),
-  );
-};
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* repository.elsewhere("git", "fetch");
+    for (const branch of branches) {
+      yield* repository.elsewhere("bookmark", "track", `${branch}@origin`);
+    }
+    for (const branch of branches) {
+      yield* repository.elsewhere("edit", branch);
+      yield* repository.writeElsewhere(`${branch}-elsewhere.txt`, "elsewhere\n");
+    }
+    yield* repository.elsewhere(
+      "git",
+      "push",
+      ...EffectArray.flatMap(branches, (branch) => ["--bookmark", branch]),
+    );
+  });
 
 /**
  * Squash-merges a branch into `into`, `main` by default, as one commit, together with the
@@ -91,29 +98,30 @@ export const squashMergeOnGitHub = (
     readonly deleted?: boolean;
     readonly into?: string;
   } = {},
-): void => {
-  repository.git("fetch", "--quiet");
-  repository.git("checkout", "--quiet", "-B", into, `origin/${into}`);
-  repository.git("merge", "--quiet", "--squash", `origin/${branch}`);
-  repository.git("commit", "--quiet", "-m", `${branch} (#1)`);
-  repository.git("push", "--quiet", "origin", into);
-  for (const name of [...below, branch]) {
-    repository.mergedOnGitHub(
-      name,
-      EffectString.trim(repository.git("rev-parse", `origin/${name}`)),
-    );
-  }
-  let previous = EffectString.trim(repository.git("rev-parse", `origin/${branch}`));
-  let base = into;
-  for (const name of above) {
-    const pushed = EffectString.trim(repository.git("rev-parse", `origin/${name}`));
-    repository.git("checkout", "--quiet", "-B", name, pushed);
-    repository.git("rebase", "--quiet", "--onto", base, previous, name);
-    repository.git("push", "--quiet", "--force", "origin", name);
-    previous = pushed;
-    base = name;
-  }
-  if (deleted) {
-    repository.git("push", "--quiet", "origin", "--delete", ...below, branch);
-  }
-};
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* repository.git("fetch", "--quiet");
+    yield* repository.git("checkout", "--quiet", "-B", into, `origin/${into}`);
+    yield* repository.git("merge", "--quiet", "--squash", `origin/${branch}`);
+    yield* repository.git("commit", "--quiet", "-m", `${branch} (#1)`);
+    yield* repository.git("push", "--quiet", "origin", into);
+    for (const name of [...below, branch]) {
+      const head = yield* repository.git("rev-parse", `origin/${name}`);
+      repository.mergedOnGitHub(name, EffectString.trim(head));
+    }
+    const top = yield* repository.git("rev-parse", `origin/${branch}`);
+    let previous = EffectString.trim(top);
+    let base = into;
+    for (const name of above) {
+      const head = yield* repository.git("rev-parse", `origin/${name}`);
+      const pushed = EffectString.trim(head);
+      yield* repository.git("checkout", "--quiet", "-B", name, pushed);
+      yield* repository.git("rebase", "--quiet", "--onto", base, previous, name);
+      yield* repository.git("push", "--quiet", "--force", "origin", name);
+      previous = pushed;
+      base = name;
+    }
+    if (deleted) {
+      yield* repository.git("push", "--quiet", "origin", "--delete", ...below, branch);
+    }
+  });

@@ -1,4 +1,4 @@
-import { Array as EffectArray } from "effect";
+import { Array as EffectArray, Effect } from "effect";
 
 import { moveTrunkOnGitHub } from "./branch-changes";
 import type { ScratchRepository } from "./scratch-repository";
@@ -13,31 +13,38 @@ export const conflictWithTrunk = (
   repository: ScratchRepository,
   conflicted: string,
   { pushed = [] }: { readonly pushed?: readonly string[] } = {},
-): void => {
-  moveTrunkOnGitHub(repository, `${conflicted}.txt`);
-  repository.jj("git", "fetch");
-  repository.jj("rebase", "-b", "@", "-d", "main");
-  if (pushed.length > 0) {
-    repository.jj(
-      "git",
-      "push",
-      ...EffectArray.flatMap(pushed, (bookmark) => ["--bookmark", bookmark]),
-    );
-  }
-};
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* moveTrunkOnGitHub(repository, `${conflicted}.txt`);
+    yield* repository.jj("git", "fetch");
+    yield* repository.jj("rebase", "-b", "@", "-d", "main");
+    if (pushed.length > 0) {
+      yield* repository.jj(
+        "git",
+        "push",
+        ...EffectArray.flatMap(pushed, (bookmark) => ["--bookmark", bookmark]),
+      );
+    }
+  });
 
 /** The change of each bookmark as a command lists it: its short id and its description's first line. */
-export const labelsOf = (repository: ScratchRepository, ...bookmarks: readonly string[]): string =>
-  EffectArray.join(
-    EffectArray.map(bookmarks, (bookmark) =>
-      repository.jj(
-        "log",
-        "--no-graph",
-        "-r",
-        bookmark,
-        "-T",
-        'change_id.shortest(8) ++ " " ++ description.first_line()',
-      ),
+export const labelsOf = (
+  repository: ScratchRepository,
+  ...bookmarks: readonly string[]
+): Effect.Effect<string> =>
+  Effect.map(
+    Effect.forEach(
+      bookmarks,
+      (bookmark) =>
+        repository.jj(
+          "log",
+          "--no-graph",
+          "-r",
+          bookmark,
+          "-T",
+          'change_id.shortest(8) ++ " " ++ description.first_line()',
+        ),
+      { concurrency: 1 },
     ),
-    "\n",
+    (labels) => EffectArray.join(labels, "\n"),
   );

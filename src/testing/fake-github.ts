@@ -36,7 +36,7 @@ export interface FakeGitHubOptions {
   /** GitHub answers 403 to a comment where the token can't write to issues. */
   readonly commentForbidden?: boolean;
   /** What GitHub does to the repository when it merges, which the fake has no repository to do. */
-  readonly onMerge?: (pullRequest: PullRequestNumber) => void;
+  readonly onMerge?: (pullRequest: PullRequestNumber) => Effect.Effect<void>;
   /** The pull requests from the branch in any state, newest first. None by default. */
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
   /** The checks each branch requires. A branch not named here doesn't exist. */
@@ -196,20 +196,10 @@ export const fakeGitHub = (
       );
     },
     mergePullRequest: (number) =>
-      record(`merge #${number}`).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            onMerge?.(number);
-          }),
-        ),
-      ),
+      record(`merge #${number}`).pipe(Effect.tap(() => onMerge?.(number) ?? Effect.void)),
     mergeStack: (number) =>
       record(`merge the stack up to #${number}`).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            onMerge?.(number);
-          }),
-        ),
+        Effect.tap(() => onMerge?.(number) ?? Effect.void),
         Effect.as("merged"),
       ),
     openPullRequest: (branch) => Effect.sync(() => Option.fromNullishOr(opened.get(branch))),
