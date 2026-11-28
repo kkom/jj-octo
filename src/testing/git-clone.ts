@@ -47,12 +47,11 @@ export const gitClone = (
     yield* execute(root, ["git", "clone", "--quiet", origin, checkout]);
     yield* execute(checkout, ["git", "config", "user.name", name]);
     yield* execute(checkout, ["git", "config", "user.email", "cloner@example.com"]);
-    const printed: string[] = [];
-    const print = (text: string): void => {
-      printed.push(text);
-    };
+    // What jj prints goes nowhere, since no test reads it.
     const layerIn = (directory: string) =>
-      layerAt(directory, env, print).pipe(Layer.provide(Layer.succeedContext(services)));
+      layerAt(directory, env, () => Effect.void).pipe(
+        Layer.provide(Layer.succeedContext(services)),
+      );
     return {
       git: (...args: readonly string[]) => execute(checkout, ["git", ...args]),
       jj: (...args: readonly string[]) => execute(checkout, ["jj", ...args]),

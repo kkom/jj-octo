@@ -72,7 +72,7 @@ export const makeExecutor = (
 export const layerAt = (
   cwd: string,
   env: Readonly<Record<string, string>>,
-  printed: (text: string) => void,
+  printed: (text: string) => Effect.Effect<void>,
 ): Layer.Layer<Git | Jj | PrDescriptions, never, ScratchServices> =>
   Layer.merge(
     gitLayer({ cwd, env }),

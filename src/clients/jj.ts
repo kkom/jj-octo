@@ -60,7 +60,7 @@ interface JjOptions {
   /** Added to the environment jj inherits. */
   readonly env?: Readonly<Record<string, string>>;
   /** Receives what `run` commands print, which otherwise goes to the terminal. */
-  readonly printed?: (text: string) => void;
+  readonly printed?: (text: string) => Effect.Effect<void>;
 }
 
 export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
@@ -108,10 +108,11 @@ export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
                   code === 0 ? Effect.void : Effect.fail(failed(args, "")),
                 ),
               )
-          : Effect.flatMap(captured(args), ({ exitCode, stderr, stdout }) => {
-              printed(stdout + stderr);
-              return exitCode === 0 ? Effect.void : Effect.fail(failed(args, stderr));
-            });
+          : Effect.flatMap(captured(args), ({ exitCode, stderr, stdout }) =>
+              printed(stdout + stderr).pipe(
+                Effect.andThen(exitCode === 0 ? Effect.void : Effect.fail(failed(args, stderr))),
+              ),
+            );
 
       const dryRun = (args: readonly string[]): Effect.Effect<string, JjFailed> =>
         Effect.flatMap(captured([...DRY_RUN, ...args]), ({ exitCode, stderr }) => {
