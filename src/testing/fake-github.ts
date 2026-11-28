@@ -20,8 +20,9 @@ import { environment } from "./environment";
 import { provideSetup } from "./it-effect";
 import type { ScratchRepository } from "./scratch-repository";
 
-/** A workflow run, by its id and whether it has completed. */
+/** A workflow run, by its id, the branch it ran on, and whether it has completed. */
 export interface FakeRun {
+  readonly branch: string;
   /** GitHub answers 403 to a cancel where the token can't write to Actions. */
   readonly cancelForbidden?: boolean;
   readonly completed: boolean;
@@ -41,7 +42,7 @@ export interface FakeGitHubOptions {
   readonly pullRequestsFrom?: (branch: string) => readonly ListedPullRequest[];
   /** The checks each branch requires. A branch not named here doesn't exist. */
   readonly required?: Readonly<Record<string, RequiredChecks>>;
-  /** Each commit's workflow runs. None by default. */
+  /** Each commit's workflow runs, on any branch. None by default. */
   readonly runs?: Readonly<Record<string, readonly FakeRun[]>>;
 }
 
@@ -229,10 +230,10 @@ export const fakeGitHub = (
       Effect.sync(() =>
         EffectArray.findFirst(registered, ({ unmerged }) => unmerged.includes(pullRequest)),
       ),
-    unfinishedRuns: (commit) =>
+    unfinishedRuns: ({ branch, commit }) =>
       Effect.succeed(
         EffectArray.map(
-          EffectArray.filter(runs[commit] ?? [], (run) => !run.completed),
+          EffectArray.filter(runs[commit] ?? [], (run) => run.branch === branch && !run.completed),
           ({ id }) => WorkflowRunIdSchema.make(id),
         ),
       ),

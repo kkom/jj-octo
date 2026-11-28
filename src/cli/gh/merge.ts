@@ -71,15 +71,16 @@ const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
   });
 
 /**
- * Cancels the workflow runs that haven't completed for the merged changes' commits, which are their
- * pull requests' heads. Tries every run, and fails at the end if any cancel failed.
+ * Cancels the workflow runs that haven't completed for each merged change's commit on the branch
+ * of its bookmark, which is its pull request's head. Tries every run, and fails at the end if any
+ * cancel failed.
  */
 const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
   Effect.gen(function* () {
     const github = yield* GitHub;
     const runs = (yield* Effect.forEach(
       changes,
-      ({ commitId }) => github.unfinishedRuns(commitId),
+      ({ bookmark, commitId }) => github.unfinishedRuns({ branch: bookmark, commit: commitId }),
       { concurrency: 4 },
     )).flat();
     const [outcomes, failures] = yield* Effect.partition(runs, (run) => github.cancelRun(run), {

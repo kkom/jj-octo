@@ -12,7 +12,7 @@ import { PullRequestNumberSchema, WorkflowRunIdSchema } from "./types";
 const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
 
 const runsPath = (page: number) =>
-  `/repos/owner/name/actions/runs?head_sha=abc&per_page=100&page=${page}`;
+  `/repos/owner/name/actions/runs?branch=claude%2Fa&head_sha=abc&per_page=100&page=${page}`;
 
 describe("unfinishedRuns", () => {
   itEffect(
@@ -31,7 +31,7 @@ describe("unfinishedRuns", () => {
         };
         const outcome = yield* withGitHub(
           ({ path }) => pages[path],
-          (github) => github.unfinishedRuns("abc"),
+          (github) => github.unfinishedRuns({ branch: "claude/a", commit: "abc" }),
         );
         expect(outcome).toStrictEqual({
           requests: [`GET api.github.com${runsPath(1)}`, `GET api.github.com${runsPath(2)}`],
@@ -44,7 +44,7 @@ describe("unfinishedRuns", () => {
     Effect.gen(function* () {
       const outcome = yield* withGitHub(
         () => new Reply(500, { message: "answered 500" }),
-        (github) => failureOf(github.unfinishedRuns("abc")),
+        (github) => failureOf(github.unfinishedRuns({ branch: "claude/a", commit: "abc" })),
       );
       expect(outcome).toStrictEqual({
         requests: [`GET api.github.com${runsPath(1)}`],
