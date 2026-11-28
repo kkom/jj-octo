@@ -1,10 +1,11 @@
-import { afterAll, describe, expect, it } from "bun:test";
+import { afterAll, describe, expect } from "bun:test";
 
 import { Effect, Option } from "effect";
 
 import { GitHub } from "../../clients/github/client";
 import { conflictWithTrunk, labelsOf } from "../../testing/conflicts";
 import { fakeGitHub, inRepository } from "../../testing/fake-github";
+import { itEffect } from "../../testing/it-effect";
 import { openPullRequest, stackOf } from "../../testing/pull-requests";
 import {
   pushedStack,
@@ -38,83 +39,97 @@ const draftsIn = (
   ).pipe(inRepository(repository, github));
 
 describe("publish", () => {
-  it("publishes a change and the ones below it where a change above has conflicts", async () => {
-    const repository = pushedStack("a", "b", "c");
-    conflictWithTrunk(repository, "c", { pushed: ["a", "b"] });
-    const github = githubWithThree();
-    await Effect.runPromise(publishIn(repository, github, "b"));
-    expect(github.calls).toStrictEqual(["publish #1", "publish #2"]);
-  });
+  itEffect("publishes a change and the ones below it where a change above has conflicts", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a", "b", "c");
+      conflictWithTrunk(repository, "c", { pushed: ["a", "b"] });
+      const github = githubWithThree();
+      yield* publishIn(repository, github, "b");
+      expect(github.calls).toStrictEqual(["publish #1", "publish #2"]);
+    }),
+  );
 
-  it("fails before publishing any where the change named has conflicts", async () => {
-    const repository = pushedStack("a", "b", "c");
-    conflictWithTrunk(repository, "b", { pushed: ["a"] });
-    const github = githubWithThree();
-    const failure = await Effect.runPromise(Effect.flip(publishIn(repository, github, "b")));
-    expect({ calls: github.calls, message: failure.message }).toStrictEqual({
-      calls: [],
-      message: `resolve the conflicts first:\n${labelsOf(repository, "b")}`,
-    });
-  });
+  itEffect("fails before publishing any where the change named has conflicts", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a", "b", "c");
+      conflictWithTrunk(repository, "b", { pushed: ["a"] });
+      const github = githubWithThree();
+      const failure = yield* Effect.flip(publishIn(repository, github, "b"));
+      expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+        calls: [],
+        message: `resolve the conflicts first:\n${labelsOf(repository, "b")}`,
+      });
+    }),
+  );
 
-  it("marks the drafts of a change and the ones below it ready, bottom to top", async () => {
-    const repository = pushedStack("a", "b", "c");
-    const github = fakeGitHub(
-      {
-        a: openPullRequest("main", 1, "a"),
-        b: { ...openPullRequest("a", 2, "b"), draft: false },
-        c: openPullRequest("b", 3, "c"),
-      },
-      stackOf(1, 2, 3),
-    );
-    await Effect.runPromise(publishIn(repository, github, "c"));
-    expect({
-      calls: github.calls,
-      drafts: await Effect.runPromise(draftsIn(repository, github, ["a", "b", "c"])),
-    }).toStrictEqual({
-      calls: ["publish #1", "publish #3"],
-      drafts: [Option.some(false), Option.some(false), Option.some(false)],
-    });
-  });
+  itEffect("marks the drafts of a change and the ones below it ready, bottom to top", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a", "b", "c");
+      const github = fakeGitHub(
+        {
+          a: openPullRequest("main", 1, "a"),
+          b: { ...openPullRequest("a", 2, "b"), draft: false },
+          c: openPullRequest("b", 3, "c"),
+        },
+        stackOf(1, 2, 3),
+      );
+      yield* publishIn(repository, github, "c");
+      expect({
+        calls: github.calls,
+        drafts: yield* draftsIn(repository, github, ["a", "b", "c"]),
+      }).toStrictEqual({
+        calls: ["publish #1", "publish #3"],
+        drafts: [Option.some(false), Option.some(false), Option.some(false)],
+      });
+    }),
+  );
 
-  it("leaves the changes above the one named as drafts", async () => {
-    const repository = pushedStack("a", "b");
-    const github = fakeGitHub(
-      { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
-      stackOf(1, 2),
-    );
-    await Effect.runPromise(publishIn(repository, github, "a"));
-    expect(github.calls).toStrictEqual(["publish #1"]);
-  });
+  itEffect("leaves the changes above the one named as drafts", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a", "b");
+      const github = fakeGitHub(
+        { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
+        stackOf(1, 2),
+      );
+      yield* publishIn(repository, github, "a");
+      expect(github.calls).toStrictEqual(["publish #1"]);
+    }),
+  );
 
-  it("publishes nothing where every pull request is ready", async () => {
-    const repository = pushedStack("a");
-    const github = fakeGitHub({ a: { ...openPullRequest("main", 1, "a"), draft: false } }, []);
-    await Effect.runPromise(publishIn(repository, github, "a"));
-    expect(github.calls).toStrictEqual([]);
-  });
+  itEffect("publishes nothing where every pull request is ready", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a");
+      const github = fakeGitHub({ a: { ...openPullRequest("main", 1, "a"), draft: false } }, []);
+      yield* publishIn(repository, github, "a");
+      expect(github.calls).toStrictEqual([]);
+    }),
+  );
 
-  it("publishes nothing while a change has edits that aren't pushed", async () => {
-    const repository = pushedStack("a", "b");
-    repository.jj("describe", "-r", "b", "-m", "b, reworded");
-    const github = fakeGitHub(
-      { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
-      stackOf(1, 2),
-    );
-    const failure = await Effect.runPromise(Effect.flip(publishIn(repository, github, "b")));
-    expect({ calls: github.calls, message: failure.message }).toStrictEqual({
-      calls: [],
-      message: "these changes aren't pushed: b; run `jj gh submit --publish` instead",
-    });
-  });
+  itEffect("publishes nothing while a change has edits that aren't pushed", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a", "b");
+      repository.jj("describe", "-r", "b", "-m", "b, reworded");
+      const github = fakeGitHub(
+        { a: openPullRequest("main", 1, "a"), b: openPullRequest("a", 2, "b") },
+        stackOf(1, 2),
+      );
+      const failure = yield* Effect.flip(publishIn(repository, github, "b"));
+      expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+        calls: [],
+        message: "these changes aren't pushed: b; run `jj gh submit --publish` instead",
+      });
+    }),
+  );
 
-  it("publishes nothing where a change has no open pull request", async () => {
-    const repository = pushedStack("a", "b");
-    const github = fakeGitHub({ b: openPullRequest("a", 2, "b") }, []);
-    const failure = await Effect.runPromise(Effect.flip(publishIn(repository, github, "b")));
-    expect({ calls: github.calls, message: failure.message }).toStrictEqual({
-      calls: [],
-      message: "no open pull request for a; run `jj gh submit --publish` instead",
-    });
-  });
+  itEffect("publishes nothing where a change has no open pull request", () =>
+    Effect.gen(function* () {
+      const repository = pushedStack("a", "b");
+      const github = fakeGitHub({ b: openPullRequest("a", 2, "b") }, []);
+      const failure = yield* Effect.flip(publishIn(repository, github, "b"));
+      expect({ calls: github.calls, message: failure.message }).toStrictEqual({
+        calls: [],
+        message: "no open pull request for a; run `jj gh submit --publish` instead",
+      });
+    }),
+  );
 });
