@@ -7,10 +7,11 @@ import {
   Layer,
   Path,
   Record as EffectRecord,
-  Stream,
   String as EffectString,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+
+import { readOutput } from "./process";
 
 export class GitFailed extends Data.TaggedError("GitFailed")<{
   readonly message: string;
@@ -84,21 +85,14 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
                   { cwd: directory },
                 ),
               );
-              const [text, stderr, code] = yield* Effect.all(
-                [
-                  Stream.mkString(Stream.decodeText(handle.stdout)),
-                  Stream.mkString(Stream.decodeText(handle.stderr)),
-                  handle.exitCode,
-                ],
-                { concurrency: "unbounded" },
-              );
+              const { exitCode, stderr, stdout } = yield* readOutput(handle);
               // The exit code is the number of conflicts, and 255 for a failure.
-              if (code > 127) {
+              if (exitCode > 127) {
                 return yield* new GitFailed({
                   message: `git merge-file failed: ${EffectString.trim(stderr)}`,
                 });
               }
-              return { conflicted: code > 0, text: EffectString.trimEnd(text) };
+              return { conflicted: exitCode > 0, text: EffectString.trimEnd(stdout) };
             }),
           ).pipe(
             Effect.catchTag("PlatformError", (error) =>
@@ -111,18 +105,11 @@ export const gitLayer = ({ cwd, env }: GitOptions = {}): Layer.Layer<
               const handle = yield* spawner.spawn(
                 ChildProcess.make("git", args, { cwd, env, extendEnv: true }),
               );
-              const [stdout, stderr, code] = yield* Effect.all(
-                [
-                  Stream.mkString(Stream.decodeText(handle.stdout)),
-                  Stream.mkString(Stream.decodeText(handle.stderr)),
-                  handle.exitCode,
-                ],
-                { concurrency: "unbounded" },
-              );
-              return code === 0
+              const { exitCode, stderr, stdout } = yield* readOutput(handle);
+              return exitCode === 0
                 ? stdout
                 : yield* new GitFailed({
-                    exitCode: code,
+                    exitCode,
                     message: `git ${EffectArray.join(args, " ")} failed${EffectString.trim(stderr) === "" ? "" : `: ${EffectString.trim(stderr)}`}`,
                   });
             }),

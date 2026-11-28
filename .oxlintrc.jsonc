@@ -180,6 +180,7 @@
             "from": "package",
             "name": [
               "Brand",
+              "ChildProcessHandle",
               "Command",
               "Context",
               "Effect",
