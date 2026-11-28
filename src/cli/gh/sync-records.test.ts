@@ -5,7 +5,7 @@ import { Array as EffectArray, Effect, Layer, Option } from "effect";
 import { PullRequestNumberSchema } from "../../clients/github/types";
 import { PrDescriptions } from "../../clients/pr-descriptions";
 import { squashMergeOnGitHub } from "../../testing/branch-changes";
-import { fakeGitHub } from "../../testing/fake-github";
+import { fakeGitHubHolding, setUpPullRequestsAB } from "../../testing/fake-github";
 import { layer } from "../../testing/it-effect";
 import { pushedStack } from "../../testing/scratch-repository";
 import { syncing } from "../../testing/sync";
@@ -32,7 +32,9 @@ const left = Effect.gen(function* () {
   return EffectArray.map(records, (found) => Option.map(found, ({ description }) => description));
 });
 
-layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync", (it) => {
+const fakeGitHubAB = fakeGitHubHolding(setUpPullRequestsAB());
+
+layer(Layer.merge(pushedStack("a", "b"), fakeGitHubAB))("sync", (it) => {
   it("deletes the recorded descriptions of merged pull requests, and keeps the others", () =>
     Effect.gen(function* () {
       yield* record;

@@ -1,12 +1,4 @@
-import {
-  Array as EffectArray,
-  Context,
-  Effect,
-  Layer,
-  Option,
-  Record as EffectRecord,
-  Ref,
-} from "effect";
+import { Array as EffectArray, Context, Effect, Layer, Record as EffectRecord, Ref } from "effect";
 
 import { GitHub } from "../clients/github/client";
 import type {
@@ -84,9 +76,9 @@ export class FakeGitHub extends Context.Service<
      * Records that GitHub merged the pull request from `branch` into `into`, with `head` as its
      * head commit. As GitHub does, closes that pull request and drops it from its stack. With
      * `deleted`, the merge deleted the branch, so the open pull requests based on it are retargeted
-     * to `into`.
+     * to `into`. Returns the pull request as it was open. Dies where `branch` has no open pull request.
      */
-    readonly recordMerge: (merge: RecordedMerge) => Effect.Effect<void>;
+    readonly recordMerge: (merge: RecordedMerge) => Effect.Effect<PullRequest>;
     /** Sets the open pull requests by branch, the stacks, and the rest of what GitHub holds. */
     readonly setUp: (setUp: FakeGitHubSetUp) => Effect.Effect<void>;
   }
@@ -107,44 +99,48 @@ export const fakeGitHub: Layer.Layer<FakeGitHub | GitHub> = Layer.unwrap(
       Layer.succeed(FakeGitHub, {
         calls: Effect.map(Ref.get(state), ({ calls }) => calls),
         recordMerge: ({ branch, deleted, head, into }) =>
-          Ref.update(state, (current) => {
-            const merging = Option.fromNullishOr(current.open[branch]);
-            // A test may merge a branch it gave no open pull request, so the number comes from
-            // the count of merges, which keeps it unique among them.
-            const number = Option.match(merging, {
-              onNone: () => current.merged.length + 1,
-              onSome: (open) => open.number,
-            });
-            const others = EffectRecord.filter(current.open, (_, from) => from !== branch);
-            return {
-              ...current,
-              merged: [
+          Effect.flatten(
+            Ref.modify(state, (current): [Effect.Effect<PullRequest>, State] => {
+              const merging = current.open[branch];
+              if (merging === undefined) {
+                return [
+                  Effect.die(
+                    new Error(`the fake GitHub has no open pull request from ${branch} to merge`),
+                  ),
+                  current,
+                ];
+              }
+              const others = EffectRecord.filter(current.open, (_, from) => from !== branch);
+              return [
+                Effect.succeed(merging),
                 {
-                  branch,
-                  pullRequest: {
-                    ...pullRequest(number, "merged", head),
-                    title: Option.match(merging, {
-                      onNone: () => branch,
-                      onSome: (open) => open.title,
-                    }),
-                  },
+                  ...current,
+                  merged: [
+                    {
+                      branch,
+                      pullRequest: {
+                        ...pullRequest(merging.number, "merged", head),
+                        title: merging.title,
+                      },
+                    },
+                    ...current.merged,
+                  ],
+                  open: deleted
+                    ? EffectRecord.map(others, (open) =>
+                        open.base === branch ? { ...open, base: into } : open,
+                      )
+                    : others,
+                  stacks: EffectArray.map(current.stacks, (stack) => ({
+                    ...stack,
+                    unmerged: EffectArray.filter(
+                      stack.unmerged,
+                      (unmerged) => unmerged !== merging.number,
+                    ),
+                  })),
                 },
-                ...current.merged,
-              ],
-              open: deleted
-                ? EffectRecord.map(others, (open) =>
-                    open.base === branch ? { ...open, base: into } : open,
-                  )
-                : others,
-              stacks: EffectArray.map(current.stacks, (stack) => ({
-                ...stack,
-                unmerged: EffectArray.filter(
-                  stack.unmerged,
-                  (unmerged) => !Option.exists(merging, (open) => open.number === unmerged),
-                ),
-              })),
-            };
-          }),
+              ];
+            }),
+          ),
         setUp: ({ open = {}, stacks = [], ...options }) =>
           Ref.update(state, (current) => ({ ...current, open, options, stacks })),
       }),
@@ -210,3 +206,9 @@ export const setUpPullRequestsABC = <R = never>({
   ...options
 }: Omit<FakeGitHubSetUp<R>, "open"> = {}): Effect.Effect<void, never, FakeGitHub | R> =>
   setUpGitHub({ ...options, open: openPullRequestsABC, stacks });
+
+/** `fakeGitHub`, set up by `setUp`, such as `setUpPullRequestsAB()`. */
+export const fakeGitHubHolding = (
+  setUp: Effect.Effect<void, never, FakeGitHub>,
+): Layer.Layer<FakeGitHub | GitHub> =>
+  Layer.effectDiscard(setUp).pipe(Layer.provideMerge(fakeGitHub));
