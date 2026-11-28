@@ -105,9 +105,11 @@ const open = (root: string): Effect.Effect<ScratchRepository, never, ScratchServ
     const merged: { readonly branch: string; readonly pullRequest: ListedPullRequest }[] = [];
     const printed: string[] = [];
     const layerIn = (directory: string) =>
-      layerAt(directory, env, (text) => {
-        printed.push(text);
-      }).pipe(Layer.provide(Layer.succeedContext(services)));
+      layerAt(directory, env, (text) =>
+        Effect.sync(() => {
+          printed.push(text);
+        }),
+      ).pipe(Layer.provide(Layer.succeedContext(services)));
     const layer = layerIn(repository);
 
     return {
