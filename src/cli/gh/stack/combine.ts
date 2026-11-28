@@ -1,7 +1,8 @@
 import { Array as EffectArray, Console, Effect, String as EffectString } from "effect";
 
 import { Jj, type JjFailed } from "../../../clients/jj";
-import { bookmarkTargets } from "./bookmark-targets";
+import { formatJson } from "../../../json";
+import type { BookmarkTargets } from "./bookmark-targets";
 import { anyOf, bookmarkRevset, changeRevset, commitsAt, logLines } from "./changes";
 
 // Combines a local change with its GitHub branch after a fetch, for `sync` and `submit`.
@@ -29,32 +30,43 @@ export const pushedOf = (
 // first, a commit GitHub added higher up would be rewritten too, and left as a change of its own.
 export const bookmarksBeforeFetch = (
   revset: string,
+  /** `bookmarkTargets`, read after the repository's last change. */
+  targets: BookmarkTargets,
 ): Effect.Effect<readonly BookmarkBeforeFetch[], JjFailed, Jj> =>
   Effect.gen(function* () {
-    const targets = [...(yield* bookmarkTargets)];
+    const named = [...targets];
     const bookmarked = `(${revset}) & bookmarks()`;
-    const bottomFirst = yield* logLines(
-      bookmarked,
-      String.raw`commit_id ++ "\t" ++ change_id ++ "\t" ++ current_working_copy ++ "\n"`,
+    // The bookmarked commits and their children, in one read. The children's parents link each
+    // child to its bookmarked commit.
+    const output = yield* logLines(
+      `(${bookmarked}) | children(${bookmarked})`,
+      String.raw`commit_id ++ "\t" ++ change_id ++ "\t" ++ current_working_copy ++ "\t" ++ parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ self.contained_in(${formatJson(bookmarked)}) ++ "\n"`,
     );
-    const childLines = yield* logLines(
-      `children(${bookmarked})`,
-      String.raw`parents.map(|p| p.commit_id()).join(",") ++ "\t" ++ change_id ++ "\n"`,
-    );
-    const children = EffectArray.map(childLines, (line) => EffectString.split(line, "\t"));
+    const logged = EffectArray.map(output, (line) => {
+      const [commit, change = "", workingCopy, parents = "", isBookmarked] = EffectString.split(
+        line,
+        "\t",
+      );
+      return {
+        change,
+        commit,
+        editing: workingCopy === "true",
+        isBookmarked: isBookmarked === "true",
+        parents: EffectString.split(parents, ","),
+      };
+    });
     return EffectArray.flatMap(
-      EffectArray.reverse(bottomFirst),
-      (line): readonly BookmarkBeforeFetch[] => {
-        const [commit, change = "", workingCopy] = EffectString.split(line, "\t");
-        const above = EffectArray.flatMap(children, ([parents, child = ""]) =>
-          EffectString.split(parents, ",").includes(commit) ? [child] : [],
+      EffectArray.reverse(EffectArray.filter(logged, ({ isBookmarked }) => isBookmarked)),
+      ({ change, commit, editing }): readonly BookmarkBeforeFetch[] => {
+        const above = EffectArray.flatMap(logged, ({ change: child, parents }) =>
+          parents.includes(commit) ? [child] : [],
         );
         return EffectArray.map(
-          EffectArray.filter(targets, ([, { local }]) => local === commit),
+          EffectArray.filter(named, ([, { local }]) => local === commit),
           ([name, { origin }]) => ({
             above,
             change,
-            editing: workingCopy === "true",
+            editing,
             local: commit,
             name,
             remote: origin,

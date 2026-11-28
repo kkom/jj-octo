@@ -209,6 +209,8 @@
           // Intersections with a conditional type, which the rule can't resolve.
           "GraphqlDataSchema",
           "ResponseSchema",
+          // A `ReadonlyMap`, whose methods the rule counts as mutable.
+          "BookmarkTargets",
           // Readonly fields that hold effects, which the rule allows only at the top level.
           { "from": "file", "name": "SetupStep", "path": "src/cli/gh/setup.ts" },
         ],

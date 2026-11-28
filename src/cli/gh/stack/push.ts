@@ -8,7 +8,7 @@ import { Jj, type JjFailed } from "../../../clients/jj";
 import { PrDescriptions } from "../../../clients/pr-descriptions";
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting } from "../../../settings";
 import { closeAbandoned } from "./abandoned";
-import { bookmarkTargets } from "./bookmark-targets";
+import { type BookmarkTargets, bookmarkTargets } from "./bookmark-targets";
 import {
   anyOf,
   bookmarkRevset,
@@ -29,7 +29,7 @@ import { basesFor, mustDissolve, titleAndBody } from "./plan";
 import type { NotCombined } from "./reconcile";
 import { register, type SeveralStacks, stackContaining } from "./stacks";
 import { type BranchesDeleted, syncStack } from "./sync-stack";
-import { checkedTrunk, type TrunkMismatch } from "./trunk";
+import { type TrunkMismatch, trunkAndDownstack } from "./trunk";
 
 interface PushOptions {
   readonly trunk: string;
@@ -39,6 +39,8 @@ interface PushOptions {
    */
   readonly draft: boolean;
   readonly overwriteDescriptions: boolean;
+  /** `bookmarkTargets`, read after the repository's last change. */
+  readonly targets: BookmarkTargets;
 }
 
 interface OpenPullRequest {
@@ -59,7 +61,7 @@ export type SubmitFailed = BranchesDeleted | NotCombined | PushFailed;
 
 export const push = (
   stack: readonly StackChange[],
-  { draft, overwriteDescriptions, trunk }: PushOptions,
+  { draft, overwriteDescriptions, targets, trunk }: PushOptions,
 ): Effect.Effect<void, PushFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
     const github = yield* GitHub;
@@ -67,14 +69,26 @@ export const push = (
     const records = yield* PrDescriptions;
     const bookmarks = EffectArray.map(stack, ({ bookmark }) => bookmark);
     const bases = basesFor(bookmarks, trunk);
-    const found = yield* Effect.forEach(
-      stack,
-      (change, index) =>
-        github
-          .openPullRequest(change.bookmark)
-          .pipe(
-            Effect.map((pullRequest) => ({ base: bases[index] ?? trunk, change, pullRequest })),
+    // `jj config list` doesn't snapshot the working copy, so it can run beside `jj log`.
+    const [found, pushedDescriptions, ignoreClaudeCodeFooter] = yield* Effect.all(
+      [
+        Effect.forEach(
+          stack,
+          (change, index) =>
+            github
+              .openPullRequest(change.bookmark)
+              .pipe(
+                Effect.map((pullRequest) => ({ base: bases[index] ?? trunk, change, pullRequest })),
+              ),
+          { concurrency: "unbounded" },
+        ),
+        descriptionsOf(
+          EffectArray.flatMap(bookmarks, (bookmark) =>
+            Option.toArray(Option.fromUndefinedOr(targets.get(bookmark)?.origin)),
           ),
+        ),
+        readSetting(IGNORE_CLAUDE_CODE_FOOTER),
+      ],
       { concurrency: "unbounded" },
     );
     // Before syncing descriptions, which can rewrite changes, so a failure changes nothing.
@@ -82,13 +96,6 @@ export const push = (
       Option.toArray(Option.map(pullRequest, ({ number }) => number)),
     );
     const existing = yield* stackContaining(openNumbers);
-    const targets = yield* bookmarkTargets;
-    const pushedDescriptions = yield* descriptionsOf(
-      EffectArray.flatMap(bookmarks, (bookmark) =>
-        Option.toArray(Option.fromUndefinedOr(targets.get(bookmark)?.origin)),
-      ),
-    );
-    const ignoreClaudeCodeFooter = yield* readSetting(IGNORE_CLAUDE_CODE_FOOTER);
 
     // Before anything changes on GitHub, so a description conflict stops the whole submit. One at a
     // time, since rewording a change rewrites those above it.
@@ -217,14 +224,15 @@ export const push = (
 
 export const submit = (
   revision: string,
-  options: Omit<PushOptions, "trunk">,
+  options: Omit<PushOptions, "targets" | "trunk">,
 ): Effect.Effect<void, SubmitFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
-    const trunk = yield* checkedTrunk;
     // Read first, so a non-stack fails before the sync rewrites anything.
-    const downstack = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
-    if (!(yield* syncStack(revision, trunk))) {
-      yield* push(downstack, { ...options, trunk });
+    const { downstack, trunk } = yield* trunkAndDownstack(revision);
+    const targets = yield* bookmarkTargets;
+    // `syncStack` changes nothing where it returns false, so `targets` stays current.
+    if (!(yield* syncStack(revision, trunk, targets))) {
+      yield* push(downstack, { ...options, targets, trunk });
       return;
     }
     // The sync can drop merged changes and replace others with GitHub's, so the stack is found
@@ -241,5 +249,6 @@ export const submit = (
     const synced = yield* downstackChanges(bookmarkRevset(top.value.bookmark)).pipe(
       Effect.flatMap(withoutConflicts),
     );
-    yield* push(synced, { ...options, trunk });
+    const syncedTargets = yield* bookmarkTargets;
+    yield* push(synced, { ...options, targets: syncedTargets, trunk });
   });

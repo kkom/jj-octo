@@ -5,7 +5,7 @@ import type { GitHub } from "../../../clients/github/client";
 import type { Jj } from "../../../clients/jj";
 import type { PrDescriptions } from "../../../clients/pr-descriptions";
 import { bookmarkTargets } from "./bookmark-targets";
-import { changesIn, stackChanges, stackRevset } from "./changes";
+import { chainOf, loggedChanges, stackRevset } from "./changes";
 import { push, type PushFailed } from "./push";
 
 /**
@@ -17,10 +17,11 @@ export const pushAgain = (
   trunk: string,
 ): Effect.Effect<void, PushFailed, Git | GitHub | Jj | PrDescriptions> =>
   Effect.gen(function* () {
-    if ((yield* changesIn(stackRevset(revision))).length === 0) {
+    const logged = yield* loggedChanges(stackRevset(revision));
+    if (logged.length === 0) {
       return;
     }
-    const stack = yield* stackChanges(revision);
+    const stack = yield* chainOf(logged, revision);
     const targets = yield* bookmarkTargets;
     const pushed = Option.match(
       EffectArray.findLastIndex(
@@ -46,6 +47,6 @@ export const pushAgain = (
     }
     const pushing = pushed.slice(0, pushed.length - left.length);
     if (pushing.length > 0) {
-      yield* push(pushing, { draft: true, overwriteDescriptions: false, trunk });
+      yield* push(pushing, { draft: true, overwriteDescriptions: false, targets, trunk });
     }
   });

@@ -6,6 +6,7 @@ import type { GitHubFailed } from "../../clients/github/failure";
 import type { Jj, JjFailed } from "../../clients/jj";
 import type { PrDescriptions } from "../../clients/pr-descriptions";
 import { asUserError, provideGitHubFromOrigin, withHelp } from "../command";
+import { bookmarkTargets } from "./stack/bookmark-targets";
 import {
   anyOf,
   changeIdsAt,
@@ -96,7 +97,8 @@ export const sync = ({
     const skipped = allWorkspaces
       ? NONE_SKIPPED
       : yield* skippedStacks(EffectArray.map(known, ({ commitId }) => commitId));
-    const before = yield* bookmarksBeforeFetch(`mutable() ~ (${skipped.revset})`);
+    const targets = yield* bookmarkTargets;
+    const before = yield* bookmarksBeforeFetch(`mutable() ~ (${skipped.revset})`, targets);
     const merged = [
       ...known,
       ...(yield* mergedOnGitHub(EffectArray.filter(before, ({ name }) => notMerged(known)(name)))),

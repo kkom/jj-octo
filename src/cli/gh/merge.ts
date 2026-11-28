@@ -13,8 +13,6 @@ import {
   bookmarkRevset,
   bookmarksAt,
   commitsAt,
-  downstackChanges,
-  withoutConflicts,
   pushedState,
   type StackChange,
   upstackRevset,
@@ -22,7 +20,7 @@ import {
 import type { PushFailed } from "./stack/push";
 import { pushAgain } from "./stack/push-again";
 import type { NotCombined } from "./stack/reconcile";
-import { checkedTrunk } from "./stack/trunk";
+import { trunkAndDownstack } from "./stack/trunk";
 import { allWorkspacesFlag, sync } from "./sync";
 
 export class NotMergeable extends Schema.TaggedError<
@@ -108,8 +106,7 @@ export const merge = (
   Git | GitHub | Jj | PrDescriptions
 > =>
   Effect.gen(function* () {
-    const trunk = yield* checkedTrunk;
-    const changes = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
+    const { downstack: changes, trunk } = yield* trunkAndDownstack(revision);
     const top = changes.at(-1)?.bookmark ?? "";
 
     // GitHub merges what was pushed, so a later edit would be stranded on a change whose branch is
@@ -127,8 +124,10 @@ export const merge = (
         )}; run \`jj gh submit\` first`,
       });
     }
-    const pullRequest = yield* openPullRequestOf(top);
-    const above = yield* bookmarksAt(upstackRevset(bookmarkRevset(top)));
+    const [pullRequest, above] = yield* Effect.all(
+      [openPullRequestOf(top), bookmarksAt(upstackRevset(bookmarkRevset(top)))],
+      { concurrency: "unbounded" },
+    );
 
     if ((yield* mergeOnGitHub(pullRequest, trunk)) === "enqueued") {
       yield* Console.error(

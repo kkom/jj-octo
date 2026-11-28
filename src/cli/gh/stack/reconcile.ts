@@ -14,10 +14,10 @@ import { PrDescriptions } from "../../../clients/pr-descriptions";
 import { bookmarkTargets } from "./bookmark-targets";
 import {
   anyOf,
-  bookmarksAt,
   changeRevset,
   changeIdsAt,
   exactPattern,
+  lines,
   STACK_ROOTS,
   type StackChange,
 } from "./changes";
@@ -108,13 +108,31 @@ export const mergedOnGitHub = (
   Effect.flatMap(mergedHeadsOf(bookmarks), (heads) => mergedIn(bookmarks, heads));
 
 /**
- * Passes only names still listed, since a fetch already deleted the bookmark of a branch deleted on
- * GitHub where unchanged locally, and jj warns about missing names.
+ * Each local bookmark that points at a commit, conflicted ones included, and whether it points at
+ * one on the trunk. A conflicted bookmark is on the trunk where any of its commits is, as for
+ * `jj bookmark list -r`.
  */
-const forget = (names: readonly string[]) =>
+const localBookmarks = Effect.gen(function* () {
+  const jj = yield* Jj;
+  const listed = yield* jj.read([
+    "bookmark",
+    "list",
+    "-T",
+    String.raw`if(!remote && present, name ++ "\t" ++ added_targets.any(|c| c.contained_in("::trunk()")) ++ "\n")`,
+  ]);
+  return EffectArray.map(lines(listed), (line) => {
+    const [name, onTrunk] = EffectString.split(line, "\t");
+    return { name, onTrunk: onTrunk === "true" };
+  });
+});
+
+/**
+ * Forgets the bookmarks and their branches on GitHub, in one jj operation. The caller passes only
+ * names still listed, since a fetch already deleted the bookmark of a branch deleted on GitHub
+ * where unchanged locally, and jj warns about missing names.
+ */
+const forget = (present: readonly string[]) =>
   Effect.gen(function* () {
-    const listed = yield* bookmarkTargets;
-    const present = EffectArray.filter(names, (name) => listed.has(name));
     if (present.length > 0) {
       const jj = yield* Jj;
       yield* jj.run([
@@ -124,6 +142,25 @@ const forget = (names: readonly string[]) =>
         ...EffectArray.map(present, (name) => exactPattern(name)),
       ]);
     }
+  });
+
+/** Abandons the merged changes, and returns the ids of the changes on them, which the rebase keeps. */
+const abandonMerged = (merged: readonly MergedChange[], skipped: string) =>
+  Effect.gen(function* () {
+    if (merged.length === 0) {
+      return [];
+    }
+    const jj = yield* Jj;
+    const mergedRevset = `(${anyOf(EffectArray.map(merged, ({ changeId }) => changeRevset(changeId)))}) & mutable() ~ (${skipped})`;
+    const required = yield* changeIdsAt(`(${mergedRevset}):: ~ (${mergedRevset})`);
+    yield* jj.run(["abandon", mergedRevset]);
+    yield* Console.error(
+      `abandoned the changes whose pull requests merged: ${EffectArray.join(
+        EffectArray.map(merged, ({ bookmark }) => bookmark),
+        ", ",
+      )}`,
+    );
+    return required;
   });
 
 interface Reconciliation {
@@ -166,20 +203,17 @@ export const reconcile = ({
   Effect.gen(function* () {
     const jj = yield* Jj;
     yield* jj.run(["git", "fetch", ...fetch]);
-    // After the fetch, so it can't bring back as a bookmark a branch GitHub hasn't deleted yet.
-    yield* forget(EffectArray.map(merged, ({ bookmark }) => bookmark));
-    const mergedRevset = `(${anyOf(EffectArray.map(merged, ({ changeId }) => changeRevset(changeId)))}) & mutable() ~ (${skipped})`;
-    const required = yield* changeIdsAt(`(${mergedRevset}):: ~ (${mergedRevset})`);
-    if (merged.length > 0) {
-      yield* jj.run(["abandon", mergedRevset]);
-      yield* Console.error(
-        `abandoned the changes whose pull requests merged: ${EffectArray.join(
-          EffectArray.map(merged, ({ bookmark }) => bookmark),
-          ", ",
-        )}`,
-      );
-    }
+    // Forgetting the merged bookmarks and abandoning their changes leaves the other bookmarks'
+    // `origin` targets as the fetch left them, so `forget` and `combine` share this read.
     const fetched = yield* bookmarkTargets;
+    // After the fetch, so it can't bring back as a bookmark a branch GitHub hasn't deleted yet.
+    yield* forget(
+      EffectArray.filter(
+        EffectArray.map(merged, ({ bookmark }) => bookmark),
+        (name) => fetched.has(name),
+      ),
+    );
+    const required = yield* abandonMerged(merged, skipped);
     const notCombined: string[] = [];
     for (const bookmark of EffectArray.filter(before, ({ name }) => notMerged(merged)(name))) {
       if (!(yield* combine(bookmark, fetched.get(bookmark.name)?.origin, skipped))) {
@@ -191,11 +225,22 @@ export const reconcile = ({
       required,
     );
     const onStacks = new Set(bookmarks);
-    const onTrunk = yield* bookmarksAt("::trunk()");
-    yield* forget(EffectArray.filter(onTrunk, (name) => onStacks.has(name)));
+    // Read on first use, and once for `forget` and `prune`.
+    const listed = yield* Effect.cached(Effect.provideService(localBookmarks, Jj, jj));
+    const forgotten = EffectArray.map(
+      EffectArray.filter(
+        onStacks.size > 0 ? yield* listed : [],
+        ({ name, onTrunk }) => onTrunk && onStacks.has(name),
+      ),
+      ({ name }) => name,
+    );
+    yield* forget(forgotten);
     const records = yield* PrDescriptions;
-    // `bookmarksAt` also lists conflicted bookmarks, which `bookmarkTargets` gives no local target.
-    yield* records.prune(Effect.provideService(bookmarksAt("all()"), Jj, jj));
+    yield* records.prune(
+      Effect.map(listed, (all) =>
+        EffectArray.flatMap(all, ({ name }) => (forgotten.includes(name) ? [] : [name])),
+      ),
+    );
     if (notCombined.length > 0) {
       return yield* NotCombined.make({
         message: EffectArray.join(
