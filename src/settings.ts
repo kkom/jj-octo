@@ -3,54 +3,52 @@ import { Array as EffectArray, Config, Effect, Option } from "effect";
 import { type Jj, JjFailed, readJjConfig } from "./clients/jj";
 import { formatJson } from "./json";
 
-// The options a user sets for jj-octo, outside its flags. The code reads each through the model
-// here, and `jj gh --help` documents each from it.
+// The options jj-octo takes besides its flags. The code and `jj gh --help` both read these.
 
-/** An environment variable that changes what jj-octo does. */
 export interface EnvironmentVariable {
   readonly description: string;
   readonly name: string;
 }
 
 export const GH_TOKEN: EnvironmentVariable = {
-  description: "The GitHub token that jj-octo sends, where `jj-octo.github-auth` is `token`.",
+  description: "The GitHub token to send, where `jj-octo.github-auth` is `token`.",
   name: "GH_TOKEN",
 };
 
 export const GITHUB_TOKEN: EnvironmentVariable = {
   description:
-    "The GitHub token that jj-octo sends where `GH_TOKEN` is unset. Where neither is set, jj-octo runs `gh auth token` and sends the token it prints.",
+    "The GitHub token to send if `GH_TOKEN` is unset. Without either, jj-octo sends what `gh auth token` prints.",
   name: "GITHUB_TOKEN",
 };
 
 const CLAUDE_CODE_REMOTE: EnvironmentVariable = {
   description:
-    "`true` in a Claude Code cloud session. There, `links --copy` says how to give the links to the user instead of copying them, `publish` marks drafts ready through the GitHub proxy's own route rather than GraphQL, which the proxy rejects, and `jj-octo.ignore-claude-code-footer` is `true` by default.",
+    "`true` in a Claude Code cloud session. There, `links --copy` says how to share the links instead of copying them, `publish` marks drafts ready without GraphQL, which the GitHub proxy rejects, and `jj-octo.ignore-claude-code-footer` defaults to `true`.",
   name: "CLAUDE_CODE_REMOTE",
 };
 
 export const WAYLAND_DISPLAY: EnvironmentVariable = {
   description:
-    "Where set and not empty on Linux, `links --copy` copies with `wl-copy`, or with `xclip` where `wl-copy` isn't installed. Otherwise, it copies with `xclip`.",
+    "On Linux, `links --copy` copies with `wl-copy` if this is not empty and `wl-copy` is installed, else with `xclip`.",
   name: "WAYLAND_DISPLAY",
 };
 
-// Effect reads this one, and Bun the two after it, rather than jj-octo.
+// Effect reads this one, and Bun the next two, not jj-octo.
 const NO_COLOR: EnvironmentVariable = {
   description:
-    "Where set and not empty, help and errors are printed without colors. Otherwise they have colors where stdout is a terminal or `FORCE_COLOR` is set, unless `TERM` is `dumb`.",
+    "If not empty, help and errors have no colors. Otherwise they have colors if stdout is a terminal or `FORCE_COLOR` is set, unless `TERM` is `dumb`.",
   name: "NO_COLOR",
 };
 
 const HTTPS_PROXY: EnvironmentVariable = {
   description:
-    "The proxy that requests to api.github.com go through, where `jj-octo.github-auth` is `token`. An Anthropic-hosted Claude Code cloud session sets it to its GitHub proxy.",
+    "The proxy for api.github.com requests, where `jj-octo.github-auth` is `token`. Anthropic-hosted Claude Code cloud sessions set it to their GitHub proxy.",
   name: "HTTPS_PROXY",
 };
 
 const NODE_EXTRA_CA_CERTS: EnvironmentVariable = {
   description:
-    "A file of PEM certificates that requests to api.github.com trust besides Bun's own, where `jj-octo.github-auth` is `token`. An Anthropic-hosted Claude Code cloud session sets it to the certificates of its GitHub proxy.",
+    "A PEM file of certificates to trust besides Bun's own, where `jj-octo.github-auth` is `token`. Anthropic-hosted Claude Code cloud sessions set it to their GitHub proxy's certificates.",
   name: "NODE_EXTRA_CA_CERTS",
 };
 
@@ -64,25 +62,25 @@ export const ENVIRONMENT_VARIABLES: readonly EnvironmentVariable[] = [
   NODE_EXTRA_CA_CERTS,
 ];
 
-/** Whether this runs in a Claude Code cloud session, which sets `CLAUDE_CODE_REMOTE` to `true`. */
-export const claudeCodeCloudSession: Effect.Effect<boolean> = Effect.orDie(
-  // The variable defaults to empty, and any string is valid, so reading it can't fail.
-  Config.String(CLAUDE_CODE_REMOTE.name).pipe(
-    Config.withDefault(""),
-    Config.map((value) => value === "true"),
-  ),
+/** An environment variable's value, or `""` if it's unset. */
+export const environmentString = (name: string): Effect.Effect<string> =>
+  // Reading can't fail: the default is empty and any string is accepted.
+  Effect.orDie(Config.String(name).pipe(Config.withDefault("")));
+
+export const claudeCodeCloudSession: Effect.Effect<boolean> = Effect.map(
+  environmentString(CLAUDE_CODE_REMOTE.name),
+  (value) => value === "true",
 );
 
-/** A value that a setting takes, and what it does. */
 export interface Choice<A> {
   readonly description: string;
   readonly value: A;
 }
 
-/** A key in jj's config that changes what jj-octo does. */
+/** A key in jj's config. */
 export interface Setting<A extends boolean | string> {
   readonly choices: readonly Choice<A>[];
-  /** The value where the key has none, and how the help states it. */
+  /** The value if the key is unset, and how the help states it. */
   readonly default: { readonly description: string; readonly value: Effect.Effect<A> };
   readonly description: string;
   readonly key: string;
@@ -91,18 +89,17 @@ export interface Setting<A extends boolean | string> {
 export const GITHUB_AUTH: Setting<"git-proxy" | "token"> = {
   choices: [
     {
-      description:
-        "Sends your own token: `GH_TOKEN` or `GITHUB_TOKEN`, or else the one `gh auth token` prints.",
+      description: "Sends your token: `GH_TOKEN`, `GITHUB_TOKEN`, or what `gh auth token` prints.",
       value: "token",
     },
     {
       description:
-        "Sends requests through the `http.proxy` that git uses for https://github.com, trusting the certificate authorities in git's `http.sslCAInfo` in place of Bun's own. Sends a placeholder token, which the proxy must replace with real credentials. Through a proxy that only forwards requests, GitHub rejects every request. On a self-hosted Claude Code runner started with `--use-anthropic-git-proxy`, where the session holds no GitHub token, use this value. jj-octo reads git's settings on each run, so it follows a proxy that moves to another port.",
+        "Sends requests through git's `http.proxy` for https://github.com, trusting git's `http.sslCAInfo` instead of Bun's certificate authorities. Sends a placeholder token for the proxy to replace. Through a proxy that only forwards requests, GitHub rejects every request. Use this on a self-hosted Claude Code runner started with `--use-anthropic-git-proxy`, where the session has no GitHub token. Reads git's settings on each run, so it follows the proxy to a new port.",
       value: "git-proxy",
     },
   ],
   default: { description: "token", value: Effect.succeed("token") },
-  description: "How requests reach api.github.com, and the credentials they carry.",
+  description: "How requests reach api.github.com, and their credentials.",
   key: "jj-octo.github-auth",
 };
 
@@ -112,11 +109,11 @@ export const IGNORE_CLAUDE_CODE_FOOTER: Setting<boolean> = {
     { description: "Compares the body as it is.", value: false },
   ],
   default: {
-    description: "`true` where `CLAUDE_CODE_REMOTE` is `true`, and `false` elsewhere",
+    description: "`true` if `CLAUDE_CODE_REMOTE` is `true`, else `false`",
     value: claudeCodeCloudSession,
   },
   description:
-    "Whether `submit` leaves out the \"Generated by Claude Code\" footer when it compares a pull request's body with its change's description. The GitHub proxy of a Claude Code cloud session can append the footer to each body it writes. With `false`, `submit` reads that footer as an edit made on GitHub, and writes it into the change.",
+    "Whether `submit` ignores the \"Generated by Claude Code\" footer when it compares a pull request's body with its change's description. A Claude Code cloud session's GitHub proxy can append it. With `false`, `submit` copies the footer into the change.",
   key: "jj-octo.ignore-claude-code-footer",
 };
 
@@ -125,7 +122,7 @@ export const SETTINGS: readonly (Setting<boolean> | Setting<string>)[] = [
   IGNORE_CLAUDE_CODE_FOOTER,
 ];
 
-/** The setting's value in jj's config, or its default where it has none. Fails on any other value. */
+/** The setting's value, or its default if the key is unset. Fails on any other value. */
 export const readSetting = <A extends boolean | string>(
   setting: Setting<A>,
 ): Effect.Effect<A, JjFailed, Jj> =>

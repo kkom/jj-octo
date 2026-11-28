@@ -74,7 +74,7 @@ const MergeRequest = Schema.Struct({
 });
 export const StartedMerge = responseOf<"pulls/merge-async">()(MergeRequest);
 export const MergeResult = responseOf<"pulls/get-merge-async-result">()(MergeRequest);
-// GitHub describes a run's id, an int64, as `number | bigint`, though JSON parses only to a number.
+// GitHub types a run's int64 id as `number | bigint`, though JSON parses only to a number.
 export const WorkflowRuns = responseOf<"actions/list-workflow-runs-for-repo">()(
   Schema.Struct({
     workflow_runs: Schema.Array(
@@ -101,9 +101,8 @@ const CommitStatus = Schema.Struct({ context: Schema.String, state: Schema.Strin
 export const CombinedStatus = responseOf<"repos/get-combined-status-for-ref">()(
   Schema.Struct({ statuses: Schema.Array(CommitStatus) }),
 );
-// A rule's `type` names the kind of rule, and decides what its `parameters` hold. A rule requiring
-// status checks whose `parameters` `StatusCheckRule` can't decode fails `OtherRule` too, so the
-// response fails to decode rather than the rule going unread.
+// A status check rule that `StatusCheckRule` can't decode also fails `OtherRule`, so the response
+// fails rather than the rule going unread.
 const StatusCheck = Schema.Struct({
   context: Schema.String,
   integration_id: Schema.optionalKey(Schema.Finite),
@@ -144,20 +143,17 @@ export const BranchProtection = responseOf<"repos/get-branch">()(
 
 const GraphqlErrors = Schema.Array(Schema.Struct({ message: Schema.String }));
 
-/** A GraphQL response: the fields read from its `data`, and the `errors` sent beside or in place of it. */
 export type GraphqlResponse<S extends Schema.Top> = Schema.Struct<{
   readonly data: Schema.optionalKey<Schema.NullOr<S>>;
   readonly errors: Schema.optionalKey<typeof GraphqlErrors>;
 }>;
 
-/** A schema for `data`, provided the type GraphQL Code Generator wrote for the document decodes with it. */
 type GraphqlDataSchema<Data, S extends Schema.Top> = S &
   ([Data] extends [S["Encoded"]] ? unknown : { readonly mismatch: "the generated type" });
 
 /**
- * A schema for a GraphQL response: the fields read from its `data`, which doesn't compile unless
- * `Data`, the type GraphQL Code Generator wrote for the document, decodes with it, and the `errors`
- * GitHub sends beside or in place of `data`.
+ * A GraphQL response's schema, from the fields read from `data`. GitHub sends `errors` with or
+ * instead of `data`. It compiles only if `Data`, the document's generated type, decodes with it.
  */
 export const graphqlResponseOf =
   <Data>() =>
@@ -167,7 +163,6 @@ export const graphqlResponseOf =
       errors: Schema.optionalKey(GraphqlErrors),
     });
 
-/** One pull request of an `AnyPullRequests` listing, with its state in one value. */
 export const listedPullRequest = ({
   created_at,
   draft,
@@ -185,7 +180,7 @@ export const listedPullRequest = ({
     createdAt: created_at,
     head: head.sha,
     number,
-    // The stack's page is beside the pull request's: `…/pull/2` and `…/stack/7`.
+    // The stack's page sits beside the pull request's: `…/pull/2` and `…/stack/7`.
     stack: Option.map(Option.fromNullishOr(stack?.number), (stackNumber) => ({
       number: stackNumber,
       url: new URL(`../stack/${stackNumber}`, html_url).href,
@@ -196,7 +191,6 @@ export const listedPullRequest = ({
   };
 };
 
-/** One stack of a `Stacks` listing, with the pull requests that haven't merged, bottom to top. */
 export const remoteStack = ({
   number,
   pull_requests,

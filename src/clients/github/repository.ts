@@ -1,6 +1,5 @@
 import { Option, String as EffectString } from "effect";
 
-/** Owner and name of a GitHub repository. */
 export interface Repository {
   readonly name: string;
   readonly owner: string;

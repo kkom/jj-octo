@@ -1,7 +1,6 @@
 import { Effect, Stream, type PlatformError } from "effect";
 import type { ChildProcessSpawner } from "effect/process";
 
-/** Reads a child process's stdout and stderr as text, and its exit code, until it exits. */
 export const readOutput = (
   handle: ChildProcessSpawner.ChildProcessHandle,
 ): Effect.Effect<

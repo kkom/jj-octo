@@ -12,8 +12,6 @@ import type { Requests } from "./requests";
 import { graphqlResponseOf, PullRequestNodeId } from "./responses";
 import type { PullRequestNumber } from "./types";
 
-// Marking a draft ready for review, which GitHub's REST API can't do.
-
 const MarkedPullRequest = Schema.Struct({
   pullRequest: Schema.NullOr(Schema.Struct({ isDraft: Schema.Boolean })),
 });
@@ -22,7 +20,6 @@ const MarkedReadyForReview = graphqlResponseOf<MarkReadyForReviewMutation>()(
   Schema.Struct({ markPullRequestReadyForReview: Schema.NullOr(MarkedPullRequest) }),
 );
 
-/** The GraphQL request that marks the pull request with the node id ready for review. */
 const markReadyRequest = (pullRequestId: string): HttpClientRequest.HttpClientRequest => {
   const variables: MarkReadyForReviewMutationVariables = { pullRequestId };
   return HttpClientRequest.post("/graphql").pipe(
@@ -30,10 +27,7 @@ const markReadyRequest = (pullRequestId: string): HttpClientRequest.HttpClientRe
   );
 };
 
-/**
- * Fails where GitHub's answer to `markReadyRequest` has errors, which it sends with a 200, or
- * leaves the pull request a draft.
- */
+// GitHub sends GraphQL errors with a 200.
 const checkMarkedReady = (
   pullRequest: PullRequestNumber,
   { data, errors = [] }: typeof MarkedReadyForReview.Type,
@@ -56,9 +50,8 @@ const checkMarkedReady = (
 };
 
 /**
- * Marks the draft pull request at `pullPath` ready for review: through GraphQL's
- * `markPullRequestReadyForReview`, or in a Claude Code cloud session, whose GitHub proxy rejects
- * GraphQL, through the proxy's own route for it.
+ * Marks the draft ready for review through GraphQL. In a Claude Code cloud session, whose GitHub
+ * proxy rejects GraphQL, it uses the proxy's own route.
  */
 export const markReadyForReview = (
   { json, send }: Requests,

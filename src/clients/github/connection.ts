@@ -14,23 +14,17 @@ import { type Git, gitConfig } from "../git";
 import type { Jj } from "../jj";
 import { GitHubFailed } from "./failure";
 
-/** A proxy that requests to api.github.com go through, with the certificate authorities to trust. */
 export interface Proxy {
-  /** PEM certificates trusted in place of the runtime's own, where there are any. */
+  /** PEM certificates trusted in place of the runtime's own, if any. */
   readonly ca: Option.Option<string>;
   readonly url: string;
 }
 
-/** How requests reach api.github.com: the token they carry, and the proxy they go through. */
 export interface Connection {
   readonly proxy: Option.Option<Proxy>;
   readonly token: Redacted.Redacted;
 }
 
-/**
- * The token for api.github.com: `GH_TOKEN` or `GITHUB_TOKEN` where the environment sets one,
- * and otherwise executes `gh auth token` to generate one.
- */
 const ownToken = Effect.gen(function* () {
   const fromEnvironment = yield* Config.option(
     Config.Redacted(GH_TOKEN.name).pipe(Config.orElse(() => Config.Redacted(GITHUB_TOKEN.name))),
@@ -39,7 +33,7 @@ const ownToken = Effect.gen(function* () {
     return fromEnvironment.value;
   }
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  // `gh` prints nothing and exits 1 when it isn't logged in, and the exit code isn't reported.
+  // Logged out, `gh` prints nothing and exits 1, and the exit code isn't reported.
   const stored = yield* spawner
     .string(ChildProcess.make("gh", ["auth", "token"]))
     .pipe(Effect.map(EffectString.trim));
@@ -50,7 +44,6 @@ const ownToken = Effect.gen(function* () {
   ),
 );
 
-/** A git setting for https://github.com, as `git config --get-urlmatch` resolves it. */
 const gitSetting = (name: string) =>
   Effect.gen(function* () {
     const value = yield* gitConfig(["--get-urlmatch", name, "https://github.com"]).pipe(
@@ -59,12 +52,7 @@ const gitSetting = (name: string) =>
     return value === "" ? Option.none<string>() : Option.some(value);
   });
 
-/**
- * Sends requests through the proxy that git uses for github.com, trusting the CA bundle git
- * trusts for it. The proxy replaces the request's token with its own credentials, so the token
- * sent is a placeholder. Git's settings are read on each run, so a proxy that moves to a new port
- * is followed.
- */
+// `GITHUB_AUTH` documents what this does.
 const gitProxy = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const url = yield* gitSetting("http.proxy");
@@ -84,7 +72,7 @@ const gitProxy = Effect.gen(function* () {
         ),
         Effect.asSome,
       );
-  // Git reads a proxy without a scheme as an HTTP one.
+  // Git reads a proxy without a scheme as HTTP.
   const withScheme = /^[a-z][\d+.a-z-]*:\/\//iu.test(url.value) ? url.value : `http://${url.value}`;
   const connection: Connection = {
     proxy: Option.some({ ca, url: withScheme }),
@@ -93,7 +81,6 @@ const gitProxy = Effect.gen(function* () {
   return connection;
 });
 
-/** Reads `jj-octo.github-auth`, which says how requests reach api.github.com. */
 export const connection: Effect.Effect<
   Connection,
   GitHubFailed,

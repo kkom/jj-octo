@@ -6,9 +6,7 @@ import { bodyOf } from "./openapi";
 import type { Requests } from "./requests";
 import type { PullRequestNumber } from "./types";
 
-/** The client's calls that change one pull request. */
 export interface PullRequestWrites {
-  /** Closes the pull request without merging it. */
   readonly closePullRequest: (pullRequest: PullRequestNumber) => Effect.Effect<void, GitHubFailed>;
   readonly commentOnPullRequest: (
     pullRequest: PullRequestNumber,
@@ -42,7 +40,7 @@ export const pullRequestWrites = (
     ).pipe(Effect.asVoid);
   return {
     closePullRequest: (pullRequest) => update(pullRequest, { state: "closed" }),
-    // GitHub keeps a pull request's own comments with its issue
+    // GitHub keeps a pull request's own comments with its issue.
     commentOnPullRequest: (pullRequest, body) =>
       send(
         HttpClientRequest.post(repo(`/issues/${pullRequest}/comments`)).pipe(

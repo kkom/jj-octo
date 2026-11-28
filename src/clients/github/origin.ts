@@ -16,8 +16,7 @@ import { connection } from "./connection";
 import { GitHubFailed } from "./failure";
 import { repositoryFromUrl } from "./repository";
 
-// The client of the GitHub repository behind the `origin` remote, which jj reads whether or not
-// the workspace is a git checkout.
+// Reads the `origin` remote through jj, so it works outside a git checkout too.
 export const gitHubLayerFromOrigin: Effect.Effect<
   Layer.Layer<GitHub, never, HttpClient.HttpClient>,
   GitHubFailed | JjFailed,

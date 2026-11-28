@@ -41,10 +41,9 @@ import {
   WorkflowRunIdSchema,
 } from "./types";
 
-/** How a stack merge ended: merged now, or queued to merge once the queue reaches it. */
 export type MergeOutcome = "enqueued" | "merged";
 
-/** How a cancel ended: the run is cancelling, or it had finished before the cancel reached it. */
+/** `finished` means the run completed before GitHub received the cancel. */
 export type CancelOutcome = "cancelled" | "finished";
 
 export class GitHub extends Context.Service<
@@ -54,7 +53,6 @@ export class GitHub extends Context.Service<
       stack: StackNumber,
       pullRequests: readonly PullRequestNumber[],
     ) => Effect.Effect<void, GitHubFailed>;
-    /** Those of the pull requests that GitHub's search lists as open and approved. */
     readonly approvedPullRequests: (
       pullRequests: readonly SearchedPullRequest[],
     ) => Effect.Effect<ReadonlySet<PullRequestNumber>, GitHubFailed>;
@@ -70,11 +68,10 @@ export class GitHub extends Context.Service<
       pullRequests: readonly PullRequestNumber[],
     ) => Effect.Effect<StackNumber, GitHubFailed>;
     readonly defaultBranch: Effect.Effect<string, GitHubFailed>;
-    /** Marks a draft pull request ready for review, as `ready-for-review.ts` says. */
     readonly markReadyForReview: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<void, GitHubFailed>;
-    /** Merges the pull request through its stack, together with everything below it. */
+    /** Merges the pull request and everything below it through its stack. */
     readonly mergeStack: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<MergeOutcome, GitHubFailed>;
@@ -84,7 +81,7 @@ export class GitHub extends Context.Service<
     readonly openPullRequest: (
       branch: string,
     ) => Effect.Effect<Option.Option<PullRequest>, GitHubFailed>;
-    /** The pull requests from the branch in any state, newest first. */
+    /** In any state, newest first. */
     readonly pullRequestsFrom: (
       branch: string,
     ) => Effect.Effect<readonly ListedPullRequest[], GitHubFailed>;
@@ -92,15 +89,14 @@ export class GitHub extends Context.Service<
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<Option.Option<RemoteStack>, GitHubFailed>;
     /**
-     * The workflow runs of the commit on the branch that haven't completed. A run on another
-     * branch with the same head commit, such as the trunk's push run after a fast-forward merge,
-     * isn't one of them.
+     * Excludes runs on other branches with that head commit, such as the trunk's push run after a
+     * fast-forward merge.
      */
     readonly unfinishedRuns: (head: {
       readonly branch: string;
       readonly commit: string;
     }) => Effect.Effect<readonly WorkflowRunId[], GitHubFailed>;
-    /** Dissolves the stack. Its pull requests stay open. */
+    /** The stack's pull requests stay open. */
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
   } & CheckReads &
     PullRequestWrites
@@ -110,14 +106,14 @@ export const GitHubLive = (
   repository: Repository,
   connection: Connection,
 ): Layer.Layer<GitHub, never, HttpClient.HttpClient> => {
-  // A cloud session's proxy allows the paths under the repository and `/search/issues`, so the
-  // other REST calls start under the repository. Only `markReadyForReview`, outside a cloud
-  // session, calls `/graphql`.
+  // A cloud session's proxy allows only paths under the repository and `/search/issues`, so other
+  // REST calls go under the repository. Only `markReadyForReview` outside a cloud session calls
+  // `/graphql`.
   const repo = (path: string): string => `/repos/${repository.owner}/${repository.name}${path}`;
   return Layer.effect(
     GitHub,
     Effect.gen(function* () {
-      // Bun's fetch takes a proxy, and certificate authorities to trust in place of its own.
+      // Bun's fetch takes a proxy, and certificate authorities replacing its own.
       const requestInit: BunFetchRequestInit = Option.match(connection.proxy, {
         onNone: () => ({}),
         onSome: ({ ca, url }) =>
@@ -196,7 +192,7 @@ export const GitHubLive = (
           approvedPullRequests({ json, send }, repository, pullRequests),
         ...checkReads({ json, send }, repo),
         ...pullRequestWrites({ json, send }, repo),
-        // GitHub answers 409 for a run that has completed, as one can between listing and cancel
+        // GitHub answers 409 for a run that completed after it was listed.
         cancelRun: (run) =>
           send(HttpClientRequest.post(repo(`/actions/runs/${run}/cancel`))).pipe(
             Effect.as<CancelOutcome>("cancelled"),

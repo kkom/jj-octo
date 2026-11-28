@@ -2,7 +2,7 @@ import type { operations } from "@octokit/openapi-types";
 import type { Schema } from "effect";
 import { HttpClientRequest } from "effect/http";
 
-// GitHub's own description of its REST API, keyed by operation id as its documentation names them.
+// GitHub's description of its REST API, keyed by the operation ids its documentation uses.
 type Operation = keyof operations;
 type Json<T> = T extends { readonly content: { readonly "application/json": infer A } } ? A : never;
 type Success<O extends Operation> = keyof operations[O]["responses"] & (200 | 201 | 202);
@@ -11,13 +11,12 @@ type RequestBody<O extends Operation> = operations[O] extends { readonly request
   ? Json<NonNullable<B>>
   : never;
 
-/** The schema, provided every response GitHub documents for the operation decodes with it. */
 type ResponseSchema<O extends Operation, S extends Schema.Top> = S &
   ([ResponseBody<O>] extends [S["Encoded"]] ? unknown : { readonly mismatch: O });
 
 /**
- * A schema for the fields read from an operation's response, which doesn't compile unless
- * GitHub's documented response decodes with it. The rest of the response is ignored.
+ * Compiles only if every response GitHub documents for the operation decodes with the schema.
+ * Other fields are ignored.
  */
 export const responseOf =
   <O extends Operation>() =>
