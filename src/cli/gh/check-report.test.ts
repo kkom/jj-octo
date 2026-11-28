@@ -29,11 +29,23 @@ describe("checkReport", () => {
     expect(
       checkReport(requiring("CI", "Lint", "Docs"), [
         run("CI", "queued", "pending"),
-        run("Lint", "skipped", "passed"),
+        run("Lint", "skipped", "skipped"),
       ]),
     ).toStrictEqual({
       rows: ["required  CI    queued", "required  Docs  expected", "required  Lint  skipped"],
       state: "pending: CI, Docs",
+    });
+  });
+
+  it("names the required checks GitHub skipped, where none is further from passing", () => {
+    expect(
+      checkReport(requiring("CI", "Lint"), [
+        run("CI", "skipped", "skipped"),
+        run("Lint", "success", "passed"),
+      ]),
+    ).toStrictEqual({
+      rows: ["required  CI    skipped", "required  Lint  success"],
+      state: "skipped: CI",
     });
   });
 

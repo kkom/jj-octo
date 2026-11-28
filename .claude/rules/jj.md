@@ -54,6 +54,8 @@ Run `jj gh sync` often, since conflicts grow as a stack lags `main`. It pushes n
 
 `submit` opens new pull requests as drafts. Write the description the PR template asks for with `jj describe`, run `submit` again, then `jj gh publish`. `submit` keeps each pull request's title and body equal to its change's description, merging edits made on GitHub into the change. Where both sides edited the same lines, it stops and prints both.
 
+CI skips drafts, so `jj gh checks` says `skipped` for a draft, and after `publish` until the new run starts. Merge only once that run passes.
+
 `submit` closes the pull request of a change that you abandoned. A change moved out of the stack leaves its pull request open; close it by hand.
 
 ## Merging

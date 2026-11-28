@@ -53,10 +53,10 @@ export interface ListedPullRequest {
 }
 
 /**
- * Where a check is, as GitHub counts it for a required check: not finished, or finished as a pass
- * or a failure.
+ * Where a check is: not finished, or finished as passed, failed or skipped. GitHub counts a skipped
+ * required check as passed, though nothing ran.
  */
-export type CheckState = "failed" | "passed" | "pending";
+export type CheckState = "failed" | "passed" | "pending" | "skipped";
 
 /** The latest result of one check of a commit: a check run, or a commit status. */
 export interface Check {

@@ -90,7 +90,7 @@ layer(gitHubThroughProxy)("latestChecks", (it) => {
       });
     }));
 
-  it("counts a run as passed where GitHub counts it so for a required check", () =>
+  it("reads each conclusion as passed, failed or skipped", () =>
     Effect.gen(function* () {
       const conclusions = [
         "success",
@@ -115,7 +115,7 @@ layer(gitHubThroughProxy)("latestChecks", (it) => {
         result: [
           check("success", "success", "passed"),
           check("neutral", "neutral", "passed"),
-          check("skipped", "skipped", "passed"),
+          check("skipped", "skipped", "skipped"),
           check("failure", "failure", "failed"),
           check("cancelled", "cancelled", "failed"),
           check("timed_out", "timed_out", "failed"),
