@@ -118,11 +118,10 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubHolding(setUpPullRequestsAB()
         yield* repository.write("b.txt", "b, edited\n");
         yield* setUpPullRequestsAB({ stacks: [] });
         yield* submitting();
-        yield* repository.git("fetch", "--quiet");
         expect({
           files: yield* repository.files("a"),
           log: yield* repository.log,
-          pushedB: yield* repository.git("show", "origin/b:b.txt"),
+          pushedB: yield* repository.git("show", "b:b.txt"),
         }).toStrictEqual({
           files: ["a.txt", "base.txt", "suggestion.txt"],
           log: ["a [a]", "b [b]"],
@@ -181,7 +180,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubHolding(setUpPullRequestsAB()
     it("stops before changing anything where a branch was deleted on GitHub without a merge", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
-        yield* repository.git("push", "--quiet", "origin", "--delete", "a");
+        yield* repository.git("branch", "--quiet", "--delete", "--force", "a");
         const branches = yield* repository.branches;
         yield* setUpGitHub({ open: { b: openPullRequestsAB.b } });
         const failure = yield* failureOf();
@@ -225,13 +224,12 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubHolding(setUpPullRequestsAB()
     it("leaves alone the changes above the one named", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
-        yield* repository.git("push", "--quiet", "origin", "--delete", "b");
+        yield* repository.git("branch", "--quiet", "--delete", "--force", "b");
         yield* repository.jj("edit", "a");
         yield* repository.write("a.txt", "a, edited\n");
         yield* setUpGitHub({ open: { a: openPullRequestsAB.a } });
         yield* submitting({ revision: "a" });
-        yield* repository.git("fetch", "--quiet");
-        const shown = yield* repository.git("show", "origin/a:a.txt");
+        const shown = yield* repository.git("show", "a:a.txt");
         expect(shown).toBe("a, edited\n");
       }));
 

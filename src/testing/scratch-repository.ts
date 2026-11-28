@@ -25,9 +25,9 @@ import {
 import { templateOf } from "./templates";
 
 /**
- * A jj repository with `main` pushed to a bare `origin`, for tests that run the real jj. A second,
- * plain git clone of `origin` stands in for GitHub changing branches by itself. A command that
- * fails is a defect, since it's the test's own setup that failed.
+ * A jj repository with `main` pushed to a bare `origin`, for tests that run the real jj. A git
+ * worktree of `origin` stands in for GitHub changing branches by itself. A command that fails is a
+ * defect, since it's the test's own setup that failed.
  */
 export class ScratchRepository extends Context.Service<
   ScratchRepository,
@@ -58,7 +58,7 @@ export class ScratchRepository extends Context.Service<
     readonly env: Readonly<Record<string, string>>;
     /** The files in the revision, sorted. */
     readonly files: (revision: string) => Effect.Effect<readonly string[]>;
-    /** Runs git in the clone standing in for GitHub. */
+    /** Runs git in the worktree standing in for GitHub. */
     readonly git: (...args: readonly string[]) => Effect.Effect<string>;
     /** Runs jj in the repository, and returns what it printed. */
     readonly jj: (...args: readonly string[]) => Effect.Effect<string>;
@@ -77,7 +77,7 @@ export class ScratchRepository extends Context.Service<
     readonly stack: (...names: readonly string[]) => Effect.Effect<void>;
     /** Writes a file into the working copy of the second jj clone. */
     readonly writeElsewhere: (file: string, content: string) => Effect.Effect<void>;
-    /** Writes a file into the clone standing in for GitHub. */
+    /** Writes a file into the worktree standing in for GitHub. */
     readonly writeOnGitHub: (file: string, content: string) => Effect.Effect<void>;
     /** Writes a file into the jj working copy. */
     readonly write: (file: string, content: string) => Effect.Effect<void>;
@@ -124,12 +124,16 @@ const open = (root: string): Effect.Effect<ScratchRepository["Service"], never, 
       );
 
     return {
-      branches: git("ls-remote", "--heads", "origin").pipe(
+      branches: git(
+        "for-each-ref",
+        "--format=%(objectname)%09%(refname:lstrip=2)",
+        "refs/heads",
+      ).pipe(
         Effect.map((listed) =>
           EffectRecord.fromEntries(
             EffectArray.map(lines(listed), (line): readonly [string, string] => {
-              const [commit, ref = ""] = EffectString.split(line, "\t");
-              return [EffectString.replace("refs/heads/", "")(ref), commit];
+              const [commit, branch = ""] = EffectString.split(line, "\t");
+              return [branch, commit];
             }),
           ),
         ),
@@ -166,18 +170,18 @@ const open = (root: string): Effect.Effect<ScratchRepository["Service"], never, 
       printed: Ref.get(printed),
       stack: (...names) =>
         Effect.gen(function* () {
-          yield* jj("new", "main");
-          yield* Effect.forEach(
+          yield* Effect.reduce(
             names,
-            (name) =>
+            () => "main",
+            (parent, name) =>
               Effect.gen(function* () {
-                yield* jj("describe", "-m", name);
+                yield* jj("new", parent, "-m", name);
                 yield* writeIn(repository, `${name}.txt`, `${name}\n`);
                 yield* jj("bookmark", "create", name, "-r", "@");
-                yield* jj("new");
+                return name;
               }),
-            { concurrency: 1, discard: true },
           );
+          yield* jj("new");
         }),
       write: (file, content) => writeIn(repository, file, content),
       writeElsewhere: (file, content) =>
@@ -210,7 +214,15 @@ const buildBase = (root: string): Effect.Effect<void, never, ScratchServices> =>
     yield* write("base.txt", "base\n");
     yield* jj("bookmark", "create", "main", "-r", "@");
     yield* jj("git", "push", "--bookmark", "main");
-    yield* execute(root, ["git", "clone", "--quiet", origin, "github"]);
+    yield* execute(origin, [
+      "git",
+      "worktree",
+      "add",
+      "--quiet",
+      "--detach",
+      path.join(root, "github"),
+      "main",
+    ]);
   });
 
 const baseTemplate: Effect.Effect<string, never, ScratchServices> = templateOf("base", buildBase);
