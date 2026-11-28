@@ -22,7 +22,6 @@ interface LogEntry {
   readonly pushed: Pushed;
 }
 
-/** One line per change, top first, with the columns aligned. */
 const logLines = (entries: readonly LogEntry[]): readonly string[] => {
   const rows = EffectArray.map(
     EffectArray.reverse(entries),
@@ -39,7 +38,6 @@ const logLines = (entries: readonly LogEntry[]): readonly string[] => {
   return table(rows, 2);
 };
 
-/** The changes of the stack containing the revision, each with its pull request and push state. */
 export const log = (
   revision: string,
 ): Effect.Effect<readonly string[], GitHubFailed | JjFailed | NotAStack, GitHub | Jj> =>
@@ -73,7 +71,7 @@ export const logCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Show changes and their pull requests",
-    "Prints one line per change, top first: its bookmark, its pull request and whether that is a draft or ready for review, and whether the change is pushed, changed since the push, or not pushed. A change with conflicts is marked `conflicted`.",
-    "Fails if the changes aren't a chain, or if one doesn't have exactly one bookmark. Changes nothing, locally or on GitHub.",
+    "Prints one line per change, top first: its bookmark, its pull request as draft or ready, and whether the change is pushed, changed since the push, or not pushed. Marks a change with conflicts `conflicted`.",
+    "Changes nothing, locally or on GitHub.",
   ),
 );

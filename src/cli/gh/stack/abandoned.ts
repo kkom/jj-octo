@@ -7,12 +7,11 @@ import type { Jj, JjFailed } from "../../../clients/jj";
 import type { BookmarkTarget } from "./bookmark-targets";
 import { anyOf, changeIdsAt, changeRevset } from "./changes";
 
-/** What a push comments on a pull request that it closed. */
 export const CLOSED_COMMENT =
-  "Closed by jj-octo, because the change of this pull request was abandoned. Reopen the pull request to keep it.";
+  "Closed by jj-octo, since this pull request's change was abandoned. Reopen it to keep it.";
 
-// The bookmarks deleted here whose tracked branch on `origin` is on a change with no visible commit,
-// as `jj abandon` leaves them.
+// Bookmarks deleted here whose tracked `origin` branch is on a change with no visible commit, as
+// `jj abandon` leaves them.
 const abandonedBookmarks = (targets: readonly (readonly [string, BookmarkTarget])[]) =>
   Effect.gen(function* () {
     const candidates = EffectArray.flatMap(targets, ([name, { deleted, originChange, tracked }]) =>
@@ -31,10 +30,7 @@ const abandonedBookmarks = (targets: readonly (readonly [string, BookmarkTarget]
     );
   });
 
-/**
- * Closes those of the pull requests whose change was abandoned, and comments why. `left` are the
- * pull requests that the pushed stack no longer holds, and `targets` every bookmark with its targets.
- */
+/** `left` are the pull requests that the pushed stack no longer holds. */
 export const closeAbandoned = (
   left: readonly PullRequestNumber[],
   targets: readonly (readonly [string, BookmarkTarget])[],

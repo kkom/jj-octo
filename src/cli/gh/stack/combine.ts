@@ -4,31 +4,29 @@ import { Jj, type JjFailed } from "../../../clients/jj";
 import { bookmarkTargets } from "./bookmark-targets";
 import { anyOf, bookmarkRevset, changeRevset, commitsAt, logLines } from "./changes";
 
-// Combines a local change with its branch on GitHub after a fetch, for `sync` and `submit`.
+// Combines a local change with its GitHub branch after a fetch, for `sync` and `submit`.
 
-/** Where a bookmark on a stack pointed before the fetch. */
+/** Where a stack bookmark pointed before the fetch. */
 export interface BookmarkBeforeFetch {
   /** The ids of the changes on top of it, which the fetch can move off the stack. */
   readonly above: readonly string[];
-  /** The change's id, which stays the same when the change is rewritten. */
+  /** The change id, which survives rewrites. */
   readonly change: string;
   /** Whether it's the working copy, which the fetch can replace with a new one off the stack. */
   readonly editing: boolean;
   readonly local: string;
   readonly name: string;
-  /** The commit of its branch, for a bookmark that was pushed. */
+  /** Its branch's commit, for a pushed bookmark. */
   readonly remote: string | undefined;
 }
 
-/** The bookmarks that were pushed, and so have a branch on GitHub. */
 export const pushedOf = (
   bookmarks: readonly BookmarkBeforeFetch[],
 ): readonly BookmarkBeforeFetch[] =>
   EffectArray.filter(bookmarks, ({ remote }) => remote !== undefined);
 
-// Top first, because folding GitHub's commits into a change rewrites everything above it. Done
-// bottom first, a commit GitHub added higher up would be rewritten too, and left behind as a
-// change of its own.
+// Top first, since folding GitHub's commits into a change rewrites everything above it. Bottom
+// first, a commit GitHub added higher up would be rewritten too, and left as a change of its own.
 export const bookmarksBeforeFetch = (
   revset: string,
 ): Effect.Effect<readonly BookmarkBeforeFetch[], JjFailed, Jj> =>
@@ -67,10 +65,10 @@ export const bookmarksBeforeFetch = (
   });
 
 /**
- * The local commit of a change after a fetch and whatever was rewritten since. The fetch can
- * bring back the commit that was pushed, and GitHub's copies can carry the same change id, so
- * those two are left out. With nothing else, the change is still the commit that was pushed. With
- * nothing at all, the fetch abandoned it, which it does where no branch on GitHub contains it.
+ * Returns the change's local commits. Leaves out the pushed commit, which the fetch can bring back,
+ * and GitHub's copies, which can share the change id. With nothing else, returns the pushed commit
+ * where the change still has it. With nothing at all, the fetch abandoned the change, as it does
+ * where no GitHub branch contains it.
  */
 const localCommit = (change: string, remote: string, fetched: string) =>
   Effect.gen(function* () {
@@ -83,30 +81,28 @@ const localCommit = (change: string, remote: string, fetched: string) =>
   });
 
 /**
- * Makes the local change and its branch on GitHub one change again after a fetch, and returns
- * whether it could. The local change stays the one change of its pull request, and nothing GitHub
- * has is dropped.
- *
- * The fetch moves the bookmark to GitHub's commit where the local change was untouched, and
- * leaves it conflicted where both sides changed.
+ * Makes the local change and its GitHub branch one change again after a fetch, and returns whether
+ * it could. The local change stays its pull request's one change, and nothing GitHub has is
+ * dropped. The fetch moves the bookmark to GitHub's commit where the local change was untouched,
+ * and conflicts it where both sides changed.
  */
 export const combine = (
   { above, change, editing, local: localBefore, name, remote }: BookmarkBeforeFetch,
   fetched: string | undefined,
-  // The changes to leave where they are, as `Reconciliation.skipped` says.
+  // The changes to leave in place, as `Reconciliation.skipped` says.
   skipped: string,
 ): Effect.Effect<boolean, JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
-    // Never pushed, unchanged on GitHub, or deleted there, which a merged branch is.
+    // Never pushed, unchanged on GitHub, or deleted there, as a merged branch is.
     if (remote === undefined || fetched === undefined || fetched === remote) {
       return true;
     }
     const [local, ...others] = yield* localCommit(change, remote, fetched);
     if (local === undefined) {
-      // Nothing but the working copy kept the pushed commit, so the fetch abandoned it. It moved
-      // the changes on it to its parent, off the stack, and started a new working copy there if
-      // it was the working copy. GitHub's commit takes its place for both.
+      // Only the working copy kept the pushed commit, so the fetch abandoned it, moved the changes
+      // on it to its parent, off the stack, and started a new working copy there if it was one.
+      // GitHub's commit replaces it for both.
       if (editing) {
         yield* jj.run(["edit", fetched]);
       }
@@ -122,9 +118,9 @@ export const combine = (
       return false;
     }
     const keepLocal = jj.run(["bookmark", "set", name, "-r", local, "--allow-backwards"]);
-    // GitHub's commits that the local change now replaces. Left alone they stay in the log as a
-    // second copy of the change. What another bookmark holds above the pushed commit stays, such
-    // as GitHub's rewrite of the branch below, which the fetch moved that bookmark to.
+    // GitHub's commits the local change now replaces, which would otherwise show as a second copy.
+    // What another bookmark holds above the pushed commit stays, such as GitHub's rewrite of the
+    // branch below, where the fetch moved that bookmark.
     const held = `::(bookmarks() ~ ${bookmarkRevset(name)}) ~ ::${remote}`;
     const dropCopies = jj.run([
       "abandon",
@@ -146,7 +142,7 @@ export const combine = (
       return true;
     }
 
-    // From here GitHub rewrote the branch: its commit doesn't contain the one pushed.
+    // From here GitHub rewrote the branch: its commit doesn't contain the pushed one.
     if (localBefore === remote) {
       yield* jj.run(["rebase", "--source", `children(${local})`, "--destination", fetched]);
       // Abandoning the working copy would start a new one on the parent, off the stack.

@@ -5,17 +5,16 @@ import { lines } from "./changes";
 
 /** Where a bookmark points: locally, and on `origin` as of the last fetch or push. */
 export interface BookmarkTarget {
-  /** Whether the bookmark was deleted here, as `jj abandon` deletes it, and not yet on `origin`. */
+  /** Whether the bookmark was deleted here, as `jj abandon` does, but not yet on `origin`. */
   readonly deleted: boolean;
   readonly local: string | undefined;
   readonly origin: string | undefined;
-  /** The change that `origin`'s branch is on. */
   readonly originChange: string | undefined;
-  /** Whether the bookmark tracks its branch on `origin`, which a push needs. */
+  /** Whether the bookmark tracks its `origin` branch, which a push needs. */
   readonly tracked: boolean;
 }
 
-/** Every bookmark's targets, read in one command. A conflicted bookmark has no local target. */
+/** A conflicted bookmark has no local target. */
 export const bookmarkTargets: Effect.Effect<
   ReadonlyMap<string, BookmarkTarget>,
   JjFailed,

@@ -11,14 +11,11 @@ export class TrunkMismatch extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("TrunkMismatch", { message: Schema.String }) {}
 
-/** The default branch as `origin` has it, quoted so that any branch name parses. */
+// Quoted so any branch name parses.
 export const trunkRevset = (branch: string): string => `${formatJson(branch)}@origin`;
 
-/**
- * Fails unless `trunk()` is the commit of GitHub's default branch. jj's own `trunk()` guesses
- * from the branch names it knows, so a repository whose default branch it doesn't guess would
- * otherwise have its stacks rebased onto one branch and their pull requests based on another.
- */
+// By default, jj's `trunk()` guesses from branch names, and a wrong guess would rebase stacks onto
+// one branch and base their pull requests on another.
 export const checkTrunk = (branch: string): Effect.Effect<void, JjFailed | TrunkMismatch, Jj> =>
   Effect.gen(function* () {
     if ((yield* commitsAt(`trunk() & present(${trunkRevset(branch)})`)).length === 0) {
@@ -28,7 +25,6 @@ export const checkTrunk = (branch: string): Effect.Effect<void, JjFailed | Trunk
     }
   });
 
-/** GitHub's default branch, read once and checked to be `trunk()`. */
 export const checkedTrunk: Effect.Effect<
   string,
   GitHubFailed | JjFailed | TrunkMismatch,

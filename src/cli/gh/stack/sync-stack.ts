@@ -25,14 +25,13 @@ import {
   reconcile,
 } from "./reconcile";
 
-// Syncs one stack, for `submit`, where GitHub merged or changed any of it.
+// Syncs one stack for `submit`, where GitHub merged or changed any of it.
 
 export class BranchesDeleted extends Schema.TaggedError<
   BranchesDeleted,
   { readonly brand: unique symbol }
 >()("BranchesDeleted", { message: Schema.String }) {}
 
-/** Why a deleted branch's change doesn't count as merged, from its merged pull requests' heads. */
 const whyDeleted = (heads: readonly string[], { remote }: BookmarkBeforeFetch): string => {
   if (remote !== undefined && heads.includes(remote)) {
     return "its pushed commit merged, and the change was edited since";
@@ -42,11 +41,8 @@ const whyDeleted = (heads: readonly string[], { remote }: BookmarkBeforeFetch): 
     : "no pull request from it merged";
 };
 
-/**
- * The pushed bookmarks whose branch on GitHub isn't the commit jj last fetched, as after GitHub
- * rebases the rest of a stack whose bottom merged. Read from the remote itself, without a fetch.
- * Also the ones whose branch GitHub deleted.
- */
+// Reads `origin` without a fetch. GitHub changes a branch when it rebases a stack whose bottom
+// merged.
 const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
   Effect.gen(function* () {
     const pushed = pushedOf(bookmarks);
@@ -55,7 +51,7 @@ const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
       return { changed: [], deleted: [] };
     }
     const git = yield* Git;
-    // Jj's own git repository, which a jj workspace without a `.git` of its own also has.
+    // Jj's own git repository, which a jj workspace without its own `.git` also has.
     const jj = yield* Jj;
     const gitDirectory = yield* jj.read(["git", "root"]).pipe(Effect.map(EffectString.trim));
     const output = yield* git.read([
@@ -84,11 +80,8 @@ const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
   });
 
 /**
- * Syncs the revision's stack alone, as `sync` does, where any pull request of the
- * revision or the changes below it merged, or any of their branches changed on GitHub. Fetches
- * only those branches and the trunk, so other stacks stay as they are. The changes above are
- * rebased with the stack, and their branches are left for their own submit. Returns whether it
- * synced.
+ * Fetches only the trunk and the branches of the revision and the changes below it, leaving other
+ * stacks. Returns whether it synced.
  */
 export const syncStack = (
   revision: string,
@@ -99,7 +92,7 @@ export const syncStack = (
   Git | GitHub | Jj | PrDescriptions
 > =>
   Effect.gen(function* () {
-    // The changes above the revision aren't submitted, so they're synced only by following these.
+    // The changes above the revision aren't submitted, so they sync only by following these.
     const downstack = downstackRevset(revision);
     const before = yield* bookmarksBeforeFetch(downstack);
     const [heads, onGitHub] = yield* Effect.all([mergedHeadsOf(before), changedOnGitHub(before)], {
@@ -107,9 +100,9 @@ export const syncStack = (
     });
     const merged = yield* mergedIn(before, heads);
     const changed = EffectArray.filter(onGitHub.changed, notMerged(merged));
-    // A fetch would delete the local bookmark, and the commit with it where nothing else keeps it.
-    // That is right only for work that merged, which a merged pull request with another head
-    // doesn't prove: GitHub may have added commits before merging, or the name may be reused.
+    // A fetch would delete the local bookmark, and its commit where nothing else keeps it. That's
+    // right only for merged work, which a merged pull request with another head doesn't prove:
+    // GitHub may have added commits before merging, or the name may be reused.
     const deleted = EffectArray.filter(onGitHub.deleted, ({ name }) => notMerged(merged)(name));
     if (deleted.length > 0) {
       return yield* BranchesDeleted.make({
@@ -134,7 +127,7 @@ export const syncStack = (
       return false;
     }
     yield* Console.error(`on GitHub, ${EffectArray.join(found, ", ")}; syncing the stack first`);
-    // The whole stack is rebased, so the changes above the revision keep their place on it.
+    // The whole stack is rebased, so changes above the revision keep their place.
     const whole = stackRevset(revision);
     const bookmarks = yield* bookmarksAt(whole);
     // With the working copy on top, which follows the stack even where all of it merged.

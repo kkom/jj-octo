@@ -48,7 +48,6 @@ const openPullRequestOf = (bookmark: string) =>
     return opened.value;
   });
 
-/** Merges the pull request, and returns whether it has merged or is only queued to. */
 const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
   Effect.gen(function* () {
     const github = yield* GitHub;
@@ -58,11 +57,10 @@ const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
       yield* Console.error(`merging ${numbered(unmerged.slice(0, unmerged.indexOf(number) + 1))}`);
       return yield* github.mergeStack(number);
     }
-    // Outside a GitHub stack a merge goes into the pull request's base, and takes nothing below
-    // it along.
+    // Outside a GitHub stack, a merge goes into the pull request's base and takes nothing below it.
     if (base !== trunk) {
       return yield* NotMergeable.make({
-        message: `#${number} isn't in a GitHub stack, and its base is ${base}, so merging it wouldn't reach the trunk; run \`jj gh submit\` to register the stack, or merge the changes below it first`,
+        message: `#${number} isn't in a GitHub stack and its base is ${base}, not the trunk; run \`jj gh submit\` to register the stack, or merge the changes below it first`,
       });
     }
     yield* Console.error(`merging ${numbered([number])}`);
@@ -70,11 +68,6 @@ const mergeOnGitHub = ({ base, number }: PullRequest, trunk: string) =>
     return "merged" as const;
   });
 
-/**
- * Cancels the workflow runs that haven't completed for each merged change's commit on the branch
- * of its bookmark, which is its pull request's head. Tries every run, and fails at the end if any
- * cancel failed.
- */
 const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
   Effect.gen(function* () {
     const github = yield* GitHub;
@@ -103,13 +96,6 @@ const cancelPullRequestRuns = (changes: readonly StackChange[]) =>
     }
   });
 
-/**
- * Merges the pull requests of the revision's change and the ones below it in its stack. One in a
- * GitHub stack is merged through the stack API, together with everything below it, or nothing at
- * all. One outside a stack is merged normally. Then syncs, and pushes again what is left of the
- * stack. With `cancelPrRuns`, it cancels the merged pull requests' workflow runs that haven't
- * completed, after the sync.
- */
 export const merge = (
   revision: string,
   {
@@ -126,8 +112,8 @@ export const merge = (
     const changes = yield* downstackChanges(revision).pipe(Effect.flatMap(withoutConflicts));
     const top = changes.at(-1)?.bookmark ?? "";
 
-    // GitHub merges what was pushed, so an edit made since would be left behind on a change
-    // whose branch is gone.
+    // GitHub merges what was pushed, so a later edit would be stranded on a change whose branch is
+    // gone.
     const targets = yield* bookmarkTargets;
     const unpushed = EffectArray.filter(
       changes,
@@ -152,8 +138,8 @@ export const merge = (
       yield* Console.error(`merged up to #${pullRequest.number}`);
       // GitHub merged exactly what was pushed, as checked above.
       yield* sync({ allWorkspaces, known: changes, trunk });
-      // Before the push, which can fail, and failing only after it, so a token that can't
-      // cancel runs still leaves the rest of the stack pushed.
+      // Cancels before the push, which can fail, but fails after it, so a token that can't cancel
+      // runs still leaves the stack pushed.
       const cancelling = cancelPrRuns
         ? yield* Effect.exit(cancelPullRequestRuns(changes))
         : Exit.void;
@@ -175,7 +161,7 @@ export const mergeCommand = Command.make(
     cancelPrRuns: Flag.Boolean("cancel-pr-runs").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "After merging, cancel the merged pull requests' workflow runs that haven't completed",
+        "After merging, cancel the merged pull requests' unfinished workflow runs",
       ),
     ),
     revision: revisionFlag("The top change to merge"),
@@ -186,11 +172,10 @@ export const mergeCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Merge the pull requests of a change and the ones below it",
-    "Prints which pull requests it merges, then squash-merges them. An empty working copy means the change below it. Fails before merging if a change has edits that aren't pushed.",
-    "Pull requests in a GitHub stack merge together with the ones below them: all of them or none. A pull request outside a stack merges alone, and only if its base is the trunk.",
-    "Then syncs as `jj gh sync` does: abandons the merged changes, forgets their bookmarks, and rebases the rest of the stack onto the trunk, recording any conflict in the change. It skips the stacks that only other workspaces' working copies are on, unless you pass `--all-workspaces`. It always syncs the stack it merged. Then pushes the rest of the stack again, up to the highest branch already on GitHub. A change with conflicts can't be pushed, so it pushes only the changes below the lowest one, and prints which it leaves local. It closes the pull requests of abandoned changes, as `jj gh submit` does.",
-    "Fails before merging where the change named or one below it has conflicts. A change above it can have conflicts.",
-    "With `--cancel-pr-runs`, also cancels the merged pull requests' workflow runs that haven't completed, after the sync. Where a cancel fails, it tries the rest and pushes the stack, then fails.",
-    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once GitHub merges the pull requests, run `jj gh sync`, with `--all-workspaces` where only other workspaces' working copies are on the stack.",
+    "Prints which pull requests it merges, then squash-merges them. Fails before merging if a change has unpushed edits.",
+    "Pull requests in a GitHub stack merge with those below them, all or none. One outside a stack merges alone, and only if based on the trunk.",
+    "Then syncs as `jj gh sync` does, including the merged stack even where only other workspaces' working copies are on it. Then pushes the rest of the stack again, up to the highest branch on GitHub, stopping below the lowest change with conflicts and printing which it leaves local. Closes the pull requests of abandoned changes, as `jj gh submit` does.",
+    "With `--cancel-pr-runs`, cancels the merged pull requests' unfinished workflow runs after the sync. Where a cancel fails, it tries the rest and pushes the stack, then fails.",
+    "Where GitHub queues the merge, `merge` neither syncs nor cancels runs. Once the pull requests merge, run `jj gh sync`, with `--all-workspaces` where only other workspaces' working copies are on the stack.",
   ),
 );

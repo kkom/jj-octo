@@ -89,7 +89,7 @@ layer(scratchRepository)("stackChanges", (it) => {
       const failure = yield* Effect.flip(stackChanges("@"));
       expect(failure).toStrictEqual(
         NotAStack.make({
-          message: `every change needs a bookmark naming its branch; these have none:\n${labelOfA}`,
+          message: `these changes have no bookmark naming their branch:\n${labelOfA}`,
         }),
       );
     }));

@@ -11,7 +11,6 @@ export class NoSuchStack extends Schema.TaggedError<
   { readonly brand: unique symbol }
 >()("NoSuchStack", { message: Schema.String }) {}
 
-/** Dissolves a GitHub stack. Its pull requests stay open, each on the base it had. */
 export const dissolve = (
   stack: StackNumber,
 ): Effect.Effect<void, GitHubFailed | NoSuchStack, GitHub> =>
@@ -42,7 +41,7 @@ export const dissolveCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Dissolve a GitHub stack, leaving its pull requests open",
-    "Each pull request keeps its base, so it still shows only its own change's diff.",
-    "`submit` dissolves and registers again the one stack its pull requests are in, where a reorder, an insertion or a dropped change needs it. It changes only that one stack: where its pull requests belong to several, it won't take one out of another stack, and it fails and names this command for the stacks to dissolve. Check what a stack holds on GitHub before dissolving it.",
+    "Each pull request keeps its base.",
+    "Where a jj stack's pull requests are in several GitHub stacks, `submit` fails and names this command for the ones to dissolve. Check a stack's contents on GitHub before dissolving it.",
   ),
 );

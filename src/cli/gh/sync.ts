@@ -28,15 +28,11 @@ import {
 } from "./stack/reconcile";
 import { checkedTrunk } from "./stack/trunk";
 
-/**
- * The changes of the stacks that only other workspaces' working copies are on, outside the synced
- * stacks. Unlike `stackRevset`, it keeps another workspace's empty working copy, which is the
- * whole of a stack it just started.
- */
+// Unlike `stackRevset`, keeps another workspace's empty working copy, the whole of a stack it just
+// started.
 const otherWorkspacesRevset = (synced: string): string =>
   `reachable(working_copies() ~ @, mutable()) ~ (${synced})`;
 
-/** The stack this workspace's working copy is on, and the stacks of the revisions. */
 const syncedRevset = (revisions: readonly string[]): string =>
   `reachable(${anyOf(["@", ...revisions])}, mutable())`;
 
@@ -44,13 +40,8 @@ const ORIGIN_BRANCHES = 'remote_bookmarks(remote=exact:"origin")';
 
 const NONE_SKIPPED = { hasBranches: false, revset: "none()" };
 
-/**
- * The stacks that only other workspaces' working copies are on, outside the synced stacks, as the
- * descendants of their bottom changes, which are named by change id. So it follows a change that
- * a jj command in another workspace rewrites meanwhile, and stays one id per stack. A copy of a
- * divergent bottom change on a synced stack stays out. Also says whether any of their changes has
- * a branch, counting one whose local bookmark was deleted.
- */
+// Selects by the bottom changes' change ids, which follow a change that another workspace's jj
+// command rewrites meanwhile. A copy of a divergent bottom change on a synced stack stays out.
 const skippedStacks = (revisions: readonly string[]) =>
   Effect.gen(function* () {
     const synced = syncedRevset(revisions);
@@ -66,42 +57,31 @@ const skippedStacks = (revisions: readonly string[]) =>
     };
   });
 
-/**
- * The branches on GitHub that the changes outside the skipped stacks have, including ones whose
- * local bookmark was deleted, which a fetch should still update or remove.
- */
+// Includes branches whose local bookmark was deleted, which the fetch still updates or removes.
 const syncedBranches = (skipped: string) =>
   logLines(
     `(mutable() & ${ORIGIN_BRANCHES}) ~ (${skipped})`,
     String.raw`remote_bookmarks.filter(|b| b.remote() == "origin").map(|b| b.name() ++ "\n").join("")`,
   );
 
-/** The bottom changes of the skipped stacks that sync would rebase, other than empty ones. */
 const notSynced = (skipped: string) =>
   changesIn(`(${STACK_ROOTS_NOT_ON_TRUNK}) & (${skipped}) ~ ${SCRATCH}`);
 
-/** `--all-workspaces`, for the commands that sync. */
 export const allWorkspacesFlag: Flag.Flag<boolean> = Flag.Boolean("all-workspaces").pipe(
   Flag.withDefault(false),
   Flag.withDescription("Also sync the stacks that only other workspaces' working copies are on"),
 );
 
 export interface SyncOptions {
-  /** Whether to also sync the stacks that only other workspaces' working copies are on. */
   readonly allWorkspaces: boolean;
-  /** Changes known to have merged, which GitHub isn't asked about, with the commits that merged. */
+  /**
+   * Merged changes that GitHub isn't asked about. Their stacks sync even without `allWorkspaces`.
+   */
   readonly known?: readonly (MergedChange & Pick<StackChange, "commitId">)[];
-  /** The trunk's branch, from `checkedTrunk`. */
+  /** From `checkedTrunk`. */
   readonly trunk: string;
 }
 
-/**
- * Rebases every stack that doesn't conflict onto the fetched trunk, and pushes nothing. Each
- * bookmark is combined with its branch on GitHub first, and each merged change abandoned.
- *
- * Unless `allWorkspaces` is set, it skips the stacks that only other workspaces' working copies
- * are on, and doesn't fetch their branches. The stacks of the known merged changes stay in.
- */
 export const sync = ({
   allWorkspaces,
   known = [],
@@ -112,7 +92,7 @@ export const sync = ({
   GitHub | Jj | PrDescriptions
 > =>
   Effect.gen(function* () {
-    // By commit, since a merged change can be divergent with a copy in another workspace's stack.
+    // By commit, since a merged change can diverge with a copy in another workspace's stack.
     const skipped = allWorkspaces
       ? NONE_SKIPPED
       : yield* skippedStacks(EffectArray.map(known, ({ commitId }) => commitId));
@@ -121,7 +101,7 @@ export const sync = ({
       ...known,
       ...(yield* mergedOnGitHub(EffectArray.filter(before, ({ name }) => notMerged(known)(name)))),
     ];
-    // Also where the sync fails, which can be after it rebased the stacks.
+    // Also where the sync fails, possibly after rebasing the stacks.
     const reportNotSynced = Effect.gen(function* () {
       const stacks = yield* notSynced(skipped.revset);
       if (stacks.length > 0) {
@@ -167,11 +147,11 @@ export const syncCommand = Command.make(
   provideGitHubFromOrigin,
   withHelp(
     "Fetch, and rebase the stacks onto the trunk",
-    "Fetches, then rebases the unmerged changes onto the trunk, keeping each on the changes below it. Abandons each change whose pull request merged, and forgets its bookmark, unless you edited the change after the merge.",
-    "Skips the stacks that only other workspaces' working copies are on, unless you pass `--all-workspaces`. A workspace whose directory you deleted counts until you run `jj workspace forget`. Where the skipped stacks have branches, it fetches only the trunk and the branches of the stacks it syncs.",
-    "Leaves a stack that would conflict with the trunk where it was, and names it. When you want to resolve the conflict, rebase it with `jj rebase`. `sync` rebases the rest of a stack whose changes merged even where the rebase conflicts, and records the conflict in the change.",
-    "Squashes commits added to a branch on GitHub into the branch's local change, even where that change has local edits too. Where GitHub only rebased a branch, keeps the local change.",
+    "Fetches, then rebases the unmerged changes onto the trunk, keeping each on the changes below it. Abandons each change whose pull request merged and forgets its bookmark, unless you edited it after the merge.",
+    "Skips stacks only other workspaces' working copies are on, unless you pass `--all-workspaces`. A workspace whose directory you deleted counts until `jj workspace forget`. Where skipped stacks have branches, fetches only the trunk and the synced stacks' branches.",
+    "Leaves a stack that would conflict with the trunk in place and names it; rebase it with `jj rebase` when ready. Rebases the rest of a stack whose changes merged even where that conflicts, recording the conflict in the change.",
+    "Squashes commits added to a branch on GitHub into its local change, even one with local edits. Where GitHub only rebased a branch, keeps the local change.",
     "Fails before fetching if `trunk()` isn't GitHub's default branch, which `jj-octo init` sets.",
-    "Pushes nothing. To update the pull requests of a change and the ones below it, run `jj gh submit`.",
+    "Pushes nothing; run `jj gh submit` to update the pull requests.",
   ),
 );
