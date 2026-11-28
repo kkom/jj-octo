@@ -5,14 +5,15 @@ import type { GitHub } from "../../../clients/github/client";
 import type { GitHubFailed } from "../../../clients/github/failure";
 import { Jj, type JjFailed } from "../../../clients/jj";
 import type { PrDescriptions } from "../../../clients/pr-descriptions";
+import { formatJson } from "../../../json";
+import type { BookmarkTargets } from "./bookmark-targets";
 import {
   anyOf,
   bookmarkRevset,
-  bookmarksAt,
-  changeIdsAt,
   changeRevset,
   downstackRevset,
   lines,
+  logLines,
   stackRevset,
 } from "./changes";
 import { type BookmarkBeforeFetch, bookmarksBeforeFetch, pushedOf } from "./combine";
@@ -51,9 +52,12 @@ const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
       return { changed: [], deleted: [] };
     }
     const git = yield* Git;
-    // Jj's own git repository, which a jj workspace without its own `.git` also has.
+    // Jj's own git repository, which a jj workspace without its own `.git` also has. Its path
+    // doesn't depend on the working copy, so the read skips the snapshot.
     const jj = yield* Jj;
-    const gitDirectory = yield* jj.read(["git", "root"]).pipe(Effect.map(EffectString.trim));
+    const gitDirectory = yield* jj
+      .read(["git", "root", "--ignore-working-copy"])
+      .pipe(Effect.map(EffectString.trim));
     const output = yield* git.read([
       "--git-dir",
       gitDirectory,
@@ -81,11 +85,13 @@ const changedOnGitHub = (bookmarks: readonly BookmarkBeforeFetch[]) =>
 
 /**
  * Fetches only the trunk and the branches of the revision and the changes below it, leaving other
- * stacks. Returns whether it synced.
+ * stacks. Returns whether it synced, and changes nothing where it didn't.
  */
 export const syncStack = (
   revision: string,
   trunk: string,
+  /** `bookmarkTargets`, read after the repository's last change. */
+  targets: BookmarkTargets,
 ): Effect.Effect<
   boolean,
   BranchesDeleted | GitFailed | GitHubFailed | JjFailed | NotCombined,
@@ -94,7 +100,7 @@ export const syncStack = (
   Effect.gen(function* () {
     // The changes above the revision aren't submitted, so they sync only by following these.
     const downstack = downstackRevset(revision);
-    const before = yield* bookmarksBeforeFetch(downstack);
+    const before = yield* bookmarksBeforeFetch(downstack, targets);
     const [heads, onGitHub] = yield* Effect.all([mergedHeadsOf(before), changedOnGitHub(before)], {
       concurrency: "unbounded",
     });
@@ -129,9 +135,23 @@ export const syncStack = (
     yield* Console.error(`on GitHub, ${EffectArray.join(found, ", ")}; syncing the stack first`);
     // The whole stack is rebased, so changes above the revision keep their place.
     const whole = stackRevset(revision);
-    const bookmarks = yield* bookmarksAt(whole);
     // With the working copy on top, which follows the stack even where all of it merged.
-    const unnamed = yield* changeIdsAt(`((${whole}) | (@ & children(${whole}))) ~ bookmarks()`);
+    const output = yield* logLines(
+      `(${whole}) | (@ & children(${whole}))`,
+      String.raw`change_id ++ "\t" ++ self.contained_in(${formatJson(whole)}) ++ "\t" ++ local_bookmarks.map(|b| b.name()).join(" ") ++ "\n"`,
+    );
+    const logged = EffectArray.map(output, (line) => {
+      const [change, inStack, names = ""] = EffectString.split(line, "\t");
+      return {
+        change,
+        inStack: inStack === "true",
+        names: names === "" ? [] : EffectString.split(names, " "),
+      };
+    });
+    const bookmarks = EffectArray.flatMap(logged, ({ inStack, names }) => (inStack ? names : []));
+    const unnamed = EffectArray.flatMap(logged, ({ change, names }) =>
+      names.length === 0 ? [change] : [],
+    );
     yield* reconcile({
       before,
       bookmarks,

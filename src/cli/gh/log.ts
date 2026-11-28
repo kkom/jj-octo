@@ -44,10 +44,13 @@ export const log = (
   Effect.gen(function* () {
     const github = yield* GitHub;
     const stack = yield* stackChanges(revision);
-    const targets = yield* bookmarkTargets;
-    const pullRequests = yield* Effect.forEach(
-      stack,
-      ({ bookmark }) => github.openPullRequest(bookmark),
+    const [targets, pullRequests] = yield* Effect.all(
+      [
+        bookmarkTargets,
+        Effect.forEach(stack, ({ bookmark }) => github.openPullRequest(bookmark), {
+          concurrency: "unbounded",
+        }),
+      ],
       { concurrency: "unbounded" },
     );
     return logLines(

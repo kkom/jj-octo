@@ -48,15 +48,13 @@ const rebaseCommand = (stacks: readonly Stack[]): readonly string[] => [
 ];
 
 /**
- * Rebases the stacks onto the trunk in one command, except each stack the rebase gives a new
- * conflict, unless it holds a `required` change, so unwatched work isn't left conflicted. A dry run
- * finds those stacks, matching conflicts to stacks by change id, so a change id may be in only one
- * stack.
+ * The ids of the changes that a rebase of the stacks onto the trunk gives a new conflict. A dry run
+ * finds them, changing nothing.
  */
-const rebaseStacks = (stacks: readonly Stack[], required: readonly string[]) =>
+const conflictedByRebase = (stacks: readonly Stack[]) =>
   Effect.gen(function* () {
     if (stacks.length === 0) {
-      return;
+      return new Set<string>();
     }
     const jj = yield* Jj;
     const conflictedCommitIds = yield* commitsAt("conflicts() & mutable()");
@@ -73,7 +71,7 @@ const rebaseStacks = (stacks: readonly Stack[], required: readonly string[]) =>
     // The rebase didn't cause a conflict the change already had, nor one on a pre-rebase commit: a
     // divergent change's other commit, in a stack that stayed.
     const conflictedNow = yield* loggedChanges("conflicts() & mutable()", { atOperation: dryRun });
-    const conflictedByRebase = new Set(
+    return new Set(
       EffectArray.map(
         EffectArray.filter(
           conflictedNow,
@@ -83,12 +81,32 @@ const rebaseStacks = (stacks: readonly Stack[], required: readonly string[]) =>
         ({ changeId }) => changeId,
       ),
     );
+  });
+
+const holdsAnyOf =
+  (changeIds: readonly string[]) =>
+  (stack: Stack): boolean =>
+    EffectArray.some(stack, ({ changeId }) => changeIds.includes(changeId));
+
+/**
+ * Rebases the stacks onto the trunk in one command, except each stack the rebase gives a new
+ * conflict, unless it holds a `required` change, so unwatched work isn't left conflicted. Conflicts
+ * match stacks by change id, so a change id may be in only one stack.
+ */
+const rebaseStacks = (stacks: readonly Stack[], required: readonly string[]) =>
+  Effect.gen(function* () {
+    const jj = yield* Jj;
+    const holdsRequired = holdsAnyOf(required);
+    // Only a stack without a required change can stay.
+    const conflicted = yield* conflictedByRebase(
+      EffectArray.filter(stacks, (stack) => !holdsRequired(stack)),
+    );
     const [left, rebased] = EffectArray.partition(
       stacks,
       Filter.fromPredicate(
         (stack: Stack) =>
-          !EffectArray.some(stack, ({ changeId }) => required.includes(changeId)) &&
-          EffectArray.some(stack, ({ changeId }) => conflictedByRebase.has(changeId)),
+          !holdsRequired(stack) &&
+          EffectArray.some(stack, ({ changeId }) => conflicted.has(changeId)),
       ),
     );
     if (rebased.length > 0) {

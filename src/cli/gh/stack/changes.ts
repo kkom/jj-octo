@@ -88,8 +88,11 @@ export const logLines = (
 export const changesIn = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   logLines(revset, String.raw`change_id.shortest(8) ++ " " ++ description.first_line() ++ "\n"`);
 
-export const commitsAt = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
-  logLines(revset, String.raw`commit_id ++ "\n"`);
+export const commitsAt = (
+  revset: string,
+  options?: ReadLogOptions,
+): Effect.Effect<readonly string[], JjFailed, Jj> =>
+  logLines(revset, String.raw`commit_id ++ "\n"`, options);
 
 export const changeIdsAt = (revset: string): Effect.Effect<readonly string[], JjFailed, Jj> =>
   logLines(revset, String.raw`change_id ++ "\n"`);
@@ -185,13 +188,17 @@ const notAStack = (message: string, changes: readonly string[]) =>
 const labels = (changes: readonly LoggedChange[]): readonly string[] =>
   EffectArray.map(changes, ({ label }) => label);
 
-// A change with conflicts still belongs to the chain; only the commands that push or merge it fail.
-const chain = (
-  revset: string,
+/**
+ * Checks that the logged changes form a chain, and returns them bottom to top, each with its
+ * bookmark.
+ *
+ * A change with conflicts still belongs to the chain; only the commands that push or merge it fail.
+ */
+export const chainOf = (
+  changes: readonly LoggedChange[],
   revision: string,
-): Effect.Effect<readonly StackChange[], JjFailed | NotAStack, Jj> =>
+): Effect.Effect<readonly StackChange[], NotAStack> =>
   Effect.gen(function* () {
-    const changes = yield* loggedChanges(revset);
     if (changes.length === 0) {
       return yield* notAStack(
         `\`${revision}\` is on no stack; name a change of one that is based on the trunk, or run \`jj new\` on its top`,
@@ -250,6 +257,9 @@ const chain = (
       }),
     );
   });
+
+const chain = (revset: string, revision: string) =>
+  Effect.flatMap(loggedChanges(revset), (changes) => chainOf(changes, revision));
 
 export const stackChanges = (
   revision: string,
