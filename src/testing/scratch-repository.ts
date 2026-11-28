@@ -34,6 +34,8 @@ import { templateOf } from "./templates";
 export interface ScratchRepository {
   /** The names of the branches on `origin`, with the commit each points at. */
   readonly branches: () => Readonly<Record<string, string>>;
+  /** The id of the commit the revision names. */
+  readonly commitOf: (revision: string) => string;
   /**
    * Runs jj in a second jj clone of `origin`, made on first use. It stands in for another checkout
    * of the same person, whose pushes keep each change's id.
@@ -46,10 +48,10 @@ export interface ScratchRepository {
   /** Runs jj in the repository, and returns what it printed. */
   readonly jj: (...args: readonly string[]) => string;
   readonly layer: Layer.Layer<Git | Jj | PrDescriptions>;
-  /** Runs the effect with the repository's recorded pull request descriptions. */
+  /** The effect, with the repository's recorded pull request descriptions. */
   readonly records: <A>(
     effect: (store: PrDescriptions["Service"]) => Effect.Effect<A>,
-  ) => Promise<A>;
+  ) => Effect.Effect<A>;
   /** The same clients in another directory, such as a workspace added to the repository. */
   readonly layerAt: (directory: string) => Layer.Layer<Git | Jj | PrDescriptions>;
   /** Each described change above the trunk, bottom to top, as `description [bookmarks]`. */
@@ -172,6 +174,7 @@ const open = (root: string): ScratchRepository => {
           },
         ),
       ),
+    commitOf: (revision) => jj("log", "--no-graph", "-r", revision, "-T", "commit_id"),
     elsewhere,
     files: (revision) => lines(jj("file", "list", "-r", revision)),
     git,
@@ -203,8 +206,7 @@ const open = (root: string): ScratchRepository => {
         EffectArray.filter(merged, (recorded) => recorded.branch === branch),
         (recorded) => recorded.pullRequest,
       ),
-    records: (effect) =>
-      Effect.runPromise(Effect.flatMap(PrDescriptions, effect).pipe(Effect.provide(layer))),
+    records: (effect) => Effect.flatMap(PrDescriptions, effect).pipe(Effect.provide(layer)),
     stack: (...names) => {
       jj("new", "main");
       for (const name of names) {

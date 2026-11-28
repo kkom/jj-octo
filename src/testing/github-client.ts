@@ -16,28 +16,26 @@ import { type InterceptedRequest, throughProxy } from "./intercepting-proxy";
 // Runs `use` with the real client, against a GitHub that answers as `respond` does, with `env` as
 // the environment. Returns what it produced and the requests GitHub received, without the proxy's
 // CONNECTs.
-export const withGitHub = async <A>(
+export const withGitHub = <A, E>(
   respond: (request: InterceptedRequest) => unknown,
-  use: (github: GitHub["Service"]) => Effect.Effect<A, unknown>,
+  use: (github: GitHub["Service"]) => Effect.Effect<A, E>,
   env: Readonly<Record<string, string>> = {},
-): Promise<{ readonly requests: readonly string[]; readonly result: A }> => {
-  const { log, result } = await throughProxy("api.github.com", respond, ({ ca, url }) => {
+): Effect.Effect<{ readonly requests: readonly string[]; readonly result: A }, E> =>
+  throughProxy("api.github.com", respond, ({ ca, url }) => {
     const live = GitHubLive(
       { name: "name", owner: "owner" },
       { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
     );
-    return Effect.runPromise(
-      Effect.provide(
-        GitHub.use(use),
-        live.pipe(Layer.provideMerge(FetchHttpClient.layer), Layer.provideMerge(environment(env))),
-      ),
+    return Effect.provide(
+      GitHub.use(use),
+      live.pipe(Layer.provideMerge(FetchHttpClient.layer), Layer.provideMerge(environment(env))),
     );
-  });
-  return {
-    requests: EffectArray.filter(log, (line) => !EffectString.startsWith("CONNECT ")(line)),
-    result,
-  };
-};
+  }).pipe(
+    Effect.map(({ log, result }) => ({
+      requests: EffectArray.filter(log, (line) => !EffectString.startsWith("CONNECT ")(line)),
+      result,
+    })),
+  );
 
 // The effect's result, or the message and status it failed with.
 export const failureOf = <A>(

@@ -1,9 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect } from "bun:test";
 
-import { Array as EffectArray, Option, Order, String as EffectString } from "effect";
+import { Array as EffectArray, Effect, Option, Order, String as EffectString } from "effect";
 
 import { failureOf, searchPath, withGitHub } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
+import { itEffect } from "../../testing/it-effect";
 import { pullRequests } from "../../testing/pull-requests";
 
 const CREATED = "2026-01-01T00:00:00Z";
@@ -96,87 +97,94 @@ const mentioning = (number: number, count: number, createdAt = CREATED) =>
   Array.from({ length: count }, (_, offset) => indexed(2000 + offset, [number], createdAt));
 
 describe("approvedPullRequests", () => {
-  it("lists those of the pull requests the search lists, from every page", async () => {
-    expect(
-      await withGitHub(searchOf([indexed(7), ...mentioning(7, 100)]), (github) =>
+  itEffect("lists those of the pull requests the search lists, from every page", () =>
+    Effect.gen(function* () {
+      const outcome = yield* withGitHub(searchOf([indexed(7), ...mentioning(7, 100)]), (github) =>
         github.approvedPullRequests(asked([7])),
-      ),
-    ).toStrictEqual({
-      requests: [
-        `GET api.github.com${searchPath(`7 created:${CREATED}..${CREATED}`, 1)}`,
-        `GET api.github.com${searchPath(`7 created:${CREATED}..${CREATED}`, 2)}`,
-      ],
-      result: setOf([7]),
-    });
-  });
+      );
+      expect(outcome).toStrictEqual({
+        requests: [
+          `GET api.github.com${searchPath(`7 created:${CREATED}..${CREATED}`, 1)}`,
+          `GET api.github.com${searchPath(`7 created:${CREATED}..${CREATED}`, 2)}`,
+        ],
+        result: setOf([7]),
+      });
+    }),
+  );
 
-  it("searches for more pull requests than one search's text fits in several searches", async () => {
-    // 42 five-digit numbers and the spaces between them are 251 characters, and 43 are 257.
-    const numbers = Array.from({ length: 50 }, (_, offset) => 10_000 + offset);
-    const terms = EffectArray.map(numbers, String);
-    expect(
-      await withGitHub(searchOf([indexed(10_001), indexed(10_040), indexed(10_049)]), (github) =>
-        github.approvedPullRequests(asked(numbers)),
-      ),
-    ).toStrictEqual({
-      requests: [
-        `GET api.github.com${searchPath(`${EffectArray.join(terms.slice(0, 42), " ")} created:${CREATED}..${CREATED}`)}`,
-        `GET api.github.com${searchPath(`${EffectArray.join(terms.slice(42), " ")} created:${CREATED}..${CREATED}`)}`,
-      ],
-      result: setOf([10_001, 10_040, 10_049]),
-    });
-  });
+  itEffect("searches for more pull requests than one search's text fits in several searches", () =>
+    Effect.gen(function* () {
+      // 42 five-digit numbers and the spaces between them are 251 characters, and 43 are 257.
+      const numbers = Array.from({ length: 50 }, (_, offset) => 10_000 + offset);
+      const terms = EffectArray.map(numbers, String);
+      const outcome = yield* withGitHub(
+        searchOf([indexed(10_001), indexed(10_040), indexed(10_049)]),
+        (github) => github.approvedPullRequests(asked(numbers)),
+      );
+      expect(outcome).toStrictEqual({
+        requests: [
+          `GET api.github.com${searchPath(`${EffectArray.join(terms.slice(0, 42), " ")} created:${CREATED}..${CREATED}`)}`,
+          `GET api.github.com${searchPath(`${EffectArray.join(terms.slice(42), " ")} created:${CREATED}..${CREATED}`)}`,
+        ],
+        result: setOf([10_001, 10_040, 10_049]),
+      });
+    }),
+  );
 
-  it("splits a search that matches too many, down to one pull request", async () => {
-    // Search lists in order of creation, and #5's range keeps out what only mentions #5.
-    const index = [indexed(5, [], LATER), indexed(6), ...mentioning(5, 1200)];
-    expect(
-      await withGitHub(searchOf(index), (github) =>
+  itEffect("splits a search that matches too many, down to one pull request", () =>
+    Effect.gen(function* () {
+      // Search lists in order of creation, and #5's range keeps out what only mentions #5.
+      const index = [indexed(5, [], LATER), indexed(6), ...mentioning(5, 1200)];
+      const outcome = yield* withGitHub(searchOf(index), (github) =>
         github.approvedPullRequests(asked([5, 6], { 5: LATER })),
-      ),
-    ).toStrictEqual({
-      requests: [
-        `GET api.github.com${searchPath(`6 5 created:${CREATED}..${LATER}`)}`,
-        `GET api.github.com${searchPath(`6 created:${CREATED}..${CREATED}`)}`,
-        `GET api.github.com${searchPath(`5 created:${LATER}..${LATER}`)}`,
-      ],
-      result: setOf([5, 6]),
-    });
-  });
+      );
+      expect(outcome).toStrictEqual({
+        requests: [
+          `GET api.github.com${searchPath(`6 5 created:${CREATED}..${LATER}`)}`,
+          `GET api.github.com${searchPath(`6 created:${CREATED}..${CREATED}`)}`,
+          `GET api.github.com${searchPath(`5 created:${LATER}..${LATER}`)}`,
+        ],
+        result: setOf([5, 6]),
+      });
+    }),
+  );
 
-  it("fails where one pull request's search matches too many", async () => {
-    const path = searchPath(`5 created:${CREATED}..${CREATED}`);
-    expect(
-      await withGitHub(searchOf([indexed(5), ...mentioning(5, 1200)]), (github) =>
+  itEffect("fails where one pull request's search matches too many", () =>
+    Effect.gen(function* () {
+      const path = searchPath(`5 created:${CREATED}..${CREATED}`);
+      const outcome = yield* withGitHub(searchOf([indexed(5), ...mentioning(5, 1200)]), (github) =>
         failureOf(github.approvedPullRequests(asked([5]))),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${path}`],
-      result: {
-        message: `GET ${path} matched 1201 pull requests, at least the 1000 that search lists, so whether #5 is approved is unknown`,
-        status: undefined,
-      },
-    });
-  });
+      );
+      expect(outcome).toStrictEqual({
+        requests: [`GET api.github.com${path}`],
+        result: {
+          message: `GET ${path} matched 1201 pull requests, at least the 1000 that search lists, so whether #5 is approved is unknown`,
+          status: undefined,
+        },
+      });
+    }),
+  );
 
-  it("fails where the search timed out and listed only some pull requests", async () => {
-    const path = searchPath(`7 created:${CREATED}..${CREATED}`);
-    expect(
-      await withGitHub(searchOf([indexed(7)], true), (github) =>
+  itEffect("fails where the search timed out and listed only some pull requests", () =>
+    Effect.gen(function* () {
+      const path = searchPath(`7 created:${CREATED}..${CREATED}`);
+      const outcome = yield* withGitHub(searchOf([indexed(7)], true), (github) =>
         failureOf(github.approvedPullRequests(asked([7]))),
-      ),
-    ).toStrictEqual({
-      requests: [`GET api.github.com${path}`],
-      result: {
-        message: `GET ${path} timed out, and listed only some pull requests`,
-        status: undefined,
-      },
-    });
-  });
+      );
+      expect(outcome).toStrictEqual({
+        requests: [`GET api.github.com${path}`],
+        result: {
+          message: `GET ${path} timed out, and listed only some pull requests`,
+          status: undefined,
+        },
+      });
+    }),
+  );
 
-  it("sends no search for no pull requests", async () => {
-    expect(
-      await withGitHub(searchOf([]), (github) => github.approvedPullRequests([])),
-    ).toStrictEqual({ requests: [], result: new Set() });
-  });
+  itEffect("sends no search for no pull requests", () =>
+    Effect.gen(function* () {
+      const outcome = yield* withGitHub(searchOf([]), (github) => github.approvedPullRequests([]));
+      expect(outcome).toStrictEqual({ requests: [], result: new Set() });
+    }),
+  );
 });
