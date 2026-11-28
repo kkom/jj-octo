@@ -10,7 +10,6 @@ import { Command, Flag } from "effect/cli";
 
 import { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import {
   type Check,
   isOpen,
@@ -18,7 +17,7 @@ import {
   type RequiredChecks,
 } from "../../clients/github/types";
 import type { Jj, JjFailed } from "../../clients/jj";
-import { asUserError, revisionFlag, table, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, revisionFlag, table, withHelp } from "../command";
 import { checkReport } from "./check-report";
 import { CONFLICTED, type NotAStack, stackChanges } from "./stack/changes";
 
@@ -143,10 +142,11 @@ export const checksCommand = Command.make(
     ),
   },
   ({ revision, verbose }) =>
-    asUserError(checks(revision, { verbose }).pipe(Effect.provide(GitHubFromOrigin))).pipe(
+    asUserError(checks(revision, { verbose })).pipe(
       Effect.flatMap((printed) => Console.log(EffectArray.join(printed, "\n"))),
     ),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Show the state of the required checks of the stack's pull requests",
     "Prints one line per change of the stack, top first: its bookmark, its open pull request or `no open pull request`, and the state of the required checks, the one furthest from passing: `failed`, `unknown`, `pending` or `passed`. Unless they passed, the line names the required checks in that state, such as `failed: CI`, or `unknown: codecov` for a required check whose result can't be told apart, as below. Where the default branch requires no checks, the line says `no required checks`, and where the required checks can't be known, it says `unknown`, under a line that says why. A change with conflicts is marked `conflicted` at the end of its line.",

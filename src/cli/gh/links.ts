@@ -16,10 +16,9 @@ import {
 } from "../../clients/clipboard";
 import { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { ListedPullRequest, PullRequestState, StackLink } from "../../clients/github/types";
 import { type Jj, JjFailed } from "../../clients/jj";
-import { asUserError, revisionFlag, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, revisionFlag, withHelp } from "../command";
 import { bookmarkTargets } from "./stack/bookmark-targets";
 import { anyOf, CONFLICTED, lines, type NotAStack, readLog, stackChanges } from "./stack/changes";
 
@@ -273,8 +272,10 @@ export const linksCommand = Command.make(
     ),
     revision: revisionFlag("A change of the stack to list"),
   },
-  (options) => asUserError(links(options).pipe(Effect.provide([GitHubFromOrigin, ClipboardLive]))),
+  (options) => asUserError(links(options)),
 ).pipe(
+  provideGitHubFromOrigin,
+  Command.provide(ClipboardLive),
   withHelp(
     "Print the stack's pull requests as Markdown links",
     'Prints a link to the GitHub stack of the open pull requests, as "Current stack", where they are in one. Then prints one line per pull request, top first: 📝 for a draft, 👀 for one ready for review and not approved, ✅ for one ready for review and approved, 🏁 for a merged one, and 🚫 for one closed unmerged. Each line has a Markdown link with the number and title, and the lines the change adds and removes, in inline code, as `+123/-45`. A line whose change has conflicts ends with `conflicted`.',

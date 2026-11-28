@@ -3,8 +3,8 @@ import path from "node:path";
 
 import { Array as EffectArray, Effect } from "effect";
 
-import { gitClone, provideClients } from "../../testing/git-clone";
-import { itEffect } from "../../testing/it-effect";
+import { gitClone } from "../../testing/git-clone";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import {
   removeScratchRepositories,
   scratchDirectory,
@@ -22,12 +22,12 @@ describe("problems", () => {
   itEffect("finds what init sets up in a plain git clone, and nothing once init has", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      const found = yield* problems.pipe(provideClients(clone.layer));
+      const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         `this checkout isn't a jj repository colocated with git${INIT}`,
       ]);
-      yield* init.pipe(provideClients(clone.layer));
-      const foundOnceSetUp = yield* problems.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
+      const foundOnceSetUp = yield* problems.pipe(provideSetup(clone.layer));
       expect(foundOnceSetUp).toStrictEqual([]);
     }),
   );
@@ -39,7 +39,7 @@ describe("problems", () => {
       clone.jj("git", "init", "--colocate");
       clone.jj("bookmark", "track", "main", "--remote", "origin");
       // The changes jj made without an identity count as part of the identity's problem.
-      const found = yield* problems.pipe(provideClients(clone.layer));
+      const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         `jj has no user.name, which git has${INIT}`,
         `jj has no user.email, which git has${INIT}`,
@@ -53,7 +53,7 @@ describe("problems", () => {
       const clone = gitClone(scratchRepository());
       const worktree = path.join(scratchDirectory("worktree-"), "checkout");
       clone.git("worktree", "add", "--detach", worktree);
-      const found = yield* problems.pipe(provideClients(clone.layerAt(worktree)));
+      const found = yield* problems.pipe(provideSetup(clone.layerAt(worktree)));
       expect(found).toStrictEqual([
         "this is a git worktree, where jj would make a second repository; run `jj workspace add` in the main checkout instead",
       ]);
@@ -69,9 +69,9 @@ describe("problems", () => {
         "neither jj nor git has user.name; set it with `jj config set --user user.name`",
         "neither jj nor git has user.email; set it with `jj config set --user user.email`",
       ];
-      const failure = yield* Effect.flip(init).pipe(provideClients(clone.layer));
+      const failure = yield* Effect.flip(init).pipe(provideSetup(clone.layer));
       expect(failure).toStrictEqual(NotSetUp.make({ message: EffectArray.join(identity, "\n") }));
-      const found = yield* problems.pipe(provideClients(clone.layer));
+      const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual(identity);
     }),
   );
@@ -79,9 +79,9 @@ describe("problems", () => {
   itEffect("finds a trunk() that isn't the default branch", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       clone.jj("config", "set", "--repo", 'revset-aliases."trunk()"', "root()");
-      const found = yield* problems.pipe(provideClients(clone.layer));
+      const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         `trunk() isn't main@origin, GitHub's default branch, fetched and tracked${INIT}`,
       ]);
@@ -91,9 +91,9 @@ describe("problems", () => {
   itEffect("runs the other checks where origin can't be read", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       clone.git("remote", "set-url", "origin", "/nonexistent");
-      const found = yield* problems.pipe(provideClients(clone.layer));
+      const found = yield* problems.pipe(provideSetup(clone.layer));
       expect(found).toStrictEqual([
         EffectArray.join(
           [

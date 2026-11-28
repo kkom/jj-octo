@@ -1,8 +1,7 @@
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { BunServices } from "@effect/platform-bun";
-import { Effect, Layer, String as EffectString } from "effect";
+import { type Layer, String as EffectString } from "effect";
 
 import type { Git } from "../clients/git";
 import type { Jj } from "../clients/jj";
@@ -52,11 +51,3 @@ export const gitClone = (
     layerAt: (directory) => layerAt(directory, env, print),
   };
 };
-
-/** Provides the git and jj clients of the layer, and the runtime's own services. */
-export const provideClients =
-  (layer: Layer.Layer<Git | Jj>) =>
-  <A, E, R>(
-    program: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, Exclude<R, BunServices.BunServices | Git | Jj>> =>
-    program.pipe(Effect.provide(Layer.merge(layer, BunServices.layer)));

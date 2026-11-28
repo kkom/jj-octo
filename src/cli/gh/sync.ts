@@ -3,10 +3,9 @@ import { Command, Flag } from "effect/cli";
 
 import type { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { Jj, JjFailed } from "../../clients/jj";
 import type { PrDescriptions } from "../../clients/pr-descriptions";
-import { asUserError, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, withHelp } from "../command";
 import {
   anyOf,
   changeIdsAt,
@@ -162,9 +161,10 @@ export const syncCommand = Command.make(
       Effect.gen(function* () {
         const trunk = yield* checkedTrunk;
         yield* sync({ allWorkspaces, trunk });
-      }).pipe(Effect.provide(GitHubFromOrigin)),
+      }),
     ),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Fetch, and rebase the stacks onto the trunk",
     "Fetches, then rebases the unmerged changes onto the trunk, keeping each on the changes below it. Abandons each change whose pull request merged, and forgets its bookmark, unless you edited the change after the merge.",

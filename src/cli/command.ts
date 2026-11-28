@@ -1,5 +1,20 @@
-import { Array as EffectArray, Context, Effect, Option, String as EffectString } from "effect";
+import {
+  Array as EffectArray,
+  Context,
+  Effect,
+  type FileSystem,
+  Layer,
+  Option,
+  String as EffectString,
+} from "effect";
 import { CliError, CliOutput, Command, Flag } from "effect/cli";
+import type { HttpClient } from "effect/http";
+import type { ChildProcessSpawner } from "effect/process";
+
+import type { Git } from "../clients/git";
+import type { GitHub } from "../clients/github/client";
+import { gitHubLayerFromOrigin } from "../clients/github/origin";
+import type { Jj } from "../clients/jj";
 
 const userError = (message: string): CliError.UserError =>
   CliError.UserError.make({ cause: message, userMessage: message });
@@ -10,6 +25,25 @@ export const asUserError = <A, R>(
   program: Effect.Effect<A, { readonly _tag: string; readonly message: string }, R>,
 ): Effect.Effect<A, CliError.UserError, R> =>
   program.pipe(Effect.mapError(({ message }) => userError(message)));
+
+/**
+ * Provides a command's handler with the GitHub client of the `origin` remote. Only a command that
+ * talks to GitHub builds it, and it fails as the handlers do where `origin` isn't on GitHub.
+ */
+export const provideGitHubFromOrigin = <Name extends string, Input, ContextInput, E, R>(
+  command: Command.Command<Name, Input, ContextInput, E, R>,
+): Command.Command<
+  Name,
+  Input,
+  ContextInput,
+  E | CliError.UserError,
+  | Exclude<R, GitHub>
+  | ChildProcessSpawner.ChildProcessSpawner
+  | FileSystem.FileSystem
+  | Git
+  | HttpClient.HttpClient
+  | Jj
+> => command.pipe(Command.provide(Layer.unwrap(asUserError(gitHubLayerFromOrigin))));
 
 // The summary is the line a parent command lists. The command's own help shows it above the
 // paragraphs, which are indented here because the help formatter only indents the first line.

@@ -2,6 +2,7 @@
 import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Effect, Layer } from "effect";
 import { CliConfig, CliOutput, Command, GlobalFlag, TerminalCapabilities } from "effect/cli";
+import { SecureRandom } from "effect/crypto";
 import { FetchHttpClient } from "effect/http";
 
 import manifest from "../package.json" with { type: "json" };
@@ -11,24 +12,27 @@ import { GitLive } from "./clients/git";
 import { JjLive } from "./clients/jj";
 import { prDescriptionsLayer } from "./clients/pr-descriptions";
 
-BunRuntime.runMain(
-  Command.run(jjGhCommand, { version: manifest.version }).pipe(
-    Effect.provide([GitLive, Layer.provideMerge(prDescriptionsLayer, JjLive)]),
-    // The completions flag is left out. Its script completes a command of this name, but the shell
-    // gives everything after `jj` to jj's own completions.
-    Effect.provide(
-      CliConfig.layer({
-        builtIns: [GlobalFlag.Help, GlobalFlag.Version, GlobalFlag.Wizard, GlobalFlag.LogLevel],
-      }),
+const platform = Layer.mergeAll(
+  BunServices.layer,
+  FetchHttpClient.layer,
+  SecureRandom.layerWebCrypto,
+);
+
+const services = Layer.mergeAll(
+  GitLive,
+  Layer.provideMerge(prDescriptionsLayer, JjLive),
+  // The completions flag is left out. Its script completes a command of this name, but the shell
+  // gives everything after `jj` to jj's own completions.
+  CliConfig.layer({
+    builtIns: [GlobalFlag.Help, GlobalFlag.Version, GlobalFlag.Wizard, GlobalFlag.LogLevel],
+  }),
+  Layer.effect(CliOutput.Formatter)(
+    Effect.map(TerminalCapabilities.TerminalCapabilities, ({ canColor }) =>
+      helpFormatter(canColor),
     ),
-    Effect.provide([
-      BunServices.layer,
-      Layer.effect(CliOutput.Formatter)(
-        Effect.map(TerminalCapabilities.TerminalCapabilities, ({ canColor }) =>
-          helpFormatter(canColor),
-        ),
-      ),
-      FetchHttpClient.layer,
-    ]),
   ),
+).pipe(Layer.provideMerge(platform));
+
+BunRuntime.runMain(
+  Command.run(jjGhCommand, { version: manifest.version }).pipe(Effect.provide(services)),
 );

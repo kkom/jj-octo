@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test";
 import path from "node:path";
 
-import { BunServices } from "@effect/platform-bun";
 import {
   Array as EffectArray,
   Effect,
@@ -89,6 +88,6 @@ describe("tsconfig.json's Effect diagnostics", () => {
       expect(rules.length).toBeGreaterThan(0);
 
       expect(configured).toStrictEqual(rules);
-    }).pipe(Effect.provide(BunServices.layer)),
+    }),
   );
 });

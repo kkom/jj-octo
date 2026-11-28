@@ -4,8 +4,8 @@ import { Effect } from "effect";
 
 import manifest from "../../../package.json" with { type: "json" };
 import { formatJson } from "../../json";
-import { gitClone, provideClients } from "../../testing/git-clone";
-import { itEffect } from "../../testing/it-effect";
+import { gitClone } from "../../testing/git-clone";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
 import { problems } from "./doctor";
 import { init, setUpOnUpgrade } from "./init";
@@ -28,7 +28,7 @@ const ALIAS = 'aliases.gh = ["util","exec","--","jj-octo"]\n';
 const setUpBy = (version: string) =>
   Effect.gen(function* () {
     const clone = gitClone(scratchRepository());
-    yield* init.pipe(provideClients(clone.layer));
+    yield* init.pipe(provideSetup(clone.layer));
     clone.jj("config", "set", "--repo", SET_UP_VERSION, formatJson(version));
     clone.jj("config", "unset", "--repo", "aliases.gh");
     return clone;
@@ -38,7 +38,7 @@ describe("the version that set the checkout up", () => {
   itEffect("is recorded by init", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(recorded(clone)).toBe(THIS_VERSION);
     }),
   );
@@ -47,8 +47,8 @@ describe("the version that set the checkout up", () => {
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
       clone.jj("git", "init", "--colocate");
-      yield* setUpOnUpgrade.pipe(provideClients(clone.layer));
-      expect([yield* problems.pipe(provideClients(clone.layer)), recorded(clone)]).toStrictEqual([
+      yield* setUpOnUpgrade.pipe(provideSetup(clone.layer));
+      expect([yield* problems.pipe(provideSetup(clone.layer)), recorded(clone)]).toStrictEqual([
         [],
         THIS_VERSION,
       ]);
@@ -58,8 +58,8 @@ describe("the version that set the checkout up", () => {
   itEffect("sets up a plain git clone", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* setUpOnUpgrade.pipe(provideClients(clone.layer));
-      expect([yield* problems.pipe(provideClients(clone.layer)), recorded(clone)]).toStrictEqual([
+      yield* setUpOnUpgrade.pipe(provideSetup(clone.layer));
+      expect([yield* problems.pipe(provideSetup(clone.layer)), recorded(clone)]).toStrictEqual([
         [],
         THIS_VERSION,
       ]);
@@ -78,7 +78,7 @@ describe("the version that set the checkout up", () => {
   ])("$title", ({ recorded: version, setsUp }) =>
     Effect.gen(function* () {
       const clone = yield* setUpBy(version);
-      yield* setUpOnUpgrade.pipe(provideClients(clone.layer));
+      yield* setUpOnUpgrade.pipe(provideSetup(clone.layer));
       expect([alias(clone), recorded(clone)]).toStrictEqual(
         setsUp ? [ALIAS, THIS_VERSION] : ["", `${SET_UP_VERSION} = ${formatJson(version)}\n`],
       );
@@ -91,8 +91,8 @@ describe("the version that set the checkout up", () => {
       Effect.gen(function* () {
         const clone = gitClone(scratchRepository());
         clone.git("config", "--unset", "user.email");
-        yield* setUpOnUpgrade.pipe(provideClients(clone.layer));
-        expect([yield* problems.pipe(provideClients(clone.layer)), recorded(clone)]).toStrictEqual([
+        yield* setUpOnUpgrade.pipe(provideSetup(clone.layer));
+        expect([yield* problems.pipe(provideSetup(clone.layer)), recorded(clone)]).toStrictEqual([
           ["neither jj nor git has user.email; set it with `jj config set --user user.email`"],
           THIS_VERSION,
         ]);

@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { Array as EffectArray, Effect, String as EffectString } from "effect";
 
-import { gitClone, provideClients } from "../../testing/git-clone";
-import { itEffect } from "../../testing/it-effect";
+import { gitClone } from "../../testing/git-clone";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import {
   removeScratchRepositories,
   type ScratchRepository,
@@ -32,7 +32,7 @@ describe("init", () => {
   itEffect("colocates a git clone, and copies git's identity into jj", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("config", "get", "user.name")).toBe("Cloner\n");
       expect(clone.jj("config", "get", "user.email")).toBe("cloner@example.com\n");
       expect(clone.jj("log", "--no-graph", "-r", "@", "-T", "author.email()")).toBe(
@@ -47,7 +47,7 @@ describe("init", () => {
       const clone = gitClone(scratchRepository());
       clone.jj("git", "init", "--colocate");
       clone.jj("config", "set", "--repo", "aliases.gh", '["util", "exec", "--", "bun", "main.ts"]');
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("config", "get", "aliases.gh")).toBe(
         '["util", "exec", "--", "bun", "main.ts"]\n',
       );
@@ -58,7 +58,7 @@ describe("init", () => {
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
       writeFileSync(clone.jjConfigFile, 'aliases.gh = ["gh"]\n');
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("config", "list", "--repo", "aliases.gh")).toBe(
         'aliases.gh = ["util","exec","--","jj-octo"]\n',
       );
@@ -68,7 +68,7 @@ describe("init", () => {
   itEffect("copies a name that isn't a bare TOML value, such as a bot's", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository(), "renovate[bot]");
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("config", "get", "user.name")).toBe("renovate[bot]\n");
     }),
   );
@@ -79,7 +79,7 @@ describe("init", () => {
       Effect.gen(function* () {
         const clone = gitClone(scratchRepository());
         clone.git("config", "--unset", "user.email");
-        const failure = yield* Effect.flip(init.pipe(provideClients(clone.layer)));
+        const failure = yield* Effect.flip(init.pipe(provideSetup(clone.layer)));
         expect(failure).toStrictEqual(
           NotSetUp.make({
             message:
@@ -97,7 +97,7 @@ describe("init", () => {
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
       clone.git("remote", "set-url", "origin", "/nonexistent");
-      const failure = yield* Effect.flip(init.pipe(provideClients(clone.layer)));
+      const failure = yield* Effect.flip(init.pipe(provideSetup(clone.layer)));
       expect(failure).toStrictEqual(
         NotSetUp.make({
           message: EffectArray.join(
@@ -121,9 +121,9 @@ describe("init", () => {
   itEffect("fails where a config that overrides the repository's undoes a fix", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       clone.jj("config", "set", "--workspace", 'revset-aliases."trunk()"', "root()");
-      const failure = yield* Effect.flip(init.pipe(provideClients(clone.layer)));
+      const failure = yield* Effect.flip(init.pipe(provideSetup(clone.layer)));
       expect(failure).toStrictEqual(
         NotSetUp.make({
           message:
@@ -138,7 +138,7 @@ describe("init", () => {
       const clone = gitClone(scratchRepository());
       const worktree = path.join(scratchDirectory("worktree-"), "checkout");
       clone.git("worktree", "add", "--detach", worktree);
-      const failure = yield* Effect.flip(init.pipe(provideClients(clone.layerAt(worktree))));
+      const failure = yield* Effect.flip(init.pipe(provideSetup(clone.layerAt(worktree))));
       expect(failure).toStrictEqual(
         NotSetUp.make({
           message:
@@ -154,7 +154,7 @@ describe("init", () => {
       const clone = gitClone(scratchRepository());
       clone.jj("git", "init", "--colocate");
       clone.jj("commit", "-m", "work");
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(
         clone.jj("log", "--no-graph", "-r", "@ | @-", "-T", String.raw`author.email() ++ "\n"`),
       ).toBe("cloner@example.com\ncloner@example.com\n");
@@ -168,7 +168,7 @@ describe("init", () => {
       // Jj makes `trunk()` the default branch it finds when it colocates.
       clone.jj("git", "init", "--colocate");
       defaultToDevelop(repository);
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("config", "get", 'revset-aliases."trunk()"')).toBe('"develop"@origin\n');
       expect(clone.jj("bookmark", "list", "--tracked", "-T", String.raw`name ++ "\n"`)).toContain(
         "develop",
@@ -185,7 +185,7 @@ describe("init", () => {
       repository.jj("git", "push", "--bookmark", "develop");
       const origin = EffectString.trim(repository.git("remote", "get-url", "origin"));
       repository.git("--git-dir", origin, "symbolic-ref", "HEAD", "refs/heads/develop");
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("config", "get", 'revset-aliases."trunk()"')).toBe('"develop"@origin\n');
     }),
   );
@@ -193,9 +193,9 @@ describe("init", () => {
   itEffect("changes nothing when run again", () =>
     Effect.gen(function* () {
       const clone = gitClone(scratchRepository());
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       const operations = clone.jj("operation", "log", "--no-graph", "-T", String.raw`id ++ "\n"`);
-      yield* init.pipe(provideClients(clone.layer));
+      yield* init.pipe(provideSetup(clone.layer));
       expect(clone.jj("operation", "log", "--no-graph", "-T", String.raw`id ++ "\n"`)).toBe(
         operations,
       );
@@ -208,12 +208,12 @@ describe("checkTrunk", () => {
     Effect.gen(function* () {
       const repository = scratchRepository();
       defaultToDevelop(repository);
-      const check = checkTrunk("develop").pipe(Effect.provide(repository.layer));
+      const check = checkTrunk("develop").pipe(provideSetup(repository.layer));
       const failure = yield* Effect.flip(check);
       expect(failure.message).toBe(
         "trunk() isn't develop@origin, GitHub's default branch; run `jj-octo init`",
       );
-      yield* init.pipe(provideClients(repository.layer));
+      yield* init.pipe(provideSetup(repository.layer));
       yield* check;
     }),
   );

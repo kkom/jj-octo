@@ -1,13 +1,29 @@
 import { it, onTestFinished } from "bun:test";
 
+import { BunServices } from "@effect/platform-bun";
 import { Array as EffectArray, Cause, Clock, Effect, Layer, type Scope } from "effect";
 import { constVoid } from "effect/Function";
 import { TestClock, TestConsole } from "effect/testing";
 
-/** What every test's effect may ask for, besides the layers it provides itself. */
-export type TestServices = Scope.Scope | TestClock.TestClock | TestConsole.TestConsole;
+/** What every test's effect may ask for, besides the services its own setup builds. */
+export type TestServices =
+  | BunServices.BunServices
+  | Scope.Scope
+  | TestClock.TestClock
+  | TestConsole.TestConsole;
 
-const testServices = Layer.mergeAll(TestConsole.layer, TestClock.layer());
+const testServices = Layer.mergeAll(BunServices.layer, TestConsole.layer, TestClock.layer());
+
+/**
+ * Provides a test's program with the services its own setup built, such as a scratch repository's
+ * clients or a fake GitHub. Tests and testing modules provide those through this, not
+ * `Effect.provide`.
+ */
+export const provideSetup =
+  <ROut, E2, RIn>(layer: Layer.Layer<ROut, E2, RIn>) =>
+  <A, E, R>(program: Effect.Effect<A, E, R>): Effect.Effect<A, E | E2, Exclude<R, ROut> | RIn> =>
+    // @effect-diagnostics-next-line strictEffectProvide:off -- a test's program runs here, with the services its own setup built
+    program.pipe(Effect.provide(layer));
 
 /**
  * Sets the `TestClock` to the real time, for a test whose code compares the clock with a time
@@ -27,7 +43,6 @@ const runTest = <A, E>(effect: Effect.Effect<A, E, TestServices>): Promise<A> =>
   const promise = Effect.runPromise(
     effect.pipe(
       Effect.scoped,
-      Effect.provide(testServices),
       // The test fails with the cause's first error, and the log gets the rest. Rejecting with
       // the cause itself would report its first typed failure, ahead of a defect before it.
       Effect.catchCause((cause) =>
@@ -39,6 +54,7 @@ const runTest = <A, E>(effect: Effect.Effect<A, E, TestServices>): Promise<A> =>
             ),
         }),
       ),
+      Effect.provide(testServices),
     ),
     { signal: controller.signal },
   );

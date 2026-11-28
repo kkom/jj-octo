@@ -12,6 +12,7 @@ import { GitHub, GitHubLive } from "../clients/github/client";
 import type { GitHubFailed } from "../clients/github/failure";
 import { environment } from "./environment";
 import { type InterceptedRequest, throughProxy } from "./intercepting-proxy";
+import { provideSetup } from "./it-effect";
 
 // Runs `use` with the real client, against a GitHub that answers as `respond` does, with `env` as
 // the environment. Returns what it produced and the requests GitHub received, without the proxy's
@@ -26,9 +27,10 @@ export const withGitHub = <A, E>(
       { name: "name", owner: "owner" },
       { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
     );
-    return Effect.provide(
-      GitHub.use(use),
-      live.pipe(Layer.provideMerge(FetchHttpClient.layer), Layer.provideMerge(environment(env))),
+    return GitHub.use(use).pipe(
+      provideSetup(
+        live.pipe(Layer.provideMerge(FetchHttpClient.layer), Layer.provideMerge(environment(env))),
+      ),
     );
   }).pipe(
     Effect.map(({ log, result }) => ({

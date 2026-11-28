@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { Effect, String as EffectString } from "effect";
 
-import { gitClone, provideClients } from "../testing/git-clone";
-import { itEffect } from "../testing/it-effect";
+import { gitClone } from "../testing/git-clone";
+import { itEffect, provideSetup } from "../testing/it-effect";
 import { removeScratchRepositories, scratchRepository } from "../testing/scratch-repository";
 import { GitFailed, gitConfig } from "./git";
 
@@ -17,7 +17,7 @@ describe("gitConfig", () => {
     () =>
       Effect.gen(function* () {
         const clone = gitClone(scratchRepository());
-        const value = yield* gitConfig(["jj-octo.no-such-key"]).pipe(provideClients(clone.layer));
+        const value = yield* gitConfig(["jj-octo.no-such-key"]).pipe(provideSetup(clone.layer));
         expect(value).toBe("");
         const config = path.join(
           EffectString.trim(clone.git("rev-parse", "--absolute-git-dir")),
@@ -25,7 +25,7 @@ describe("gitConfig", () => {
         );
         appendFileSync(config, "[\n");
         const failure = yield* Effect.flip(gitConfig(["jj-octo.no-such-key"])).pipe(
-          provideClients(clone.layer),
+          provideSetup(clone.layer),
         );
         const badLine = EffectString.split(readFileSync(config, "utf8"), "\n").length - 1;
         expect(failure).toStrictEqual(

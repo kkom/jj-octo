@@ -5,7 +5,7 @@ import { Effect, Option } from "effect";
 import { GitHub } from "../../clients/github/client";
 import { PullRequestNumberSchema, StackNumberSchema } from "../../clients/github/types";
 import { fakeGitHub } from "../../testing/fake-github";
-import { itEffect } from "../../testing/it-effect";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import { stackNumbered } from "../../testing/pull-requests";
 import { dissolve, NoSuchStack } from "./dissolve";
 
@@ -26,7 +26,7 @@ describe("dissolve", () => {
             );
           }),
         ),
-        Effect.provide(github.layer),
+        provideSetup(github.layer),
       );
       expect(github.calls).toStrictEqual(["unstack #7"]);
       expect(stacks).toStrictEqual([Option.some(stackNumbered(9, 1, 2)), Option.none()]);
@@ -37,7 +37,7 @@ describe("dissolve", () => {
     Effect.gen(function* () {
       const github = fakeGitHub({}, [stackNumbered(7, 3)]);
       const failure = yield* Effect.flip(
-        dissolve(StackNumberSchema.make(77)).pipe(Effect.provide(github.layer)),
+        dissolve(StackNumberSchema.make(77)).pipe(provideSetup(github.layer)),
       );
       expect(failure).toStrictEqual(
         NoSuchStack.make({ message: "this repository has no stack #77" }),

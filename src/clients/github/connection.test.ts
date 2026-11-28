@@ -2,13 +2,12 @@ import { afterAll, describe, expect } from "bun:test";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { BunServices } from "@effect/platform-bun";
 import { Effect, Layer, Option, Redacted } from "effect";
 
 import { GITHUB_AUTH } from "../../settings";
 import { environment } from "../../testing/environment";
 import { gitClone } from "../../testing/git-clone";
-import { itEffect } from "../../testing/it-effect";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import {
   removeScratchRepositories,
   scratchDirectory,
@@ -22,7 +21,7 @@ afterAll(removeScratchRepositories);
 const checkout = (env: Readonly<Record<string, string>> = {}) => {
   const clone = gitClone(scratchRepository());
   clone.jj("git", "init", "--colocate");
-  const layer = Layer.mergeAll(clone.layer, BunServices.layer, environment(env));
+  const layer = Layer.mergeAll(clone.layer, environment(env));
   const resolved = connection.pipe(
     Effect.map(({ proxy, token }) => ({
       proxy: Option.getOrUndefined(
@@ -30,9 +29,9 @@ const checkout = (env: Readonly<Record<string, string>> = {}) => {
       ),
       token: Redacted.value(token),
     })),
-    Effect.provide(layer),
+    provideSetup(layer),
   );
-  const failure = Effect.flip(connection.pipe(Effect.provide(layer))).pipe(
+  const failure = Effect.flip(connection.pipe(provideSetup(layer))).pipe(
     Effect.map(({ message }) => message),
   );
   return { ...clone, failure, resolved };

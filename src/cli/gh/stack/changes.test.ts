@@ -3,7 +3,7 @@ import { afterAll, describe, expect } from "bun:test";
 import { Array as EffectArray, Effect } from "effect";
 
 import { conflictWithTrunk } from "../../../testing/conflicts";
-import { itEffect } from "../../../testing/it-effect";
+import { itEffect, provideSetup } from "../../../testing/it-effect";
 import { removeScratchRepositories, scratchRepository } from "../../../testing/scratch-repository";
 import { NotAStack, stackChanges, withoutConflicts } from "./changes";
 
@@ -14,7 +14,7 @@ describe("stackBookmarks", () => {
     Effect.gen(function* () {
       const repository = scratchRepository();
       repository.stack("a", "b");
-      const stack = yield* stackChanges("@").pipe(Effect.provide(repository.layer));
+      const stack = yield* stackChanges("@").pipe(provideSetup(repository.layer));
       expect(EffectArray.map(stack, ({ bookmark }) => bookmark)).toEqual(["a", "b"]);
       expect(EffectArray.map(stack, ({ description }) => description)).toEqual(["a\n", "b\n"]);
     }),
@@ -30,7 +30,7 @@ describe("stackBookmarks", () => {
       const changeOf = read("change_id");
       const commitOf = read("commit_id");
       const shortOf = read("change_id.shortest(8)");
-      const stack = yield* stackChanges("@").pipe(Effect.provide(repository.layer));
+      const stack = yield* stackChanges("@").pipe(provideSetup(repository.layer));
       expect(stack).toStrictEqual(
         EffectArray.map(
           [
@@ -65,7 +65,7 @@ describe("stackBookmarks", () => {
       const repository = scratchRepository();
       repository.stack("a", "b");
       repository.jj("new", "a", "-m", "c");
-      const failure = yield* Effect.flip(stackChanges("@")).pipe(Effect.provide(repository.layer));
+      const failure = yield* Effect.flip(stackChanges("@")).pipe(provideSetup(repository.layer));
       expect(failure).toBeInstanceOf(NotAStack);
       expect(failure.message).toContain("several heads");
     }),
@@ -76,7 +76,7 @@ describe("stackBookmarks", () => {
       const repository = scratchRepository();
       repository.stack("a", "b");
       repository.jj("bookmark", "delete", "a");
-      const failure = yield* Effect.flip(stackChanges("@")).pipe(Effect.provide(repository.layer));
+      const failure = yield* Effect.flip(stackChanges("@")).pipe(provideSetup(repository.layer));
       expect(failure.message).toContain("needs a bookmark");
     }),
   );
@@ -86,7 +86,7 @@ describe("stackBookmarks", () => {
       const repository = scratchRepository();
       repository.stack("a", "b");
       repository.jj("bookmark", "create", "extra", "-r", "a");
-      const failure = yield* Effect.flip(stackChanges("@")).pipe(Effect.provide(repository.layer));
+      const failure = yield* Effect.flip(stackChanges("@")).pipe(provideSetup(repository.layer));
       expect(failure.message).toContain("several bookmarks");
     }),
   );

@@ -6,7 +6,7 @@ import { BunServices } from "@effect/platform-bun";
 import { Array as EffectArray, Effect, Layer, String as EffectString } from "effect";
 
 import { environment } from "../testing/environment";
-import { itEffect } from "../testing/it-effect";
+import { itEffect, provideSetup } from "../testing/it-effect";
 import { removeScratchRepositories, scratchDirectory } from "../testing/scratch-repository";
 import { Clipboard, ClipboardFailed, clipboardLayer, MACOS_SCRIPT } from "./clipboard";
 
@@ -18,7 +18,7 @@ const content = {
 };
 
 const writeWith = (layer: Layer.Layer<Clipboard>) =>
-  Effect.flatMap(Clipboard, (clipboard) => clipboard.write(content)).pipe(Effect.provide(layer));
+  Effect.flatMap(Clipboard, (clipboard) => clipboard.write(content)).pipe(provideSetup(layer));
 
 const layerFor = (platform: string, env: Readonly<Record<string, string>> = {}) =>
   clipboardLayer({ platform }).pipe(Layer.provide([BunServices.layer, environment(env)]));

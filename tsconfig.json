@@ -162,7 +162,7 @@
           "scopeInLayerEffect": "error",
           "serviceNotAsClass": "error",
           "strictBooleanExpressions": "error",
-          "strictEffectProvide": "off", // undecided
+          "strictEffectProvide": "error",
           "suspendFailToFailSync": "error",
           "syncToSucceed": "error",
           "timeoutCatchTagToTimeoutOrElse": "error",

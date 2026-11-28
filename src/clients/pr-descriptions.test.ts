@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { DateTime, Effect, Option, String as EffectString } from "effect";
 
-import { itEffect, setTestClockToLiveTime } from "../testing/it-effect";
+import { itEffect, provideSetup, setTestClockToLiveTime } from "../testing/it-effect";
 import {
   removeScratchRepositories,
   type ScratchRepository,
@@ -39,7 +39,7 @@ describe("PrDescriptions", () => {
       yield* repository.records((store) => store.write(record));
       const read = yield* Effect.flatMap(PrDescriptions, (store) =>
         store.read(pullRequest, "a"),
-      ).pipe(Effect.provide(repository.layerAt(workspace)));
+      ).pipe(provideSetup(repository.layerAt(workspace)));
       expect(read).toStrictEqual(
         Option.some({ bookmark: "a", commit: "abc", description: "a\n\nbody" }),
       );
