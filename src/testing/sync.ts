@@ -8,7 +8,7 @@ import type { JjFailed } from "../clients/jj";
 import type { RepositoryClients } from "./scratch-process";
 import { ScratchRepository } from "./scratch-repository";
 
-/** Changes a file of the change `a`, which the working copy sits two changes above. */
+/** Adds a file to change `a`, two changes below the working copy. */
 export const editLocally: Effect.Effect<void, never, ScratchRepository> = ScratchRepository.use(
   (repository) =>
     Effect.gen(function* () {
@@ -18,10 +18,7 @@ export const editLocally: Effect.Effect<void, never, ScratchRepository> = Scratc
     }),
 );
 
-/**
- * Syncs onto `main`. `allWorkspaces` also syncs the stacks that only other workspaces' working
- * copies are on.
- */
+/** Syncs onto `main`. */
 export const syncing = ({ allWorkspaces = false } = {}): Effect.Effect<
   void,
   GitHubFailed | JjFailed | NotCombined,

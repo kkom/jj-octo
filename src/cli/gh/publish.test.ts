@@ -17,7 +17,7 @@ import { pushedStack, ScratchRepository } from "../../testing/scratch-repository
 import { NotPublishable, publish } from "./publish";
 import { NotAStack } from "./stack/changes";
 
-// Whether each bookmark's open pull request is a draft, as the fake GitHub reports it afterwards.
+// Whether each bookmark's open pull request is a draft.
 const draftsOf = (bookmarks: readonly string[]) =>
   Effect.forEach(
     bookmarks,

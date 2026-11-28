@@ -62,8 +62,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubAB))("sync", (it) => {
       }).toStrictEqual({ bookmarks: "", log: ["b [b]"] });
     }));
 
-  // The fetch deletes the bookmark of a branch deleted on GitHub, so there's nothing left to
-  // forget.
+  // The fetch deletes the bookmark of a branch GitHub deleted, so nothing is left to forget.
   it("abandons a merged change whose branch GitHub deleted, without a warning", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
@@ -77,9 +76,9 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubAB))("sync", (it) => {
       }).toStrictEqual({ bookmarks: "", log: ["b [b]"], warned: false });
     }));
 
-  // GitHub merges a stack as one commit, on a trunk that moved since the stack was pushed. Rebased
-  // onto the trunk, `a` would conflict with `b`'s edit of the same file, rather than come out
-  // empty. The branches are still on GitHub, so the fetch doesn't drop the changes either.
+  // GitHub merges the stack as one commit, on a trunk that moved since the push. Rebased onto the
+  // trunk, `a` would conflict with `b`'s edit, not come out empty. The branches are still on
+  // GitHub, so the fetch doesn't drop the changes either.
   it("abandons every change whose pull request merged, and rebases the rest onto the trunk", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;

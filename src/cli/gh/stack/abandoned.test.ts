@@ -10,7 +10,6 @@ import { pushedStack, ScratchRepository } from "../../../testing/scratch-reposit
 import { submitting } from "../../../testing/submit";
 import { CLOSED_COMMENT } from "./abandoned";
 
-// Which pull requests submit closes once their change has left the stack.
 layer(Layer.merge(pushedStack("a", "b", "c"), fakeGitHub))(
   "submit after a change left the stack",
   (it) => {

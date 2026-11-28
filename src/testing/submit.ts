@@ -17,7 +17,7 @@ export const submitting = ({
 } = {}): Effect.Effect<void, SubmitFailed, GitHub | RepositoryClients> =>
   submit(revision, { draft, overwriteDescriptions });
 
-/** Describes `a`, of the pushed stack `a`, `b`, as three paragraphs, and pushes it again. */
+/** Describes `a` of the pushed stack `a`, `b` as three paragraphs, and pushes it again. */
 export const describeAInParagraphs: Effect.Effect<void, never, ScratchRepository> =
   ScratchRepository.use((repository) =>
     Effect.gen(function* () {

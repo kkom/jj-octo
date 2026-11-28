@@ -8,15 +8,14 @@ import { type PrDescriptions, prDescriptionsLayer } from "../clients/pr-descript
 import { readOutput } from "../clients/process";
 import { scratchParent } from "./templates";
 
-/** The platform services that the scratch repositories run on. */
 export type ScratchServices =
   | ChildProcessSpawner.ChildProcessSpawner
   | FileSystem.FileSystem
   | Path.Path;
 
 /**
- * The platform services alone, picked out of the current context. A fixture keeps them to build
- * clients later, which then go to the caller's `Scope` rather than the fixture's.
+ * The `ScratchServices` of the current context. A fixture keeps them to build clients later, in
+ * the caller's `Scope` rather than the fixture's.
  */
 export const scratchServices: Effect.Effect<
   Context.Context<ScratchServices>,
@@ -27,7 +26,7 @@ export const scratchServices: Effect.Effect<
   Context.pick(ChildProcessSpawner.ChildProcessSpawner, FileSystem.FileSystem, Path.Path),
 );
 
-/** A new directory, removed when the test's scope closes. */
+/** A new directory, removed when the scope closes. */
 export const scratchDirectory = (
   prefix: string,
 ): Effect.Effect<string, never, FileSystem.FileSystem | Path.Path | Scope.Scope> =>
@@ -37,23 +36,17 @@ export const scratchDirectory = (
     return yield* Effect.orDie(fs.makeTempDirectoryScoped({ directory: parent, prefix }));
   });
 
-/** The jj config file in the root, which jj reads in place of the user's. */
+/** The file jj reads in place of the user's config. */
 export const jjConfigFile = (root: string): string => `${root}/config.toml`;
 
-/**
- * The environment that keeps git and jj from reading the configuration of whoever runs the tests.
- * jj reads `jjConfigFile(root)` instead.
- */
+/** Keeps git and jj from reading the configuration of whoever runs the tests. */
 export const isolatedEnv = (root: string): Readonly<Record<string, string>> => ({
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
   JJ_CONFIG: jjConfigFile(root),
 });
 
-/**
- * Runs a command in a directory with the environment, and returns what it printed. It dies with
- * what the command printed to stderr where it fails.
- */
+/** Runs a command and returns its stdout. Where it fails, dies with its stderr. */
 export const makeExecutor = (
   env: Readonly<Record<string, string>>,
 ): Effect.Effect<
@@ -81,13 +74,11 @@ export const makeExecutor = (
         ).pipe(Effect.orDie),
   );
 
-/** The git, jj and pull request description clients that `clientsIn` builds. */
 export type RepositoryClients = Git | Jj | PrDescriptions;
 
 /**
- * Builds the git, jj and pull request description clients, running in a directory with the
- * environment, as a `Context` for `Effect.provide`. What jj commands that change something print
- * goes to `printed`, rather than into the test's output.
+ * Builds the `RepositoryClients` in a directory. What jj commands that change something print goes
+ * to `printed`, not the test's output.
  */
 export const clientsIn = (
   cwd: string,

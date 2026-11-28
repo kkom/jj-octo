@@ -21,7 +21,7 @@ export const status = (name: string, outcome: string, state: Check["state"]): Ch
   state,
 });
 
-/** Required checks of the names, each from any app. */
+/** Required checks with the names, each from any app. */
 export const requiring = (...names: readonly string[]): RequiredChecks => ({
   _tag: "Known",
   checks: EffectArray.map(names, (name) => ({ app: Option.none(), name })),

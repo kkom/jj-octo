@@ -11,8 +11,8 @@ import { connection } from "./connection";
 import { GitHubFailed } from "./failure";
 
 /**
- * Makes the clone a colocated jj repository, and returns the clone with the connection it resolves
- * and the failure it fails with, each in an environment holding `env`.
+ * Makes the clone a colocated jj repository. Returns it with the connection it resolves and the
+ * failure it fails with, each in an environment holding `env`.
  */
 const checkout = (env: Readonly<Record<string, string>> = {}) =>
   Effect.gen(function* () {

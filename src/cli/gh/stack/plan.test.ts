@@ -143,7 +143,7 @@ describe("titleAndBody", () => {
   });
 });
 
-// Every description of up to four lines built from these, which covers blank, indented and
+// Every description of up to four lines built from these, covering blank, indented and
 // whitespace-only lines in each position.
 const lineKinds = ["", "  ", "Text", "    code", "\tcode", "  - nested", "Text  "];
 const withLine = (prefixes: readonly string[]): string[] =>

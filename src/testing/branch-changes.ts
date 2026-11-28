@@ -6,9 +6,8 @@ import { ScratchRepository } from "./scratch-repository";
 // What GitHub does to branches by itself, done in the worktree of `origin`.
 
 /**
- * Detaches `HEAD` at a branch in the worktree of `origin`, runs `work`, then points the branch at
- * `HEAD`. `HEAD` stays detached, since git rejects jj's push to a branch that a worktree has
- * checked out.
+ * Detaches `HEAD` at a branch, runs `work`, then points the branch at `HEAD`. `HEAD` stays
+ * detached, since git rejects a push to a branch that a worktree has checked out.
  */
 export const changeOnGitHub = <A, E, R>(
   branch: string,
@@ -46,7 +45,7 @@ export const moveTrunkOnGitHub = (
 
 /**
  * Moves `main`, then rebases a branch onto it, as the "Update branch" button does. With `extra`,
- * the rewritten commit also gets a file the branch didn't have.
+ * also adds a new file to the rewritten commit.
  */
 export const rebaseOnGitHub = (
   branch: string,
@@ -69,8 +68,8 @@ export const rebaseOnGitHub = (
   });
 
 /**
- * Adds a file to the change of each branch in another jj checkout, and force-pushes them. Unlike
- * a rewrite by GitHub, the rewritten commits keep the ids of the local changes.
+ * Adds a file to each branch's change in another jj checkout, and force-pushes them. Unlike a
+ * rewrite by GitHub, the commits keep the local changes' ids.
  */
 export const rewriteElsewhere = (
   ...branches: readonly string[]
@@ -101,10 +100,9 @@ export const rewriteElsewhere = (
   });
 
 /**
- * Squash-merges a branch into `into`, `main` by default, as one commit, together with the
- * branches `below` it, as GitHub's stack merge does. Records each one's pull request as merged on
- * the fake GitHub, and dies where one has none. With `deleted`, also deletes the branches. Rebases
- * the branches `above` it onto the new `into` in order, as GitHub does for the rest of a stack.
+ * Squash-merges a branch and the branches `below` it into `into` as one commit, as GitHub's stack
+ * merge does, and records their pull requests as merged. With `deleted`, deletes the branches.
+ * Rebases the branches `above` onto the new `into` in order, as GitHub does for the rest.
  */
 export const squashMergeOnGitHub = (
   branch: string,
@@ -144,8 +142,8 @@ export const squashMergeOnGitHub = (
         );
       }),
     );
-    // Each branch above moves onto the one rebased before it, and leaves the commits of the
-    // branch below it behind.
+    // Each branch above moves onto the one rebased before it, leaving the old commits of the
+    // branch below behind.
     const top = yield* headOf(branch);
     yield* Effect.reduce(
       above,

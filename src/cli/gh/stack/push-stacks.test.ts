@@ -14,10 +14,9 @@ import { ScratchRepository, scratchRepository } from "../../../testing/scratch-r
 import { submitting } from "../../../testing/submit";
 import { SeveralStacks } from "./stacks";
 
-// How submit changes the GitHub stacks its pull requests are in.
 layer(Layer.merge(scratchRepository, fakeGitHub))("submit's stacks", (it) => {
-  // As after a pull request on top of the stack is closed, its change dropped, and another pushed
-  // in its place: GitHub adds only above the closed one, whose head no new pull request is on.
+  // The top pull request was closed, its change dropped, and another pushed in its place. GitHub
+  // adds only above the closed one, whose head no new pull request is on.
   it("registers the stack again where its top pull request was closed without merging", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
@@ -29,8 +28,8 @@ layer(Layer.merge(scratchRepository, fakeGitHub))("submit's stacks", (it) => {
     }));
 
   // GitHub rejects a base change on a pull request in a stack, and closes a pull request whose
-  // head becomes reachable from its base. So the stack goes first, the moved pull request is parked
-  // on the trunk before the push, and it gets its new base and a new stack after.
+  // head becomes reachable from its base. So submit dissolves the stack, bases the moved pull
+  // requests on the trunk, pushes, then sets their new bases and a new stack.
   it("reorders by dissolving, parking on the trunk, pushing, then rebasing and registering", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
@@ -48,8 +47,8 @@ layer(Layer.merge(scratchRepository, fakeGitHub))("submit's stacks", (it) => {
       ]);
     }));
 
-  // Submit changes only the one stack its pull requests are in. Taking a pull request out of
-  // another stack would dissolve that stack, so it's left to an explicit `jj gh dissolve`.
+  // Taking a pull request out of another stack would dissolve that stack, so submit leaves that to
+  // `jj gh dissolve`.
   it("fails without changing GitHub where the pull requests belong to several stacks", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;

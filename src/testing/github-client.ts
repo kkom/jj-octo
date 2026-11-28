@@ -18,10 +18,7 @@ import {
   interceptingProxy,
 } from "./intercepting-proxy";
 
-/**
- * The real client for the repository `owner/name`, sending its requests through an intercepting
- * proxy for `api.github.com`, which answers as `callGitHub` tells it.
- */
+/** The real client for `owner/name`, sending its requests through a proxy for `api.github.com`. */
 export const gitHubThroughProxy: Layer.Layer<
   GitHub | InterceptingProxy,
   never,
@@ -39,8 +36,8 @@ export const gitHubThroughProxy: Layer.Layer<
 );
 
 /**
- * Answers GitHub's requests as `respond` does, and runs `use` with the client. Returns what it
- * produced and the requests GitHub received, without the proxy's CONNECTs.
+ * Answers GitHub's requests with `respond`, and runs `use` with the client. Returns its result and
+ * the requests, without the CONNECTs.
  */
 export const callGitHub = <A, E>(
   respond: (request: InterceptedRequest) => unknown,
@@ -61,7 +58,7 @@ export const callGitHub = <A, E>(
     };
   });
 
-// The search for open and approved pull requests with the terms, and the page it reads.
+// The path of a page of the search for open, approved pull requests with the terms.
 export const searchPath = (terms: string, page = 1): string =>
   `/search/issues?${new URLSearchParams([
     ["order", "asc"],

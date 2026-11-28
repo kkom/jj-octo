@@ -28,11 +28,9 @@ const indexed = (
   number,
 });
 
-// A GitHub whose search lists the open and approved pull requests of the index, as GitHub's does: a
-// number matches the pull request with it and any that mention it, `created:` matches a range of
-// creation times, and no page lists results beyond the first 1000. A search whose text, without
-// its qualifiers, is longer than 256 characters fails. A search that timed out sets
-// `incomplete_results`.
+// A GitHub whose search lists the index's open and approved pull requests, as GitHub's own search
+// does: numbers match the pull request and those mentioning it, `created:` ranges filter, the text
+// fits in 256 characters, results stop at 1000, and a timeout sets `incomplete_results`.
 const searchOf =
   (index: readonly Indexed[], timedOut = false) =>
   ({ path }: InterceptedRequest): unknown => {
@@ -112,7 +110,7 @@ layer(gitHubThroughProxy)("approvedPullRequests", (it) => {
       });
     }));
 
-  it("searches for more pull requests than one search's text fits in several searches", () =>
+  it("splits pull requests that don't fit in one search's text across several searches", () =>
     Effect.gen(function* () {
       // 42 five-digit numbers and the spaces between them are 251 characters, and 43 are 257.
       const numbers = Array.from({ length: 50 }, (_, offset) => 10_000 + offset);

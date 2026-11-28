@@ -3,9 +3,8 @@ import { Effect, FileSystem, Path, type Scope, String as EffectString } from "ef
 import { scratchDirectory } from "./scratch-process";
 
 /**
- * Copies a scratch repository's directory, with its `origin.git`, `repository` and `github`, to
- * `to`. Rewrites the absolute paths in `repository`'s git configuration and in the links between
- * `origin.git` and its worktree `github`.
+ * Copies a scratch repository's directory, and rewrites the absolute paths in `repository`'s git
+ * configuration and in the links between `origin.git` and its worktree `github`.
  */
 export const copyRepository = (
   from: string,
@@ -31,10 +30,7 @@ export const copyRepository = (
     );
   }).pipe(Effect.orDie);
 
-/**
- * Copies the scratch repository in `template` into a new directory, and returns it. The directory
- * is removed when the scope closes.
- */
+/** Copies the scratch repository in `template` into a new scoped directory, and returns it. */
 export const scratchCopyOf = (
   template: string,
 ): Effect.Effect<string, never, FileSystem.FileSystem | Path.Path | Scope.Scope> =>

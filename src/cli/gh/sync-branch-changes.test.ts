@@ -120,9 +120,9 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync", (it) => {
         });
       }));
 
-    // Another checkout's commits keep the ids of the local changes, so a change that isn't
-    // combined has two commits with one id while its stack is rebased. A sync rebases a stack
-    // and pushes nothing, so the local changes differ from the pushed ones without being edited.
+    // Another checkout's commits keep the local changes' ids, so while the stack is rebased, a
+    // change that isn't combined has two commits with one id. A sync pushes nothing, so the local
+    // changes differ from the pushed ones without being edited.
     it("fails after rebasing where another checkout rewrote changes a sync had rebased", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;

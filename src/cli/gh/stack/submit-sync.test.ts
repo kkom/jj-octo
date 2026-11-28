@@ -61,7 +61,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubHolding(setUpPullRequestsAB()
         expect(log).toStrictEqual(["elsewhere []"]);
       }));
 
-    it("fails before pushing anything where the sync gives a submitted change conflicts", () =>
+    it("fails before pushing where the sync leaves a submitted change conflicted", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;
         const branchesBefore = yield* repository.branches;
@@ -143,7 +143,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHubHolding(setUpPullRequestsAB()
         }).toStrictEqual({ below: "base", files: ["a.txt", "b.txt", "base.txt", "trunk.txt"] });
       }));
 
-    // GitHub rewrote `a` onto a trunk that has moved on since, so the sync rebases the stack again.
+    // GitHub rewrote `a` onto a trunk that has moved since, so the sync rebases the stack again.
     it("rebases onto the trunk a stack whose bottom GitHub rewrote", () =>
       Effect.gen(function* () {
         const repository = yield* ScratchRepository;

@@ -28,7 +28,7 @@ export interface InterceptedRequest {
   readonly path: string;
 }
 
-/** An answer with a status other than 200, which `respond` returns in place of the JSON alone. */
+/** An answer with a status other than 200, which `respond` returns in place of bare JSON. */
 export class Reply {
   public readonly body: unknown;
   public readonly status: number;
@@ -39,7 +39,7 @@ export class Reply {
   }
 }
 
-// Each host's certificate and key, made once per process, since openssl takes a while.
+// Each host's certificate and key, made once per process, since openssl is slow.
 const certificates = new Map<string, { readonly cert: string; readonly key: string }>();
 
 const certificateFor = (
@@ -94,8 +94,8 @@ const certificateFor = (
     }),
   );
 
-// Listens on a free port of the loopback address, and returns the port. The scope closes the
-// server, after `beforeClose` has ended the connections it holds open.
+// Listens on a free loopback port and returns it. The scope runs `beforeClose`, then closes the
+// server.
 const listen = (server: Server, beforeClose: () => void) =>
   Effect.acquireRelease(
     Effect.callback<number>((resume) => {
@@ -123,32 +123,28 @@ const listen = (server: Server, beforeClose: () => void) =>
   );
 
 /**
- * A proxy that answers HTTPS requests to one host itself, as a sandbox's proxy does. It accepts
- * each CONNECT, and answers inside the tunnel with a self-signed certificate for the host.
+ * A proxy that answers HTTPS requests to one host itself, as a sandbox's proxy does. Inside each
+ * CONNECT tunnel, it answers with a self-signed certificate for the host.
  */
 export class InterceptingProxy extends Context.Service<
   InterceptingProxy,
   {
-    /** Answers each later request to the host with the JSON `respond` returns, or the `Reply`. */
+    /** Answers each later request with the JSON or the `Reply` that `respond` returns. */
     readonly answer: (respond: (request: InterceptedRequest) => unknown) => Effect.Effect<void>;
-    /** The proxy's certificate, in PEM, which a client trusts as its certificate authority. */
+    /** The proxy's certificate in PEM, which a client trusts as its certificate authority. */
     readonly ca: string;
     /** A file holding `ca`. */
     readonly caFile: string;
-    /**
-     * Each CONNECT and request the proxy received, in order, as `CONNECT host:port` or
-     * `GET host/path`.
-     */
+    /** Each CONNECT and request, in order, as `CONNECT host:port` or `GET host/path`. */
     readonly log: Effect.Effect<readonly string[]>;
-    /** Each request the proxy received inside a tunnel, in order. */
+    /** Each request received inside a tunnel, in order. */
     readonly requests: Effect.Effect<readonly InterceptedRequest[]>;
     readonly url: string;
   }
 >()("jj-octo/testing/intercepting-proxy/InterceptingProxy") {}
 
 /**
- * A proxy for the host, which answers each request with GitHub's 404 until a test calls
- * `answer`. It stops when the layer's scope closes.
+ * A proxy for the host, which answers each request with GitHub's 404 until a test calls `answer`.
  */
 export const interceptingProxy = (
   host: string,
@@ -197,8 +193,7 @@ export const interceptingProxy = (
     }),
   );
 
-// The HTTPS server inside the tunnel, which records each request and answers it as `respond` does.
-// It returns the server's port, and stops with the scope.
+// The HTTPS server inside the tunnel. Returns its port, and stops with the scope.
 const serveOrigin = ({
   cert,
   key,
@@ -237,9 +232,8 @@ const serveOrigin = ({
     );
   });
 
-// The proxy, which records each CONNECT and tunnels it to the origin's port. A plain TCP server has
-// no `closeAllConnections`, so it keeps both ends of each tunnel for `destroySockets` to close.
-// The origin then has no connection left when its scope stops it, so its graceful stop ends.
+// Tunnels each CONNECT to the origin's port. A TCP server has no `closeAllConnections`, so it keeps
+// both ends of each tunnel for `destroySockets`. Otherwise the origin's graceful stop never ends.
 const proxyServer = (port: number, record: (line: string) => void) => {
   const sockets = new Set<Socket>();
   const server = createServer((client) => {
@@ -248,7 +242,7 @@ const proxyServer = (port: number, record: (line: string) => void) => {
       sockets.delete(client);
     });
     let head = "";
-    // A client that rejects the certificate resets the tunnel, which is no failure of the proxy.
+    // A client that rejects the certificate resets the tunnel, which isn't the proxy failing.
     client.on("error", () => {
       client.destroy();
     });
@@ -258,7 +252,7 @@ const proxyServer = (port: number, record: (line: string) => void) => {
       if (Option.isNone(end)) {
         return;
       }
-      // Paused until `pipe` resumes it, so no bytes go by while the tunnel connects.
+      // Paused until `pipe` resumes it, so no bytes are lost while the tunnel connects.
       client.pause();
       client.off("data", onData);
       const [method, target] = EffectString.split(

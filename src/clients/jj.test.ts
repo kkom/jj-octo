@@ -63,8 +63,8 @@ layer(gitClone())("jjConfig", (it) => {
 const dryRun = (args: readonly string[]) => Jj.use((jj) => jj.dryRun(args));
 
 layer(scratchRepository)("Jj.dryRun", (it) => {
-  // For the edited file, jj snapshots the working copy in an operation of its own, whose id it
-  // prints first.
+  // Here jj snapshots the working copy in an operation of its own, and prints that operation's
+  // id first.
   it("leaves the repository as it is, and returns the operation that holds the result", () =>
     Effect.gen(function* () {
       const repository = yield* ScratchRepository;
