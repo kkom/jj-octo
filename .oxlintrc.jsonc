@@ -17,10 +17,6 @@
   },
   "rules": {
     "capitalized-comments": ["error", "always", { "ignoreConsecutiveComments": true }],
-    // A worker's entrypoint and a durable object are classes whose methods the
-    // runtime calls on an instance, over RPC, so a method there can't become
-    // static or a function, whether or not it reads `this`.
-    "class-methods-use-this": "off",
     // TypeScript's return types already check what a function returns, and the
     // rule fails on a generator that ends with `return yield*` of a failure on
     // one path and returns nothing on another, as `missingReturnYieldStar` asks.
@@ -194,10 +190,6 @@
     "typescript/dot-notation": ["error", { "allowIndexSignaturePropertyAccess": true }],
     "typescript/no-empty-interface": ["error", { "allowSingleExtends": true }],
     "typescript/no-empty-object-type": ["error", { "allowInterfaces": "with-single-extends" }],
-    // A runtime's type declarations can declare as classes the values that the runtime makes
-    // and that a test's fake stands in for, such as a binding. Code never constructs them, so
-    // every value of those types fails this rule.
-    "typescript/no-unsafe-class-instance-assignment": "off",
     // It asks for `x!`, which no-non-null-assertion bans.
     "typescript/non-nullable-type-assertion-style": "off",
     "typescript/prefer-readonly-parameter-types": [
