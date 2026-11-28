@@ -58,7 +58,7 @@
       {
         "paths": [
           {
-            "importNames": ["mock", "spyOn"],
+            "importNames": ["jest", "mock", "spyOn"],
             "message": "Use a fake, injected through a layer or a parameter (testing.md).",
             "name": "bun:test",
           },
@@ -82,8 +82,224 @@
         "property": "arrayContaining",
       },
       {
+        "message": "Compare the whole value with toStrictEqual (testing.md).",
+        "property": "toEqual",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContain",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainEqual",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainKey",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainKeys",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainAnyKeys",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainAllKeys",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainValue",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainValues",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toInclude",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toHaveProperty",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toMatch",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toStartWith",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toEndWith",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toHaveLength",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toBeArrayOfSize",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainAllValues",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toContainAnyValues",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toIncludeRepeated",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toEqualIgnoringWhitespace",
+      },
+      {
+        "message": "Read the failure with Effect.flip, and compare the whole value with toStrictEqual (effect.md, testing.md).",
+        "property": "toThrow",
+      },
+      {
+        "message": "Read the failure with Effect.flip, and compare the whole value with toStrictEqual (effect.md, testing.md).",
+        "property": "toThrowError",
+      },
+      {
+        "message": "Read the failure with Effect.flip, and compare the whole value with toStrictEqual (effect.md, testing.md).",
+        "property": "toThrowErrorMatchingSnapshot",
+      },
+      {
+        "message": "Read the failure with Effect.flip, and compare the whole value with toStrictEqual (effect.md, testing.md).",
+        "property": "toThrowErrorMatchingInlineSnapshot",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, and match only the fields that vary (testing.md).",
+        "property": "toSatisfy",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeInstanceOf",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeDefined",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeTruthy",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeFalsy",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeTypeOf",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeArray",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeObject",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeString",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeNumber",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeBoolean",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeFunction",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeSymbol",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeDate",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeValidDate",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeEmpty",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeEmptyObject",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeInteger",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeFinite",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBePositive",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeNegative",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeEven",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeOdd",
+      },
+      {
+        "message": "Compare the whole value with toStrictEqual, not one property of it (testing.md).",
+        "property": "toBeNil",
+      },
+      {
         "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
         "property": "toHaveBeenCalled",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toHaveBeenCalledOnce",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toBeCalled",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toBeCalledTimes",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "toBeCalledWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "lastCalledWith",
+      },
+      {
+        "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
+        "property": "nthCalledWith",
       },
       {
         "message": "Assert on what a fake recorded, such as the messages a fake mailer kept (testing.md).",
