@@ -28,10 +28,13 @@ const draftsIn = (
   github: ReturnType<typeof fakeGitHub>,
   bookmarks: readonly string[],
 ) =>
-  Effect.forEach(bookmarks, (bookmark) =>
-    GitHub.use((client) => client.openPullRequest(bookmark)).pipe(
-      Effect.map((found) => Option.map(found, ({ draft }) => draft)),
-    ),
+  Effect.forEach(
+    bookmarks,
+    (bookmark) =>
+      GitHub.use((client) => client.openPullRequest(bookmark)).pipe(
+        Effect.map((found) => Option.map(found, ({ draft }) => draft)),
+      ),
+    { concurrency: "unbounded" },
   ).pipe(inRepository(repository, github));
 
 describe("publish", () => {

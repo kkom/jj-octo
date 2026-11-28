@@ -77,17 +77,23 @@ export const mergedIn = (
 ): Effect.Effect<readonly MergedChange[], JjFailed, Jj> =>
   Effect.gen(function* () {
     const jj = yield* Jj;
-    const merged = yield* Effect.forEach(bookmarks, ({ change, local, name, remote }) =>
-      Effect.gen(function* () {
-        const merges = heads[name] ?? [];
-        const rebasedOnly =
-          remote !== undefined &&
-          merges.includes(remote) &&
-          (yield* jj
-            .read(["interdiff", "--from", remote, "--to", local, "--summary"])
-            .pipe(Effect.map(EffectString.trim))) === "";
-        return merges.includes(local) || rebasedOnly ? [{ bookmark: name, changeId: change }] : [];
-      }),
+    const merged = yield* Effect.forEach(
+      bookmarks,
+      ({ change, local, name, remote }) =>
+        Effect.gen(function* () {
+          const merges = heads[name] ?? [];
+          const rebasedOnly =
+            remote !== undefined &&
+            merges.includes(remote) &&
+            (yield* jj
+              .read(["interdiff", "--from", remote, "--to", local, "--summary"])
+              .pipe(Effect.map(EffectString.trim))) === "";
+          return merges.includes(local) || rebasedOnly
+            ? [{ bookmark: name, changeId: change }]
+            : [];
+        }),
+      // In turn, since `jj interdiff` snapshots the working copy.
+      { concurrency: 1 },
     );
     return merged.flat();
   });

@@ -19,17 +19,20 @@ const [one, two] = [PullRequestNumberSchema.make(1), PullRequestNumberSchema.mak
 const recorded = async (): Promise<ScratchRepository> => {
   const repository = pushedStack("a", "b");
   await repository.records((store) =>
-    Effect.all([
-      store.write({ bookmark: "a", commit: "1", description: "a", pullRequest: one }),
-      store.write({ bookmark: "b", commit: "2", description: "b", pullRequest: two }),
-    ]),
+    Effect.all(
+      [
+        store.write({ bookmark: "a", commit: "1", description: "a", pullRequest: one }),
+        store.write({ bookmark: "b", commit: "2", description: "b", pullRequest: two }),
+      ],
+      { concurrency: "unbounded" },
+    ),
   );
   return repository;
 };
 
 const left = (repository: ScratchRepository) =>
   repository.records((store) =>
-    Effect.all([store.read(one, "a"), store.read(two, "b")]).pipe(
+    Effect.all([store.read(one, "a"), store.read(two, "b")], { concurrency: "unbounded" }).pipe(
       Effect.map((records) =>
         EffectArray.map(records, (record) => Option.map(record, ({ description }) => description)),
       ),
