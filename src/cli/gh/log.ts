@@ -3,10 +3,9 @@ import { Command } from "effect/cli";
 
 import { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { PullRequest } from "../../clients/github/types";
 import type { Jj, JjFailed } from "../../clients/jj";
-import { asUserError, revisionFlag, table, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, revisionFlag, table, withHelp } from "../command";
 import { bookmarkTargets } from "./stack/bookmark-targets";
 import {
   CONFLICTED,
@@ -67,10 +66,11 @@ export const logCommand = Command.make(
   "log",
   { revision: revisionFlag("A change of the stack to show") },
   ({ revision }) =>
-    asUserError(log(revision).pipe(Effect.provide(GitHubFromOrigin))).pipe(
+    asUserError(log(revision)).pipe(
       Effect.flatMap((printed) => Console.log(EffectArray.join(printed, "\n"))),
     ),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Show changes and their pull requests",
     "Prints one line per change, top first: its bookmark, its pull request and whether that is a draft or ready for review, and whether the change is pushed, changed since the push, or not pushed. A change with conflicts is marked `conflicted`.",

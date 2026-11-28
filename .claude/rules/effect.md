@@ -57,7 +57,7 @@ Code that still validates with another schema library keeps it until it's migrat
 
 ## Write a test's body as an Effect with `itEffect`
 
-`itEffect` from `src/testing/it-effect.ts` runs the test's effect on bun's runner, in a scope that closes when it ends, with a `TestClock` that starts at 0 and a `TestConsole`. A failure fails the test. Where bun stops waiting, such as at the test's timeout, the effect is interrupted and its finalizers run. A test with no effect stays a plain `it`.
+`itEffect` from `src/testing/it-effect.ts` runs the test's effect on bun's runner, in a scope that closes when it ends, with Bun's platform services, a `TestClock` that starts at 0 and a `TestConsole`. The services a test's own setup builds, such as a scratch repository's clients or a fake GitHub, go in with `provideSetup`, ❌ not `Effect.provide`, which `strictEffectProvide` fails outside an entry point. A failure fails the test. Where bun stops waiting, such as at the test's timeout, the effect is interrupted and its finalizers run. A test with no effect stays a plain `it`.
 
 That's because the test then composes the code under test as production does: it provides layers, and reads a failure as a value. bun's `it.each` spreads an array row, so `itEffect.each` takes object rows.
 

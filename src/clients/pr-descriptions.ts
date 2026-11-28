@@ -76,13 +76,14 @@ const warn = (action: string) => (error: { readonly message: string }) =>
 export const prDescriptionsLayer: Layer.Layer<
   PrDescriptions,
   never,
-  FileSystem.FileSystem | Jj | Path.Path
+  FileSystem.FileSystem | Jj | Path.Path | SecureRandom.SecureRandom
 > = Layer.effect(
   PrDescriptions,
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const jj = yield* Jj;
     const path = yield* Path.Path;
+    const random = yield* SecureRandom.SecureRandom;
 
     // A workspace added with `jj workspace add` has a file in place of the repository directory,
     // holding its path relative to the workspace's `.jj`.
@@ -149,10 +150,7 @@ export const prDescriptionsLayer: Layer.Layer<
           yield* fs.makeDirectory(records, { recursive: true });
           const record = path.join(records, String(pullRequest));
           // Renamed into place, so a run stopped halfway leaves the record whole or as it was.
-          const unique = yield* SecureRandom.SecureRandom.pipe(
-            Effect.flatMap((random) => random.uuidV4()),
-            Effect.provide(SecureRandom.layerWebCrypto),
-          );
+          const unique = yield* random.uuidV4();
           const partial = `${record}.${unique}.partial`;
           // Three strings always encode
           const text = yield* Effect.orDie(encode({ bookmark, commit, description }));

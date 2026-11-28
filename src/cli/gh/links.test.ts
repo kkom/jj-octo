@@ -12,7 +12,7 @@ import {
 import type { ListedPullRequest } from "../../clients/github/types";
 import { conflictWithTrunk } from "../../testing/conflicts";
 import { fakeGitHub, inRepository } from "../../testing/fake-github";
-import { itEffect } from "../../testing/it-effect";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import { inStack, linked } from "../../testing/links";
 import { pullRequest } from "../../testing/pull-requests";
 import { removeScratchRepositories, scratchRepository } from "../../testing/scratch-repository";
@@ -130,7 +130,7 @@ describe("links", () => {
         });
         const clipboard = fakeClipboard(outcome);
         yield* links({ copy: true, revision: "@" }).pipe(
-          Effect.provide(clipboard.layer),
+          provideSetup(clipboard.layer),
           inRepository(repository, github),
         );
         expect({
@@ -178,7 +178,7 @@ describe("links", () => {
       repository.stack("a");
       const clipboard = fakeClipboard();
       const failure = yield* Effect.flip(links({ copy: true, revision: "@" })).pipe(
-        Effect.provide(clipboard.layer),
+        provideSetup(clipboard.layer),
         inRepository(repository, fakeGitHub({}, [])),
       );
       expect({ copied: clipboard.copied, failure }).toStrictEqual({
@@ -198,7 +198,7 @@ describe("links", () => {
         ],
       });
       yield* links({ copy: false, revision: "@" }).pipe(
-        Effect.provide(fakeClipboard().layer),
+        provideSetup(fakeClipboard().layer),
         inRepository(repository, github),
       );
       expect({
@@ -228,7 +228,7 @@ describe("links", () => {
       const github = fakeGitHub({}, [], { pullRequestsFrom: () => [listed] });
       const clipboard = fakeClipboard();
       yield* links({ copy: false, revision: "@" }).pipe(
-        Effect.provide(clipboard.layer),
+        provideSetup(clipboard.layer),
         inRepository(repository, github),
       );
       expect({

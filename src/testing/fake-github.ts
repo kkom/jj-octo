@@ -17,6 +17,7 @@ import {
 import type { Jj } from "../clients/jj";
 import type { PrDescriptions } from "../clients/pr-descriptions";
 import { environment } from "./environment";
+import { provideSetup } from "./it-effect";
 import type { ScratchRepository } from "./scratch-repository";
 
 /** A workflow run, by its id and whether it has completed. */
@@ -267,4 +268,4 @@ export const inRepository =
     env: Readonly<Record<string, string>> = {},
   ) =>
   <A, E>(program: Effect.Effect<A, E, Git | GitHub | Jj | PrDescriptions>): Effect.Effect<A, E> =>
-    program.pipe(Effect.provide([repository.layer, github.layer, environment(env)]));
+    program.pipe(provideSetup(Layer.mergeAll(repository.layer, github.layer, environment(env))));

@@ -8,7 +8,7 @@ import {
   rebaseOnGitHub,
   rewriteElsewhere,
 } from "../../testing/branch-changes";
-import { itEffect } from "../../testing/it-effect";
+import { itEffect, provideSetup } from "../../testing/it-effect";
 import {
   pushedStack,
   removeScratchRepositories,
@@ -152,7 +152,7 @@ describe("sync", () => {
         const failure = yield* Effect.flip(syncing(repository));
         expect(failure.message).toContain("weren't combined:\na\n");
         expect(repository.files("b")).toContain("trunk.txt");
-        const check = yield* Effect.flip(stackChanges("@")).pipe(Effect.provide(repository.layer));
+        const check = yield* Effect.flip(stackChanges("@")).pipe(provideSetup(repository.layer));
         expect(check.message).toContain("point at two changes");
       }),
     );

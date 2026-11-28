@@ -3,9 +3,8 @@ import { Argument, Command } from "effect/cli";
 
 import { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import { type StackNumber, StackNumberSchema } from "../../clients/github/types";
-import { asUserError, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, withHelp } from "../command";
 
 export class NoSuchStack extends Schema.TaggedError<
   NoSuchStack,
@@ -38,9 +37,9 @@ export const dissolveCommand = Command.make(
       Argument.withDescription("The number of the GitHub stack to dissolve"),
     ),
   },
-  ({ stack }) =>
-    asUserError(dissolve(StackNumberSchema.make(stack)).pipe(Effect.provide(GitHubFromOrigin))),
+  ({ stack }) => asUserError(dissolve(StackNumberSchema.make(stack))),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Dissolve a GitHub stack, leaving its pull requests open",
     "Each pull request keeps its base, so it still shows only its own change's diff.",

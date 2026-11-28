@@ -4,9 +4,8 @@ import { Command } from "effect/cli";
 import type { Git } from "../../clients/git";
 import { GitHub } from "../../clients/github/client";
 import type { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { Jj, JjFailed } from "../../clients/jj";
-import { asUserError, revisionFlag, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, revisionFlag, withHelp } from "../command";
 import { bookmarkTargets } from "./stack/bookmark-targets";
 import { downstackChanges, type NotAStack, pushedState, withoutConflicts } from "./stack/changes";
 
@@ -69,8 +68,9 @@ export const publish = (
 export const publishCommand = Command.make(
   "publish",
   { revision: revisionFlag("The top change to publish") },
-  ({ revision }) => asUserError(publish(revision).pipe(Effect.provide(GitHubFromOrigin))),
+  ({ revision }) => asUserError(publish(revision)),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Mark the draft pull requests of a change and the ones below it ready for review",
     "An empty working copy means the change below it. Leaves pull requests that are already ready as they are.",

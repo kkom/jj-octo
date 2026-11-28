@@ -1,6 +1,5 @@
 import path from "node:path";
 
-import { BunServices } from "@effect/platform-bun";
 import {
   Array as EffectArray,
   Effect,
@@ -47,7 +46,11 @@ export const output = (
   command: readonly [string, ...string[]],
   args: readonly string[],
   options: RunOptions,
-): Effect.Effect<{ readonly stderr: string; readonly stdout: string }> =>
+): Effect.Effect<
+  { readonly stderr: string; readonly stdout: string },
+  never,
+  ChildProcessSpawner.ChildProcessSpawner
+> =>
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -68,11 +71,12 @@ export const output = (
       }
       return { stderr, stdout };
     }),
-  ).pipe(Effect.orDie, Effect.provide(BunServices.layer));
+  ).pipe(Effect.orDie);
 
 /** Runs a build with `args`, as `output` does, and returns what it prints to stdout. */
 export const run = (
   command: readonly [string, ...string[]],
   args: readonly string[],
   options: RunOptions,
-): Effect.Effect<string> => output(command, args, options).pipe(Effect.map(({ stdout }) => stdout));
+): Effect.Effect<string, never, ChildProcessSpawner.ChildProcessSpawner> =>
+  output(command, args, options).pipe(Effect.map(({ stdout }) => stdout));

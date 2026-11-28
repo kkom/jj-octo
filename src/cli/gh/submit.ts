@@ -1,8 +1,6 @@
-import { Effect } from "effect";
 import { Command, Flag } from "effect/cli";
 
-import { GitHubFromOrigin } from "../../clients/github/origin";
-import { asUserError, revisionFlag, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, revisionFlag, withHelp } from "../command";
 import { submit } from "./stack/push";
 
 export const submitCommand = Command.make(
@@ -23,12 +21,9 @@ export const submitCommand = Command.make(
     revision: revisionFlag("The top change to submit"),
   },
   ({ overwriteDescriptions, publish, revision }) =>
-    asUserError(
-      submit(revision, { draft: !publish, overwriteDescriptions }).pipe(
-        Effect.provide(GitHubFromOrigin),
-      ),
-    ),
+    asUserError(submit(revision, { draft: !publish, overwriteDescriptions })),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Push a change and the ones below it, and open their pull requests",
     "Pushes the bookmark of each change. An empty working copy means the change below it. Opens a pull request for each branch that has none, with the title and body from its change's description. Points each pull request at the branch below it, and the bottom one at the default branch.",

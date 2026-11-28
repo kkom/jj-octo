@@ -3,8 +3,8 @@ import { writeFileSync } from "node:fs";
 
 import { Array as EffectArray, Effect } from "effect";
 
-import { gitClone, provideClients } from "../testing/git-clone";
-import { itEffect } from "../testing/it-effect";
+import { gitClone } from "../testing/git-clone";
+import { itEffect, provideSetup } from "../testing/it-effect";
 import { removeScratchRepositories, scratchRepository } from "../testing/scratch-repository";
 import { Jj, JjFailed, jjConfig } from "./jj";
 
@@ -16,12 +16,12 @@ describe("jjConfig", () => {
     () =>
       Effect.gen(function* () {
         const clone = gitClone(scratchRepository());
-        const value = yield* jjConfig("jj-octo.no-such-key").pipe(provideClients(clone.layer));
+        const value = yield* jjConfig("jj-octo.no-such-key").pipe(provideSetup(clone.layer));
         expect(value).toBe("");
         const config = clone.jjConfigFile;
         writeFileSync(config, "[");
         const failure = yield* Effect.flip(jjConfig("jj-octo.no-such-key")).pipe(
-          provideClients(clone.layer),
+          provideSetup(clone.layer),
         );
         expect(failure).toStrictEqual(
           JjFailed.make({
@@ -55,7 +55,7 @@ describe("jjConfig", () => {
         program.pipe(
           Effect.map((value) => ({ value })),
           Effect.catch(({ message }) => Effect.succeed({ message })),
-          provideClients(clone.layer),
+          provideSetup(clone.layer),
         );
       expect([
         yield* read(jjConfig("jj-octo.word")),
@@ -82,7 +82,7 @@ describe("Jj.dryRun", () => {
       const operations = repository.jj("operation", "log", "--no-graph", "-T", "id");
       repository.write("edited.txt", "edited\n");
       const operation = yield* dryRun(["describe", "-m", "tried"]).pipe(
-        provideClients(repository.layer),
+        provideSetup(repository.layer),
       );
       const description = [
         "log",
@@ -105,7 +105,7 @@ describe("Jj.dryRun", () => {
     Effect.gen(function* () {
       const repository = scratchRepository();
       const failure = yield* Effect.flip(dryRun(["describe", "-m", ""])).pipe(
-        provideClients(repository.layer),
+        provideSetup(repository.layer),
       );
       expect(failure).toStrictEqual(
         JjFailed.make({ message: "jj describe -m  made no operation" }),

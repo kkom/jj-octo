@@ -4,11 +4,10 @@ import { Command, Flag } from "effect/cli";
 import type { Git } from "../../clients/git";
 import { GitHub } from "../../clients/github/client";
 import { GitHubFailed } from "../../clients/github/failure";
-import { GitHubFromOrigin } from "../../clients/github/origin";
 import type { PullRequest, PullRequestNumber } from "../../clients/github/types";
 import type { Jj } from "../../clients/jj";
 import type { PrDescriptions } from "../../clients/pr-descriptions";
-import { asUserError, revisionFlag, withHelp } from "../command";
+import { asUserError, provideGitHubFromOrigin, revisionFlag, withHelp } from "../command";
 import { bookmarkTargets } from "./stack/bookmark-targets";
 import {
   bookmarkRevset,
@@ -181,10 +180,9 @@ export const mergeCommand = Command.make(
     revision: revisionFlag("The top change to merge"),
   },
   ({ allWorkspaces, cancelPrRuns, revision }) =>
-    asUserError(
-      merge(revision, { allWorkspaces, cancelPrRuns }).pipe(Effect.provide(GitHubFromOrigin)),
-    ),
+    asUserError(merge(revision, { allWorkspaces, cancelPrRuns })),
 ).pipe(
+  provideGitHubFromOrigin,
   withHelp(
     "Merge the pull requests of a change and the ones below it",
     "Prints which pull requests it merges, then squash-merges them. An empty working copy means the change below it. Fails before merging if a change has edits that aren't pushed.",

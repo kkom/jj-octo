@@ -18,12 +18,14 @@ import {
   Record as EffectRecord,
   String as EffectString,
 } from "effect";
+import { SecureRandom } from "effect/crypto";
 
 import { lines } from "../cli/gh/stack/changes";
 import { type Git, gitLayer } from "../clients/git";
 import type { ListedPullRequest } from "../clients/github/types";
 import { type Jj, jjLayer } from "../clients/jj";
 import { PrDescriptions, prDescriptionsLayer } from "../clients/pr-descriptions";
+import { provideSetup } from "./it-effect";
 import { pullRequest } from "./pull-requests";
 import { templateOf } from "./templates";
 
@@ -125,7 +127,7 @@ export const layerAt = (
   Layer.merge(
     gitLayer({ cwd, env }),
     Layer.provideMerge(prDescriptionsLayer, jjLayer({ cwd, env, printed })),
-  ).pipe(Layer.provide(BunServices.layer));
+  ).pipe(Layer.provide([BunServices.layer, SecureRandom.layerWebCrypto]));
 
 // The repository in a directory that already holds one: `origin.git`, `repository`, `github`
 // and the jj configuration.
@@ -206,7 +208,7 @@ const open = (root: string): ScratchRepository => {
         EffectArray.filter(merged, (recorded) => recorded.branch === branch),
         (recorded) => recorded.pullRequest,
       ),
-    records: (effect) => Effect.flatMap(PrDescriptions, effect).pipe(Effect.provide(layer)),
+    records: (effect) => Effect.flatMap(PrDescriptions, effect).pipe(provideSetup(layer)),
     stack: (...names) => {
       jj("new", "main");
       for (const name of names) {

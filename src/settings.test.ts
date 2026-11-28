@@ -5,8 +5,8 @@ import { Effect, Layer } from "effect";
 
 import { IGNORE_CLAUDE_CODE_FOOTER, readSetting, type Setting } from "./settings";
 import { environment } from "./testing/environment";
-import { gitClone, provideClients } from "./testing/git-clone";
-import { itEffect } from "./testing/it-effect";
+import { gitClone } from "./testing/git-clone";
+import { itEffect, provideSetup } from "./testing/it-effect";
 import { removeScratchRepositories, scratchRepository } from "./testing/scratch-repository";
 
 afterAll(removeScratchRepositories);
@@ -29,7 +29,7 @@ const reader = (config: string, env: Readonly<Record<string, string>> = {}) => {
     readSetting(setting).pipe(
       Effect.map((value) => ({ value })),
       Effect.catch(({ message }) => Effect.succeed({ message })),
-      provideClients(Layer.merge(clone.layer, environment(env))),
+      provideSetup(Layer.merge(clone.layer, environment(env))),
     );
 };
 
