@@ -1,10 +1,10 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Option, Order, String as EffectString } from "effect";
 
-import { failureOf, searchPath, withGitHub } from "../../testing/github-client";
+import { callGitHub, failureOf, gitHubThroughProxy, searchPath } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
-import { itEffect } from "../../testing/it-effect";
+import { layer } from "../../testing/it-effect";
 import { pullRequests } from "../../testing/pull-requests";
 
 const CREATED = "2026-01-01T00:00:00Z";
@@ -96,10 +96,10 @@ const setOf = (numbers: readonly number[]) => new Set(pullRequests(...numbers));
 const mentioning = (number: number, count: number, createdAt = CREATED) =>
   Array.from({ length: count }, (_, offset) => indexed(2000 + offset, [number], createdAt));
 
-describe("approvedPullRequests", () => {
-  itEffect("lists those of the pull requests the search lists, from every page", () =>
+layer(gitHubThroughProxy)("approvedPullRequests", (it) => {
+  it("lists those of the pull requests the search lists, from every page", () =>
     Effect.gen(function* () {
-      const outcome = yield* withGitHub(searchOf([indexed(7), ...mentioning(7, 100)]), (github) =>
+      const outcome = yield* callGitHub(searchOf([indexed(7), ...mentioning(7, 100)]), (github) =>
         github.approvedPullRequests(asked([7])),
       );
       expect(outcome).toStrictEqual({
@@ -109,15 +109,14 @@ describe("approvedPullRequests", () => {
         ],
         result: setOf([7]),
       });
-    }),
-  );
+    }));
 
-  itEffect("searches for more pull requests than one search's text fits in several searches", () =>
+  it("searches for more pull requests than one search's text fits in several searches", () =>
     Effect.gen(function* () {
       // 42 five-digit numbers and the spaces between them are 251 characters, and 43 are 257.
       const numbers = Array.from({ length: 50 }, (_, offset) => 10_000 + offset);
       const terms = EffectArray.map(numbers, String);
-      const outcome = yield* withGitHub(
+      const outcome = yield* callGitHub(
         searchOf([indexed(10_001), indexed(10_040), indexed(10_049)]),
         (github) => github.approvedPullRequests(asked(numbers)),
       );
@@ -128,14 +127,13 @@ describe("approvedPullRequests", () => {
         ],
         result: setOf([10_001, 10_040, 10_049]),
       });
-    }),
-  );
+    }));
 
-  itEffect("splits a search that matches too many, down to one pull request", () =>
+  it("splits a search that matches too many, down to one pull request", () =>
     Effect.gen(function* () {
       // Search lists in order of creation, and #5's range keeps out what only mentions #5.
       const index = [indexed(5, [], LATER), indexed(6), ...mentioning(5, 1200)];
-      const outcome = yield* withGitHub(searchOf(index), (github) =>
+      const outcome = yield* callGitHub(searchOf(index), (github) =>
         github.approvedPullRequests(asked([5, 6], { 5: LATER })),
       );
       expect(outcome).toStrictEqual({
@@ -146,13 +144,12 @@ describe("approvedPullRequests", () => {
         ],
         result: setOf([5, 6]),
       });
-    }),
-  );
+    }));
 
-  itEffect("fails where one pull request's search matches too many", () =>
+  it("fails where one pull request's search matches too many", () =>
     Effect.gen(function* () {
       const path = searchPath(`5 created:${CREATED}..${CREATED}`);
-      const outcome = yield* withGitHub(searchOf([indexed(5), ...mentioning(5, 1200)]), (github) =>
+      const outcome = yield* callGitHub(searchOf([indexed(5), ...mentioning(5, 1200)]), (github) =>
         failureOf(github.approvedPullRequests(asked([5]))),
       );
       expect(outcome).toStrictEqual({
@@ -162,13 +159,12 @@ describe("approvedPullRequests", () => {
           status: undefined,
         },
       });
-    }),
-  );
+    }));
 
-  itEffect("fails where the search timed out and listed only some pull requests", () =>
+  it("fails where the search timed out and listed only some pull requests", () =>
     Effect.gen(function* () {
       const path = searchPath(`7 created:${CREATED}..${CREATED}`);
-      const outcome = yield* withGitHub(searchOf([indexed(7)], true), (github) =>
+      const outcome = yield* callGitHub(searchOf([indexed(7)], true), (github) =>
         failureOf(github.approvedPullRequests(asked([7]))),
       );
       expect(outcome).toStrictEqual({
@@ -178,13 +174,11 @@ describe("approvedPullRequests", () => {
           status: undefined,
         },
       });
-    }),
-  );
+    }));
 
-  itEffect("sends no search for no pull requests", () =>
+  it("sends no search for no pull requests", () =>
     Effect.gen(function* () {
-      const outcome = yield* withGitHub(searchOf([]), (github) => github.approvedPullRequests([]));
+      const outcome = yield* callGitHub(searchOf([]), (github) => github.approvedPullRequests([]));
       expect(outcome).toStrictEqual({ requests: [], result: new Set() });
-    }),
-  );
+    }));
 });

@@ -13,43 +13,59 @@ import type { ChildProcessSpawner } from "effect/process";
 
 import { GitHub, GitHubLive } from "../clients/github/client";
 import type { GitHubFailed } from "../clients/github/failure";
-import { environment } from "./environment";
-import { type InterceptedRequest, throughProxy } from "./intercepting-proxy";
-import { provideSetup } from "./it-effect";
+import {
+  type InterceptedRequest,
+  InterceptingProxy,
+  interceptingProxy,
+} from "./intercepting-proxy";
 
-// Runs `use` with the real client, against a GitHub that answers as `respond` does, with `env` as
-// the environment. Returns what it produced and the requests GitHub received, without the proxy's
-// CONNECTs.
-export const withGitHub = <A, E>(
+/**
+ * The real client for the repository `owner/name`, sending its requests through an intercepting
+ * proxy for `api.github.com`, which answers as `callGitHub` tells it.
+ */
+export const gitHubThroughProxy: Layer.Layer<
+  GitHub | InterceptingProxy,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+> = Layer.unwrap(
+  Effect.map(InterceptingProxy, ({ ca, url }) =>
+    GitHubLive(
+      { name: "name", owner: "owner" },
+      { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
+    ),
+  ),
+).pipe(
+  Layer.provide(FetchHttpClient.layer),
+  Layer.provideMerge(interceptingProxy("api.github.com")),
+);
+
+/**
+ * Answers GitHub's requests as `respond` does, and runs `use` with the client. Returns what it
+ * produced and the requests GitHub received, without the proxy's CONNECTs.
+ */
+export const callGitHub = <A, E>(
   respond: (request: InterceptedRequest) => unknown,
   use: (github: GitHub["Service"]) => Effect.Effect<A, E>,
-  env: Readonly<Record<string, string>> = {},
 ): Effect.Effect<
   { readonly requests: readonly string[]; readonly result: A },
   E,
-  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+  GitHub | InterceptingProxy
 > =>
-  throughProxy("api.github.com", respond, ({ ca, url }) => {
-    const live = GitHubLive(
-      { name: "name", owner: "owner" },
-      { proxy: Option.some({ ca: Option.some(ca), url }), token: Redacted.make("test-token") },
-    );
-    return GitHub.use(use).pipe(
-      provideSetup(
-        live.pipe(Layer.provideMerge(FetchHttpClient.layer), Layer.provideMerge(environment(env))),
-      ),
-    );
-  }).pipe(
-    Effect.map(({ log, result }) => ({
+  Effect.gen(function* () {
+    const proxy = yield* InterceptingProxy;
+    yield* proxy.answer(respond);
+    const result = yield* GitHub.use(use);
+    const log = yield* proxy.log;
+    return {
       requests: EffectArray.filter(log, (line) => !EffectString.startsWith("CONNECT ")(line)),
       result,
-    })),
-  );
+    };
+  });
 
 // The effect's result, or the message and status it failed with.
-export const failureOf = <A>(
-  effect: Effect.Effect<A, GitHubFailed>,
-): Effect.Effect<A | { readonly message: string; readonly status: number | undefined }> =>
+export const failureOf = <A, R>(
+  effect: Effect.Effect<A, GitHubFailed, R>,
+): Effect.Effect<A | { readonly message: string; readonly status: number | undefined }, never, R> =>
   effect.pipe(
     Effect.catchTag("GitHubFailed", ({ message, status }) => Effect.succeed({ message, status })),
   );

@@ -3,11 +3,14 @@ import { connect, createServer, type Server, type Socket } from "node:net";
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer";
 import {
   Array as EffectArray,
+  Context,
   Effect,
   FileSystem,
+  Layer,
   Match,
   Option,
   Path,
+  Ref,
   String as EffectString,
 } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -16,18 +19,6 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { readOutput } from "../clients/process";
 import { formatJson } from "../json";
 import { scratchDirectory } from "./scratch-process";
-
-/**
- * A proxy that answers HTTPS requests to one host itself, as a sandbox's proxy does. It accepts
- * each CONNECT, and answers inside the tunnel with a self-signed certificate for the host.
- */
-export interface InterceptingProxy {
-  /** The proxy's certificate, in PEM, which a client trusts as its certificate authority. */
-  readonly ca: string;
-  /** A file holding `ca`. */
-  readonly caFile: string;
-  readonly url: string;
-}
 
 /** A request the proxy received inside a tunnel. */
 export interface InterceptedRequest {
@@ -132,20 +123,42 @@ const listen = (server: Server, beforeClose: () => void) =>
   );
 
 /**
- * Runs `run` against a proxy that answers each request to the host with the JSON `respond`
- * returns, or the `Reply`. Returns its result, and each CONNECT and request the proxy received, in
- * order, as `CONNECT host:port` or `GET host/path`.
+ * A proxy that answers HTTPS requests to one host itself, as a sandbox's proxy does. It accepts
+ * each CONNECT, and answers inside the tunnel with a self-signed certificate for the host.
  */
-export const throughProxy = <A, E, R>(
+export class InterceptingProxy extends Context.Service<
+  InterceptingProxy,
+  {
+    /** Answers each later request to the host with the JSON `respond` returns, or the `Reply`. */
+    readonly answer: (respond: (request: InterceptedRequest) => unknown) => Effect.Effect<void>;
+    /** The proxy's certificate, in PEM, which a client trusts as its certificate authority. */
+    readonly ca: string;
+    /** A file holding `ca`. */
+    readonly caFile: string;
+    /**
+     * Each CONNECT and request the proxy received, in order, as `CONNECT host:port` or
+     * `GET host/path`.
+     */
+    readonly log: Effect.Effect<readonly string[]>;
+    /** Each request the proxy received inside a tunnel, in order. */
+    readonly requests: Effect.Effect<readonly InterceptedRequest[]>;
+    readonly url: string;
+  }
+>()("jj-octo/testing/intercepting-proxy/InterceptingProxy") {}
+
+/**
+ * A proxy for the host, which answers each request with GitHub's 404 until a test calls
+ * `answer`. It stops when the layer's scope closes.
+ */
+export const interceptingProxy = (
   host: string,
-  respond: (request: InterceptedRequest) => unknown,
-  run: (proxy: InterceptingProxy) => Effect.Effect<A, E, R>,
-): Effect.Effect<
-  { readonly log: readonly string[]; readonly result: A },
-  E,
-  R | ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
+): Layer.Layer<
+  InterceptingProxy,
+  never,
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
 > =>
-  Effect.scoped(
+  Layer.effect(
+    InterceptingProxy,
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -153,15 +166,34 @@ export const throughProxy = <A, E, R>(
       const directory = yield* scratchDirectory("proxy-");
       const caFile = path.join(directory, "ca.pem");
       yield* Effect.orDie(fs.writeFileString(caFile, cert));
-      const log: string[] = [];
-      const record = (line: string) => {
-        log.push(line);
-      };
-      const port = yield* serveOrigin({ cert, key, record, respond });
-      const proxy = proxyServer(port, record);
+      const log = yield* Ref.make<readonly string[]>([]);
+      const responder = yield* Ref.make<(request: InterceptedRequest) => unknown>(
+        () => new Reply(404, { message: "Not Found" }),
+      );
+      const requests = yield* Ref.make<readonly InterceptedRequest[]>([]);
+      const record = (line: string) => Ref.update(log, EffectArray.append(line));
+      const port = yield* serveOrigin({
+        cert,
+        key,
+        record: (line, request) =>
+          record(line).pipe(Effect.andThen(Ref.update(requests, EffectArray.append(request)))),
+        respond: Ref.get(responder),
+      });
+      // The proxy records each CONNECT from a socket's callback, outside any fiber.
+      const context = yield* Effect.context();
+      const runSync = Effect.runSyncWith(context);
+      const proxy = proxyServer(port, (line) => {
+        runSync(record(line));
+      });
       const proxyPort = yield* listen(proxy.server, proxy.destroySockets);
-      const result = yield* run({ ca: cert, caFile, url: `http://127.0.0.1:${proxyPort}` });
-      return { log: [...log], result };
+      return {
+        answer: (respond) => Ref.set(responder, respond),
+        ca: cert,
+        caFile,
+        log: Ref.get(log),
+        requests: Ref.get(requests),
+        url: `http://127.0.0.1:${proxyPort}`,
+      };
     }),
   );
 
@@ -175,8 +207,8 @@ const serveOrigin = ({
 }: {
   readonly cert: string;
   readonly key: string;
-  readonly record: (line: string) => void;
-  readonly respond: (request: InterceptedRequest) => unknown;
+  readonly record: (line: string, request: InterceptedRequest) => Effect.Effect<void>;
+  readonly respond: Effect.Effect<(request: InterceptedRequest) => unknown>;
 }) =>
   Effect.gen(function* () {
     const server = yield* Effect.orDie(
@@ -185,12 +217,10 @@ const serveOrigin = ({
     yield* server.serve(
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
-        record(`${request.method} ${request.headers["host"] ?? ""}${request.url}`);
-        const answer = respond({
-          body: yield* request.text,
-          method: request.method,
-          path: request.url,
-        });
+        const received = { body: yield* request.text, method: request.method, path: request.url };
+        yield* record(`${request.method} ${request.headers["host"] ?? ""}${request.url}`, received);
+        const responder = yield* respond;
+        const answer = responder(received);
         const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
         return HttpServerResponse.text(formatJson(body), {
           contentType: "application/json",

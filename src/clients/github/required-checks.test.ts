@@ -1,10 +1,10 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Option, Order } from "effect";
 
-import { failureOf, withGitHub } from "../../testing/github-client";
+import { callGitHub, failureOf, gitHubThroughProxy } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
-import { itEffect } from "../../testing/it-effect";
+import { layer } from "../../testing/it-effect";
 
 const ACTIONS = 15_368;
 
@@ -48,10 +48,10 @@ const unprotected = {
   required_status_checks: { checks: [], contexts: [], enforcement_level: "off" },
 };
 
-describe("requiredChecks", () => {
-  itEffect("reads the checks that rulesets and branch protection require, each once", () =>
+layer(gitHubThroughProxy)("requiredChecks", (it) => {
+  it("reads the checks that rulesets and branch protection require, each once", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(
+      const { requests: received, result } = yield* callGitHub(
         protectedBy(
           [
             { ruleset_id: 1, ruleset_source: "owner/name", type: "deletion" },
@@ -83,12 +83,11 @@ describe("requiredChecks", () => {
           ],
         },
       });
-    }),
-  );
+    }));
 
-  itEffect("reads no checks from branch protection that isn't enforced", () =>
+  it("reads no checks from branch protection that isn't enforced", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(
+      const { requests: received, result } = yield* callGitHub(
         protectedBy([], unprotected),
         (github) => github.requiredChecks("main"),
       );
@@ -96,12 +95,11 @@ describe("requiredChecks", () => {
         requests,
         result: { _tag: "Known", checks: [] },
       });
-    }),
-  );
+    }));
 
-  itEffect("reads the checks as unknown where GitHub doesn't let the token read the rules", () =>
+  it("reads the checks as unknown where GitHub doesn't let the token read the rules", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(
+      const { requests: received, result } = yield* callGitHub(
         (request) =>
           request.path === rulesPath
             ? new Reply(403, { message: "Resource not accessible by integration" })
@@ -115,12 +113,11 @@ describe("requiredChecks", () => {
           reason: `couldn't read the rules of main: GET ${rulesPath} returned 403: {"message":"Resource not accessible by integration"}`,
         },
       });
-    }),
-  );
+    }));
 
-  itEffect("reads the checks as unknown where GitHub doesn't find the branch for the token", () =>
+  it("reads the checks as unknown where GitHub doesn't find the branch for the token", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(
+      const { requests: received, result } = yield* callGitHub(
         (request) =>
           request.path === branchPath
             ? new Reply(404, { message: "Branch not found" })
@@ -134,24 +131,22 @@ describe("requiredChecks", () => {
           reason: `couldn't read the rules of main: GET ${branchPath} returned 404: {"message":"Branch not found"}`,
         },
       });
-    }),
-  );
+    }));
 
-  itEffect("reads the checks as unknown where a protected branch's summary has no protection", () =>
+  it("reads the checks as unknown where a protected branch's summary has no protection", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(protectedBy([]), (github) =>
+      const { requests: received, result } = yield* callGitHub(protectedBy([]), (github) =>
         github.requiredChecks("main"),
       );
       expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
         requests,
         result: { _tag: "Unknown", reason: "GitHub listed main as protected without saying how" },
       });
-    }),
-  );
+    }));
 
-  itEffect("reads the checks as unknown where a ruleset requires workflows or code scanning", () =>
+  it("reads the checks as unknown where a ruleset requires workflows or code scanning", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(
+      const { requests: received, result } = yield* callGitHub(
         protectedBy(
           [
             statusChecksRule([{ context: "CI" }]),
@@ -170,30 +165,26 @@ describe("requiredChecks", () => {
             "main's rulesets also require workflows and code_scanning, which aren't read as checks",
         },
       });
-    }),
-  );
+    }));
 
-  itEffect(
-    "reads the checks as unknown where a rule requiring status checks doesn't name them",
-    () =>
-      Effect.gen(function* () {
-        const { requests: received, result } = yield* withGitHub(
-          protectedBy([{ type: "required_status_checks" }], unprotected),
-          (github) => github.requiredChecks("main"),
-        );
-        expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
-          requests,
-          result: {
-            _tag: "Unknown",
-            reason: "GitHub listed a rule requiring status checks on main without naming them",
-          },
-        });
-      }),
-  );
-
-  itEffect("fails on a rule requiring status checks that it can't read", () =>
+  it("reads the checks as unknown where a rule requiring status checks doesn't name them", () =>
     Effect.gen(function* () {
-      const { requests: received, result } = yield* withGitHub(
+      const { requests: received, result } = yield* callGitHub(
+        protectedBy([{ type: "required_status_checks" }], unprotected),
+        (github) => github.requiredChecks("main"),
+      );
+      expect({ requests: EffectArray.sort(received, Order.String), result }).toStrictEqual({
+        requests,
+        result: {
+          _tag: "Unknown",
+          reason: "GitHub listed a rule requiring status checks on main without naming them",
+        },
+      });
+    }));
+
+  it("fails on a rule requiring status checks that it can't read", () =>
+    Effect.gen(function* () {
+      const { requests: received, result } = yield* callGitHub(
         protectedBy(
           [{ parameters: { unexpected: true }, type: "required_status_checks" }],
           unprotected,
@@ -215,6 +206,5 @@ describe("requiredChecks", () => {
           status: undefined,
         },
       });
-    }),
-  );
+    }));
 });

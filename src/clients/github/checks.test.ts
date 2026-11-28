@@ -1,10 +1,10 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
 import { Array as EffectArray, Effect, Option, Order } from "effect";
 
-import { withGitHub } from "../../testing/github-client";
+import { callGitHub, gitHubThroughProxy } from "../../testing/github-client";
 import { type InterceptedRequest, Reply } from "../../testing/intercepting-proxy";
-import { itEffect } from "../../testing/it-effect";
+import { layer } from "../../testing/it-effect";
 import type { Check } from "./types";
 
 const ACTIONS = 15_368;
@@ -46,7 +46,7 @@ const listing =
 // The checks of commit `abc` against a GitHub that answers as `respond` does, with the requests
 // it received sorted, since the check runs and the statuses are read at once.
 const readLatestChecks = (respond: (request: InterceptedRequest) => unknown) =>
-  withGitHub(respond, (github) => github.latestChecks("abc")).pipe(
+  callGitHub(respond, (github) => github.latestChecks("abc")).pipe(
     Effect.map(({ requests, result }) => ({
       requests: EffectArray.sort(requests, Order.String),
       result,
@@ -61,8 +61,8 @@ const check = (name: string, outcome: string, state: Check["state"]): Check => (
   state,
 });
 
-describe("latestChecks", () => {
-  itEffect("counts only the newest run of each check", () =>
+layer(gitHubThroughProxy)("latestChecks", (it) => {
+  it("counts only the newest run of each check", () =>
     Effect.gen(function* () {
       const checks = yield* readLatestChecks(
         listing(
@@ -88,10 +88,9 @@ describe("latestChecks", () => {
           { ...check("CI", "success", "passed"), app: Option.none() },
         ],
       });
-    }),
-  );
+    }));
 
-  itEffect("counts a run as passed where GitHub counts it so for a required check", () =>
+  it("counts a run as passed where GitHub counts it so for a required check", () =>
     Effect.gen(function* () {
       const conclusions = [
         "success",
@@ -124,10 +123,9 @@ describe("latestChecks", () => {
           check("stale", "stale", "failed"),
         ],
       });
-    }),
-  );
+    }));
 
-  itEffect("reads each commit status, with no app", () =>
+  it("reads each commit status, with no app", () =>
     Effect.gen(function* () {
       const checks = yield* readLatestChecks(
         listing(
@@ -147,10 +145,9 @@ describe("latestChecks", () => {
           { ...check("ci/error", "error", "failed"), app: Option.none() },
         ],
       });
-    }),
-  );
+    }));
 
-  itEffect("reads every page of check runs", () =>
+  it("reads every page of check runs", () =>
     Effect.gen(function* () {
       const firstPage = Array.from({ length: 100 }, (_, index) =>
         checkRun({ conclusion: "success", id: index + 2, name: `check ${index + 2}` }),
@@ -163,7 +160,7 @@ describe("latestChecks", () => {
         },
         [statusPath(1)]: { state: "pending", statuses: [], total_count: 0 },
       };
-      const { requests, result } = yield* withGitHub(
+      const { requests, result } = yield* callGitHub(
         ({ path }) => pages[path] ?? new Reply(404, { message: "Not Found" }),
         (github) => github.latestChecks("abc"),
       );
@@ -175,6 +172,5 @@ describe("latestChecks", () => {
         ],
         result: EffectArray.map(firstPage, ({ name }) => check(name, "success", "passed")),
       });
-    }),
-  );
+    }));
 });
