@@ -5,12 +5,12 @@ import {
   Effect,
   Layer,
   Schema,
-  Stream,
   String as EffectString,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { formatJson } from "../json";
+import { readOutput } from "./process";
 
 const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
 
@@ -77,22 +77,15 @@ export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
         Effect.scoped(
           Effect.gen(function* () {
             const handle = yield* spawner.spawn(ChildProcess.make("jj", args, location));
-            return yield* Effect.all(
-              [
-                Stream.mkString(Stream.decodeText(handle.stdout)),
-                Stream.mkString(Stream.decodeText(handle.stderr)),
-                handle.exitCode,
-              ],
-              { concurrency: "unbounded" },
-            );
+            return yield* readOutput(handle);
           }),
         ).pipe(
           Effect.catchTag("PlatformError", (error) => Effect.fail(failed(args, error.message))),
         );
 
       const read = (args: readonly string[]): Effect.Effect<string, JjFailed> =>
-        Effect.flatMap(captured(args), ([stdout, stderr, code]) =>
-          code === 0 ? Effect.succeed(stdout) : Effect.fail(failed(args, stderr)),
+        Effect.flatMap(captured(args), ({ exitCode, stderr, stdout }) =>
+          exitCode === 0 ? Effect.succeed(stdout) : Effect.fail(failed(args, stderr)),
         );
 
       const run = (args: readonly string[]): Effect.Effect<void, JjFailed> =>
@@ -113,14 +106,14 @@ export const jjLayer = ({ cwd, env, printed }: JjOptions = {}): Layer.Layer<
                   code === 0 ? Effect.void : Effect.fail(failed(args, "")),
                 ),
               )
-          : Effect.flatMap(captured(args), ([stdout, stderr, code]) => {
+          : Effect.flatMap(captured(args), ({ exitCode, stderr, stdout }) => {
               printed(stdout + stderr);
-              return code === 0 ? Effect.void : Effect.fail(failed(args, stderr));
+              return exitCode === 0 ? Effect.void : Effect.fail(failed(args, stderr));
             });
 
       const dryRun = (args: readonly string[]): Effect.Effect<string, JjFailed> =>
-        Effect.flatMap(captured([...DRY_RUN, ...args]), ([, stderr, code]) => {
-          if (code !== 0) {
+        Effect.flatMap(captured([...DRY_RUN, ...args]), ({ exitCode, stderr }) => {
+          if (exitCode !== 0) {
             return Effect.fail(failed(args, stderr));
           }
           const operation = [...EffectString.matchAll(NOT_INTEGRATED)(stderr)].at(-1)?.groups?.[
