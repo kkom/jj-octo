@@ -3,8 +3,9 @@ import { Effect, FileSystem, Path, type Scope, String as EffectString } from "ef
 import { scratchDirectory } from "./scratch-process";
 
 /**
- * Copies the directory of a scratch repository, its `origin.git`, `repository` and `github`, to
- * `to`. The two git configurations hold the path of `origin.git`, which is rewritten to the copy's.
+ * Copies a scratch repository's directory, with its `origin.git`, `repository` and `github`, to
+ * `to`. Rewrites the absolute paths in `repository`'s git configuration and in the links between
+ * `origin.git` and its worktree `github`.
  */
 export const copyRepository = (
   from: string,
@@ -15,9 +16,9 @@ export const copyRepository = (
     const path = yield* Path.Path;
     yield* fs.copy(from, to, { preserveTimestamps: true });
     yield* Effect.forEach(
-      ["repository/.git/config", "github/.git/config"],
-      (config) => {
-        const file = path.join(to, config);
+      ["repository/.git/config", "github/.git", "origin.git/worktrees/github/gitdir"],
+      (relative) => {
+        const file = path.join(to, relative);
         return fs
           .readFileString(file)
           .pipe(

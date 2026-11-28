@@ -4,6 +4,7 @@ import { Array as EffectArray, Effect, Layer, String as EffectString } from "eff
 
 import {
   addCommitOnGitHub,
+  changeOnGitHub,
   moveTrunkOnGitHub,
   rebaseOnGitHub,
   rewriteElsewhere,
@@ -21,13 +22,10 @@ const rebaseBoth: Effect.Effect<void, never, ScratchRepository> = Effect.gen(fun
   yield* repository.jj("edit", "b");
   yield* repository.write("b-local.txt", "b, locally\n");
   yield* repository.jj("new");
-  yield* repository.git("fetch", "--quiet");
-  const revision = yield* repository.git("rev-parse", "origin/a");
+  const revision = yield* repository.git("rev-parse", "a");
   const pushedA = EffectString.trim(revision);
   yield* rebaseOnGitHub("a");
-  yield* repository.git("checkout", "--quiet", "-B", "b", "origin/b");
-  yield* repository.git("rebase", "--quiet", "--onto", "a", pushedA, "b");
-  yield* repository.git("push", "--quiet", "--force", "origin", "b");
+  yield* changeOnGitHub("b", repository.git("rebase", "--quiet", "--onto", "a", pushedA));
 });
 
 layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync", (it) => {

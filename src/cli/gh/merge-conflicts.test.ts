@@ -30,10 +30,7 @@ layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))(
           onMerge: () =>
             Effect.gen(function* () {
               yield* squashMergeOnGitHub("a");
-              yield* repository.writeOnGitHub("b.txt", "somebody else's\n");
-              yield* repository.git("add", ".");
-              yield* repository.git("commit", "--quiet", "-m", "another pull request");
-              yield* repository.git("push", "--quiet", "origin", "main");
+              yield* moveTrunkOnGitHub("b.txt");
             }),
           stacks: [],
         });
