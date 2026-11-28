@@ -20,6 +20,8 @@ case "${1:-}" in
         bun install --frozen-lockfile
         bun src/main.ts init
         jj config set --repo aliases.gh "[\"util\", \"exec\", \"--\", \"bun\", \"${PWD}/src/main.ts\"]"
+        jj config set --repo fix.tools.oxfmt.command '["node_modules/.bin/oxfmt", "--stdin-filepath=$path"]'
+        jj config set --repo fix.tools.oxfmt.patterns '["glob:\"**/*.{ts,json,jsonc,json5,yaml,yml,md,toml}\""]'
         ;;
     tools) ;;
     *)

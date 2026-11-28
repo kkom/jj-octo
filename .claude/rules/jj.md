@@ -36,6 +36,7 @@ Each pull request is one change, amended in place for as long as it lives. A sta
 | `jj gh log` | Shows the stack's changes, pull requests and push state |
 | `jj gh links` | Prints the stack's pull requests as Markdown links with their state and size. `--copy` copies them |
 | `jj gh checks` | Shows the state of each pull request's required checks. Read CI's result here, not from GitHub's check run list |
+| `jj fix` | Formats every change of the stack. Run it before `jj gh submit` |
 | `jj gh submit` | Pushes the stack up to the working copy and opens or updates its pull requests as one GitHub stack |
 | `jj gh publish -r <change>` | Marks the drafts up to that change ready for review |
 | `jj gh merge -r <change>` | Merges the pull requests up to that change, then syncs and republishes the rest. `--cancel-pr-runs` cancels their runs, and `--all-workspaces` works as for `sync` |
