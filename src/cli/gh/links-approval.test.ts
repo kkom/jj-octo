@@ -1,39 +1,32 @@
-import { describe, expect } from "bun:test";
+import { expect } from "bun:test";
 
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 
 import type { ListedPullRequest } from "../../clients/github/types";
-import { fakeGitHub, inRepository } from "../../testing/fake-github";
-import { itEffect } from "../../testing/it-effect";
+import { fakeGitHub, setUpGitHub } from "../../testing/fake-github";
+import { layer } from "../../testing/it-effect";
 import { linked } from "../../testing/links";
 import { pullRequest, pullRequests } from "../../testing/pull-requests";
-import { type ScratchRepository, scratchRepository } from "../../testing/scratch-repository";
+import { ScratchRepository, scratchRepository } from "../../testing/scratch-repository";
 import { stackPullRequests } from "./links";
 
 // The pull request of each change of the repository's stack, top first, against a GitHub with the
 // pull requests given, whose search lists those of the numbers given that it's asked about.
 const linkedWithApproved = (
-  repository: ScratchRepository,
   byBranch: Readonly<Record<string, readonly ListedPullRequest[]>>,
   approved: readonly number[],
 ) =>
-  stackPullRequests("@").pipe(
-    inRepository(
-      repository,
-      fakeGitHub({}, [], {
-        approved: pullRequests(...approved),
-        pullRequestsFrom: (branch) => byBranch[branch] ?? [],
-      }),
-    ),
-  );
+  setUpGitHub({
+    approved: pullRequests(...approved),
+    pullRequestsFrom: (branch) => byBranch[branch] ?? [],
+  }).pipe(Effect.andThen(stackPullRequests("@")));
 
-describe("stackPullRequests's approval", () => {
-  itEffect("marks a ready pull request approved where GitHub's search lists it as approved", () =>
+layer(Layer.merge(scratchRepository, fakeGitHub))("stackPullRequests's approval", (it) => {
+  it("marks a ready pull request approved where GitHub's search lists it as approved", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
       yield* repository.stack("a", "b");
       const found = yield* linkedWithApproved(
-        repository,
         { a: [pullRequest(1, "ready", "anything")], b: [pullRequest(2, "ready", "anything")] },
         [1],
       );
@@ -41,12 +34,11 @@ describe("stackPullRequests's approval", () => {
         linked(pullRequest(2, "ready", "anything")),
         { ...linked(pullRequest(1, "ready", "anything")), state: "approved" },
       ]);
-    }),
-  );
+    }));
 
-  itEffect("marks no pull request approved that isn't ready for review", () =>
+  it("marks no pull request approved that isn't ready for review", () =>
     Effect.gen(function* () {
-      const repository = yield* scratchRepository;
+      const repository = yield* ScratchRepository;
       yield* repository.stack("a", "b", "c");
       // A closed or merged pull request is the change's only where its head is the change.
       const commitA = yield* repository.commitOf("a");
@@ -56,12 +48,7 @@ describe("stackPullRequests's approval", () => {
         pullRequest(2, "closed", commitB),
         pullRequest(3, "draft", "anything"),
       ];
-      const found = yield* linkedWithApproved(
-        repository,
-        { a: [merged], b: [closed], c: [draft] },
-        [1, 2, 3],
-      );
+      const found = yield* linkedWithApproved({ a: [merged], b: [closed], c: [draft] }, [1, 2, 3]);
       expect(found).toStrictEqual([linked(draft), linked(closed), linked(merged)]);
-    }),
-  );
+    }));
 });

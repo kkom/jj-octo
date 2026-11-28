@@ -1,19 +1,20 @@
 import { describe, expect } from "bun:test";
 
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 
 import {
   addCommitOnGitHub,
   moveTrunkOnGitHub,
   squashMergeOnGitHub,
 } from "../../testing/branch-changes";
-import { itEffect } from "../../testing/it-effect";
-import { pushedStack, type ScratchRepository } from "../../testing/scratch-repository";
+import { fakeGitHub } from "../../testing/fake-github";
+import { layer } from "../../testing/it-effect";
+import { pushedStack, ScratchRepository } from "../../testing/scratch-repository";
 import { syncing } from "../../testing/sync";
 import { addWorkspace } from "../../testing/workspace";
 
 // The commits of the changes `a` and `b`, and of their branches as last fetched.
-const commitsOfAB = (repository: ScratchRepository): Effect.Effect<string> =>
+const commitsOfAB = ScratchRepository.use((repository) =>
   repository.jj(
     "log",
     "--no-graph",
@@ -21,89 +22,88 @@ const commitsOfAB = (repository: ScratchRepository): Effect.Effect<string> =>
     "a | b | a@origin | b@origin",
     "-T",
     String.raw`commit_id ++ "\n"`,
-  );
+  ),
+);
 
-// A stack of `a` and `b` with another workspace's working copy on `b`, and a second stack, `c`.
-const withWorkspaceOnStack = Effect.gen(function* () {
-  const repository = yield* pushedStack("a", "b");
-  yield* addWorkspace(repository, "b");
+// Another workspace's working copy on `b`, and a second stack, `c`.
+const addWorkspaceOnStack = Effect.gen(function* () {
+  const repository = yield* ScratchRepository;
+  yield* addWorkspace("b");
   yield* repository.jj("new", "main", "-m", "c");
   yield* repository.jj("bookmark", "create", "c", "-r", "@");
-  return repository;
 });
 
-describe("sync with other workspaces", () => {
+layer(Layer.merge(pushedStack("a", "b"), fakeGitHub))("sync with other workspaces", (it) => {
   describe("where another workspace's working copy is on a stack", () => {
-    itEffect("leaves the stack and its branches as they were, and syncs the rest", () =>
+    it("leaves the stack and its branches as they were, and syncs the rest", () =>
       Effect.gen(function* () {
-        const repository = yield* withWorkspaceOnStack;
-        const before = yield* commitsOfAB(repository);
-        yield* addCommitOnGitHub(repository, "b");
-        yield* squashMergeOnGitHub(repository, "a", { deleted: false });
-        yield* syncing(repository);
+        const repository = yield* ScratchRepository;
+        yield* addWorkspaceOnStack;
+        const before = yield* commitsOfAB;
+        yield* addCommitOnGitHub("b");
+        yield* squashMergeOnGitHub("a", { deleted: false });
+        yield* syncing();
         const filesOfC = yield* repository.files("c");
-        const commits = yield* commitsOfAB(repository);
+        const commits = yield* commitsOfAB;
         expect({ c: filesOfC, commits }).toStrictEqual({
           c: ["a.txt", "base.txt"],
           commits: before,
         });
-      }),
-    );
+      }));
 
-    itEffect("doesn't fetch a branch of the stack whose local bookmark was deleted", () =>
+    it("doesn't fetch a branch of the stack whose local bookmark was deleted", () =>
       Effect.gen(function* () {
-        const repository = yield* withWorkspaceOnStack;
+        const repository = yield* ScratchRepository;
+        yield* addWorkspaceOnStack;
         yield* repository.jj("bookmark", "delete", "b");
         const before = yield* repository.commitOf("b@origin");
-        yield* addCommitOnGitHub(repository, "b");
-        yield* syncing(repository);
+        yield* addCommitOnGitHub("b");
+        yield* syncing();
         const after = yield* repository.commitOf("b@origin");
         expect(after).toBe(before);
-      }),
-    );
+      }));
 
-    itEffect("syncs the stack too with `allWorkspaces`", () =>
+    it("syncs the stack too with `allWorkspaces`", () =>
       Effect.gen(function* () {
-        const repository = yield* withWorkspaceOnStack;
-        yield* squashMergeOnGitHub(repository, "a", { deleted: false });
-        yield* syncing(repository, { allWorkspaces: true });
+        const repository = yield* ScratchRepository;
+        yield* addWorkspaceOnStack;
+        yield* squashMergeOnGitHub("a", { deleted: false });
+        yield* syncing({ allWorkspaces: true });
         const filesOfC = yield* repository.files("c");
         const log = yield* repository.log;
         expect({ c: filesOfC, log }).toStrictEqual({
           c: ["a.txt", "base.txt"],
           log: ["c [c]", "b [b]"],
         });
-      }),
-    );
+      }));
 
-    itEffect("syncs the stack where this workspace's working copy is on it too", () =>
+    it("syncs the stack where this workspace's working copy is on it too", () =>
       Effect.gen(function* () {
-        const repository = yield* withWorkspaceOnStack;
+        const repository = yield* ScratchRepository;
+        yield* addWorkspaceOnStack;
         yield* repository.jj("new", "b");
-        yield* squashMergeOnGitHub(repository, "a", { deleted: false });
-        yield* syncing(repository);
+        yield* squashMergeOnGitHub("a", { deleted: false });
+        yield* syncing();
         const filesOfB = yield* repository.files("b");
         const log = yield* repository.log;
         expect({ b: filesOfB, log }).toStrictEqual({
           b: ["a.txt", "b.txt", "base.txt"],
           log: ["c [c]", "b [b]"],
         });
-      }),
-    );
+      }));
   });
 
-  itEffect("leaves another workspace's new working copy on the trunk it started from", () =>
+  it("leaves another workspace's new working copy on the trunk it started from", () =>
     Effect.gen(function* () {
-      const repository = yield* pushedStack("a", "b");
-      yield* addWorkspace(repository, "main");
-      yield* moveTrunkOnGitHub(repository);
-      yield* syncing(repository);
+      const repository = yield* ScratchRepository;
+      yield* addWorkspace("main");
+      yield* moveTrunkOnGitHub();
+      yield* syncing();
       const filesOfB = yield* repository.files("b");
-      const other = yield* repository.jj("log", "--no-graph", "-r", "other@-", "-T", "description");
+      const other = yield* repository.description("other@-");
       expect({ b: filesOfB, other }).toStrictEqual({
         b: ["a.txt", "b.txt", "base.txt", "trunk.txt"],
-        other: "base\n",
+        other: "base",
       });
-    }),
-  );
+    }));
 });

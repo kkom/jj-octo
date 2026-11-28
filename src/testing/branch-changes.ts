@@ -1,16 +1,17 @@
 import { Array as EffectArray, Effect, String as EffectString } from "effect";
 
-import type { ScratchRepository } from "./scratch-repository";
+import { FakeGitHub } from "./fake-github";
+import { ScratchRepository } from "./scratch-repository";
 
 // What GitHub does to branches by itself, done in the clone and pushed to `origin`.
 
 /** Adds a commit to a branch, as applying a review suggestion does. */
 export const addCommitOnGitHub = (
-  repository: ScratchRepository,
   branch: string,
   file = "suggestion.txt",
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, ScratchRepository> =>
   Effect.gen(function* () {
+    const repository = yield* ScratchRepository;
     yield* repository.git("fetch", "--quiet");
     yield* repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
     yield* repository.writeOnGitHub(file, "suggestion\n");
@@ -21,10 +22,10 @@ export const addCommitOnGitHub = (
 
 /** Adds a commit to `main`. */
 export const moveTrunkOnGitHub = (
-  repository: ScratchRepository,
   file = "trunk.txt",
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, ScratchRepository> =>
   Effect.gen(function* () {
+    const repository = yield* ScratchRepository;
     yield* repository.git("fetch", "--quiet");
     yield* repository.git("checkout", "--quiet", "-B", "main", "origin/main");
     yield* repository.writeOnGitHub(file, "trunk\n");
@@ -38,12 +39,12 @@ export const moveTrunkOnGitHub = (
  * does. With `extra`, the rewritten commit also gets a file the branch didn't have.
  */
 export const rebaseOnGitHub = (
-  repository: ScratchRepository,
   branch: string,
   { extra = false }: { readonly extra?: boolean } = {},
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, ScratchRepository> =>
   Effect.gen(function* () {
-    yield* moveTrunkOnGitHub(repository);
+    const repository = yield* ScratchRepository;
+    yield* moveTrunkOnGitHub();
     yield* repository.git("checkout", "--quiet", "-B", branch, `origin/${branch}`);
     yield* repository.git("rebase", "--quiet", "main");
     if (extra) {
@@ -59,18 +60,26 @@ export const rebaseOnGitHub = (
  * a rewrite by GitHub, the rewritten commits keep the ids of the local changes.
  */
 export const rewriteElsewhere = (
-  repository: ScratchRepository,
   ...branches: readonly string[]
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, ScratchRepository> =>
   Effect.gen(function* () {
+    const repository = yield* ScratchRepository;
     yield* repository.elsewhere("git", "fetch");
-    for (const branch of branches) {
-      yield* repository.elsewhere("bookmark", "track", `${branch}@origin`);
-    }
-    for (const branch of branches) {
-      yield* repository.elsewhere("edit", branch);
-      yield* repository.writeElsewhere(`${branch}-elsewhere.txt`, "elsewhere\n");
-    }
+    yield* Effect.forEach(
+      branches,
+      (branch) => repository.elsewhere("bookmark", "track", `${branch}@origin`),
+      { concurrency: 1, discard: true },
+    );
+    yield* Effect.forEach(
+      branches,
+      (branch) =>
+        repository
+          .elsewhere("edit", branch)
+          .pipe(
+            Effect.andThen(repository.writeElsewhere(`${branch}-elsewhere.txt`, "elsewhere\n")),
+          ),
+      { concurrency: 1, discard: true },
+    );
     yield* repository.elsewhere(
       "git",
       "push",
@@ -80,12 +89,11 @@ export const rewriteElsewhere = (
 
 /**
  * Squash-merges a branch into `into`, `main` by default, as one commit, together with the
- * branches `below` it, as GitHub's stack merge does. Records each one's pull request as merged, and with `deleted` also
- * deletes the branches. Rebases the branches `above` it onto the new `into` in order, as GitHub
- * does for the rest of a stack.
+ * branches `below` it, as GitHub's stack merge does. Records each one's pull request as merged on
+ * the fake GitHub, and with `deleted` also deletes the branches. Rebases the branches `above` it
+ * onto the new `into` in order, as GitHub does for the rest of a stack.
  */
 export const squashMergeOnGitHub = (
-  repository: ScratchRepository,
   branch: string,
   {
     above = [],
@@ -98,29 +106,40 @@ export const squashMergeOnGitHub = (
     readonly deleted?: boolean;
     readonly into?: string;
   } = {},
-): Effect.Effect<void> =>
+): Effect.Effect<void, never, FakeGitHub | ScratchRepository> =>
   Effect.gen(function* () {
+    const repository = yield* ScratchRepository;
+    const github = yield* FakeGitHub;
+    const headOf = (name: string) =>
+      Effect.map(repository.git("rev-parse", `origin/${name}`), EffectString.trim);
     yield* repository.git("fetch", "--quiet");
     yield* repository.git("checkout", "--quiet", "-B", into, `origin/${into}`);
     yield* repository.git("merge", "--quiet", "--squash", `origin/${branch}`);
     yield* repository.git("commit", "--quiet", "-m", `${branch} (#1)`);
     yield* repository.git("push", "--quiet", "origin", into);
-    for (const name of [...below, branch]) {
-      const head = yield* repository.git("rev-parse", `origin/${name}`);
-      repository.mergedOnGitHub(name, EffectString.trim(head));
-    }
-    const top = yield* repository.git("rev-parse", `origin/${branch}`);
-    let previous = EffectString.trim(top);
-    let base = into;
-    for (const name of above) {
-      const head = yield* repository.git("rev-parse", `origin/${name}`);
-      const pushed = EffectString.trim(head);
-      yield* repository.git("checkout", "--quiet", "-B", name, pushed);
-      yield* repository.git("rebase", "--quiet", "--onto", base, previous, name);
-      yield* repository.git("push", "--quiet", "--force", "origin", name);
-      previous = pushed;
-      base = name;
-    }
+    yield* Effect.forEach(
+      [...below, branch],
+      (name) =>
+        Effect.flatMap(headOf(name), (head) =>
+          github.recordMerge({ branch: name, deleted, head, into }),
+        ),
+      { concurrency: 1, discard: true },
+    );
+    // Each branch above moves onto the one rebased before it, and leaves the commits of the
+    // branch below it behind.
+    const top = yield* headOf(branch);
+    yield* Effect.reduce(
+      above,
+      () => ({ base: into, previous: top }),
+      ({ base, previous }, name) =>
+        Effect.gen(function* () {
+          const pushed = yield* headOf(name);
+          yield* repository.git("checkout", "--quiet", "-B", name, pushed);
+          yield* repository.git("rebase", "--quiet", "--onto", base, previous, name);
+          yield* repository.git("push", "--quiet", "--force", "origin", name);
+          return { base: name, previous: pushed };
+        }),
+    );
     if (deleted) {
       yield* repository.git("push", "--quiet", "origin", "--delete", ...below, branch);
     }

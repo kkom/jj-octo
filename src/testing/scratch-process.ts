@@ -1,4 +1,4 @@
-import { Array as EffectArray, Effect, FileSystem, Layer, type Path, type Scope } from "effect";
+import { Array as EffectArray, Context, Effect, FileSystem, Layer, Path, type Scope } from "effect";
 import { SecureRandom } from "effect/crypto";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -14,6 +14,19 @@ export type ScratchServices =
   | FileSystem.FileSystem
   | Path.Path;
 
+/**
+ * The platform services alone, picked out of the current context. A fixture keeps them to build
+ * clients later, which then go to the caller's `Scope` rather than the fixture's.
+ */
+export const scratchServices: Effect.Effect<
+  Context.Context<ScratchServices>,
+  never,
+  ScratchServices
+> = Effect.map(
+  Effect.context<ScratchServices>(),
+  Context.pick(ChildProcessSpawner.ChildProcessSpawner, FileSystem.FileSystem, Path.Path),
+);
+
 /** A new directory, removed when the test's scope closes. */
 export const scratchDirectory = (
   prefix: string,
@@ -24,14 +37,17 @@ export const scratchDirectory = (
     return yield* Effect.orDie(fs.makeTempDirectoryScoped({ directory: parent, prefix }));
   });
 
+/** The jj config file in the root, which jj reads in place of the user's. */
+export const jjConfigFile = (root: string): string => `${root}/config.toml`;
+
 /**
  * The environment that keeps git and jj from reading the configuration of whoever runs the tests.
- * jj reads `config.toml` in the root instead.
+ * jj reads `jjConfigFile(root)` instead.
  */
 export const isolatedEnv = (root: string): Readonly<Record<string, string>> => ({
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
-  JJ_CONFIG: `${root}/config.toml`,
+  JJ_CONFIG: jjConfigFile(root),
 });
 
 /**
@@ -65,16 +81,22 @@ export const makeExecutor = (
         ).pipe(Effect.orDie),
   );
 
+/** The git, jj and pull request description clients that `clientsIn` builds. */
+export type RepositoryClients = Git | Jj | PrDescriptions;
+
 /**
- * The git and jj clients, running in a directory with the environment. What jj commands that
- * change something print goes to `printed`, rather than into the test's output.
+ * Builds the git, jj and pull request description clients, running in a directory with the
+ * environment, as a `Context` for `Effect.provide`. What jj commands that change something print
+ * goes to `printed`, rather than into the test's output.
  */
-export const layerAt = (
+export const clientsIn = (
   cwd: string,
   env: Readonly<Record<string, string>>,
   printed: (text: string) => Effect.Effect<void>,
-): Layer.Layer<Git | Jj | PrDescriptions, never, ScratchServices> =>
-  Layer.merge(
-    gitLayer({ cwd, env }),
-    Layer.provideMerge(prDescriptionsLayer, jjLayer({ cwd, env, printed })),
-  ).pipe(Layer.provide(SecureRandom.layerWebCrypto));
+): Effect.Effect<Context.Context<RepositoryClients>, never, ScratchServices | Scope.Scope> =>
+  Layer.build(
+    Layer.merge(
+      gitLayer({ cwd, env }),
+      Layer.provideMerge(prDescriptionsLayer, jjLayer({ cwd, env, printed })),
+    ).pipe(Layer.provide(SecureRandom.layerWebCrypto)),
+  );

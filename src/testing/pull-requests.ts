@@ -33,7 +33,28 @@ export const openPullRequest = (base: string, number: number, title: string): Pu
   title,
 });
 
-/** Pull request `number` of this repository as a listing shows it, in the state and with the head given. */
+/**
+ * The open pull requests of the stack `a`, `b`: #1 for `a` against `main`, and #2 for `b` against
+ * `a`.
+ */
+export const openPullRequestsAB: Readonly<Record<"a" | "b", PullRequest>> = {
+  a: openPullRequest("main", 1, "a"),
+  b: openPullRequest("a", 2, "b"),
+};
+
+/**
+ * The open pull requests of the stack `a`, `b`, `c`: those of `a` and `b`, and #3 for `c` against
+ * `b`.
+ */
+export const openPullRequestsABC: Readonly<Record<"a" | "b" | "c", PullRequest>> = {
+  ...openPullRequestsAB,
+  c: openPullRequest("b", 3, "c"),
+};
+
+/**
+ * Pull request `number` of this repository as a listing shows it, in the state and with the head
+ * given.
+ */
 export const pullRequest = (
   number: number,
   state: PullRequestState,

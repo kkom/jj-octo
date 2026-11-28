@@ -5,13 +5,15 @@ const holding = (env: Readonly<Record<string, string>>) =>
   ConfigProvider.fromEnv({ env: { ...env } });
 
 /**
- * An environment holding only `env`, so whatever the tests run in can't change what the code
- * reads through `Config`.
+ * An empty environment, so whatever the tests run in can't change what the code reads through
+ * `Config`.
  */
-export const environment = (env: Readonly<Record<string, string>> = {}): Layer.Layer<never> =>
-  ConfigProvider.layer(holding(env));
+export const environment: Layer.Layer<never> = ConfigProvider.layer(holding({}));
 
-/** Runs the effect in an environment holding only `env`, as `environment` does. */
+/**
+ * Runs the effect in an environment holding only `env`, in place of the empty `environment` every
+ * test has.
+ */
 export const withEnvironment =
   (env: Readonly<Record<string, string>>) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
