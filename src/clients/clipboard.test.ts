@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "bun:test";
+import { afterAll, describe, expect } from "bun:test";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -6,6 +6,7 @@ import { BunServices } from "@effect/platform-bun";
 import { Array as EffectArray, Effect, Layer, String as EffectString } from "effect";
 
 import { environment } from "../testing/environment";
+import { itEffect } from "../testing/it-effect";
 import { removeScratchRepositories, scratchDirectory } from "../testing/scratch-repository";
 import { Clipboard, ClipboardFailed, clipboardLayer, MACOS_SCRIPT } from "./clipboard";
 
@@ -61,107 +62,119 @@ const standIn = (command: string, exitCode = 0) => {
 };
 
 describe("clipboardLayer", () => {
-  it("sets the HTML and the text with osascript on macOS", async () => {
-    const osascript = standIn("osascript");
-    const reported = await Effect.runPromise(
-      writeWith(layerFor("darwin", { PATH: osascript.PATH })),
-    );
-    expect({ recorded: osascript.recorded(), reported }).toStrictEqual({
-      recorded: {
-        alive: true,
-        args: EffectArray.join(
-          ["-l", "JavaScript", "-e", MACOS_SCRIPT, content.html, content.text, ""],
-          "\n",
-        ),
-        stdin: "",
-      },
-      reported: "copied",
-    });
-  });
+  itEffect("sets the HTML and the text with osascript on macOS", () =>
+    Effect.gen(function* () {
+      const osascript = standIn("osascript");
+      const reported = yield* writeWith(layerFor("darwin", { PATH: osascript.PATH }));
+      expect({ recorded: osascript.recorded(), reported }).toStrictEqual({
+        recorded: {
+          alive: true,
+          args: EffectArray.join(
+            ["-l", "JavaScript", "-e", MACOS_SCRIPT, content.html, content.text, ""],
+            "\n",
+          ),
+          stdin: "",
+        },
+        reported: "copied",
+      });
+    }),
+  );
 
-  it("pipes the HTML to wl-copy under Wayland, leaving its process running", async () => {
-    const wlCopy = standIn("wl-copy");
-    const reported = await Effect.runPromise(
-      writeWith(layerFor("linux", { PATH: wlCopy.PATH, WAYLAND_DISPLAY: "wayland-0" })),
-    );
-    expect({ recorded: wlCopy.recorded(), reported }).toStrictEqual({
-      recorded: {
-        alive: true,
-        args: "--type\ntext/html\n",
-        stdin: content.html,
-      },
-      reported: "copied",
-    });
-  });
+  itEffect("pipes the HTML to wl-copy under Wayland, leaving its process running", () =>
+    Effect.gen(function* () {
+      const wlCopy = standIn("wl-copy");
+      const reported = yield* writeWith(
+        layerFor("linux", { PATH: wlCopy.PATH, WAYLAND_DISPLAY: "wayland-0" }),
+      );
+      expect({ recorded: wlCopy.recorded(), reported }).toStrictEqual({
+        recorded: {
+          alive: true,
+          args: "--type\ntext/html\n",
+          stdin: content.html,
+        },
+        reported: "copied",
+      });
+    }),
+  );
 
-  it("pipes the HTML to xclip under X, leaving its process running", async () => {
-    const xclip = standIn("xclip");
-    const reported = await Effect.runPromise(
-      writeWith(layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" })),
-    );
-    expect({ recorded: xclip.recorded(), reported }).toStrictEqual({
-      recorded: {
-        alive: true,
-        args: "-selection\nclipboard\n-t\ntext/html\n",
-        stdin: content.html,
-      },
-      reported: "copied",
-    });
-  });
+  itEffect("pipes the HTML to xclip under X, leaving its process running", () =>
+    Effect.gen(function* () {
+      const xclip = standIn("xclip");
+      const reported = yield* writeWith(
+        layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }),
+      );
+      expect({ recorded: xclip.recorded(), reported }).toStrictEqual({
+        recorded: {
+          alive: true,
+          args: "-selection\nclipboard\n-t\ntext/html\n",
+          stdin: content.html,
+        },
+        reported: "copied",
+      });
+    }),
+  );
 
-  it("falls back to xclip under Wayland where wl-copy isn't installed", async () => {
-    const xclip = standIn("xclip");
-    const reported = await Effect.runPromise(
-      writeWith(layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "wayland-0" })),
-    );
-    expect({ recorded: xclip.recorded(), reported }).toStrictEqual({
-      recorded: {
-        alive: true,
-        args: "-selection\nclipboard\n-t\ntext/html\n",
-        stdin: content.html,
-      },
-      reported: "copied",
-    });
-  });
+  itEffect("falls back to xclip under Wayland where wl-copy isn't installed", () =>
+    Effect.gen(function* () {
+      const xclip = standIn("xclip");
+      const reported = yield* writeWith(
+        layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "wayland-0" }),
+      );
+      expect({ recorded: xclip.recorded(), reported }).toStrictEqual({
+        recorded: {
+          alive: true,
+          args: "-selection\nclipboard\n-t\ntext/html\n",
+          stdin: content.html,
+        },
+        reported: "copied",
+      });
+    }),
+  );
 
   // On a platform it has no command for, reporting rather than failing shows that nothing ran.
-  it("runs no command in a Claude Code cloud session, which can't reach the clipboard", async () => {
-    expect(
-      await Effect.runPromise(writeWith(layerFor("win32", { CLAUDE_CODE_REMOTE: "true" }))),
-    ).toBe("unreachable");
-  });
+  itEffect("runs no command in a Claude Code cloud session, which can't reach the clipboard", () =>
+    Effect.gen(function* () {
+      const reported = yield* writeWith(layerFor("win32", { CLAUDE_CODE_REMOTE: "true" }));
+      expect(reported).toBe("unreachable");
+    }),
+  );
 
-  it("fails naming the command where it exits non-zero", async () => {
-    const xclip = standIn("xclip", 1);
-    const failure = await layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }).pipe(
-      writeWith,
-      Effect.flip,
-      Effect.runPromise,
-    );
-    xclip.recorded();
-    expect(failure).toStrictEqual(new ClipboardFailed({ message: "xclip exited with 1" }));
-  });
+  itEffect("fails naming the command where it exits non-zero", () =>
+    Effect.gen(function* () {
+      const xclip = standIn("xclip", 1);
+      const failure = yield* layerFor("linux", { PATH: xclip.PATH, WAYLAND_DISPLAY: "" }).pipe(
+        writeWith,
+        Effect.flip,
+      );
+      xclip.recorded();
+      expect(failure).toStrictEqual(new ClipboardFailed({ message: "xclip exited with 1" }));
+    }),
+  );
 
-  it("fails naming the command where it isn't installed", async () => {
-    const empty = scratchDirectory("clipboard-");
-    const failure = await layerFor("linux", { PATH: empty, WAYLAND_DISPLAY: "" }).pipe(
-      writeWith,
-      Effect.flip,
-      Effect.runPromise,
-    );
-    expect(failure).toStrictEqual(
-      new ClipboardFailed({
-        message: "couldn't find xclip",
-      }),
-    );
-  });
+  itEffect("fails naming the command where it isn't installed", () =>
+    Effect.gen(function* () {
+      const empty = scratchDirectory("clipboard-");
+      const failure = yield* layerFor("linux", { PATH: empty, WAYLAND_DISPLAY: "" }).pipe(
+        writeWith,
+        Effect.flip,
+      );
+      expect(failure).toStrictEqual(
+        new ClipboardFailed({
+          message: "couldn't find xclip",
+        }),
+      );
+    }),
+  );
 
-  it("fails on a platform it has no command for", async () => {
-    const failure = await layerFor("win32").pipe(writeWith, Effect.flip, Effect.runPromise);
-    expect(failure).toStrictEqual(
-      new ClipboardFailed({
-        message: "copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not win32",
-      }),
-    );
-  });
+  itEffect("fails on a platform it has no command for", () =>
+    Effect.gen(function* () {
+      const failure = yield* layerFor("win32").pipe(writeWith, Effect.flip);
+      expect(failure).toStrictEqual(
+        new ClipboardFailed({
+          message:
+            "copying to the clipboard needs macOS, or Linux with wl-copy or xclip, not win32",
+        }),
+      );
+    }),
+  );
 });
