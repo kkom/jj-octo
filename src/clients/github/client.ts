@@ -91,10 +91,15 @@ export class GitHub extends Context.Service<
     readonly stackOf: (
       pullRequest: PullRequestNumber,
     ) => Effect.Effect<Option.Option<RemoteStack>, GitHubFailed>;
-    /** The workflow runs of the commit that haven't completed. */
-    readonly unfinishedRuns: (
-      commit: string,
-    ) => Effect.Effect<readonly WorkflowRunId[], GitHubFailed>;
+    /**
+     * The workflow runs of a commit on a branch that haven't completed. A run of the same commit on
+     * another branch isn't one of them, such as the trunk's push run once a merge fast-forwards the
+     * trunk to the commit.
+     */
+    readonly unfinishedRuns: (head: {
+      readonly branch: string;
+      readonly commit: string;
+    }) => Effect.Effect<readonly WorkflowRunId[], GitHubFailed>;
     /** Dissolves the stack. Its pull requests stay open. */
     readonly unstack: (stack: StackNumber) => Effect.Effect<void, GitHubFailed>;
   } & CheckReads &
@@ -272,9 +277,11 @@ export const GitHubLive = (
             Effect.map((found) => EffectArray.map(found, (listed) => listedPullRequest(listed))),
           ),
         stackOf,
-        unfinishedRuns: (commit) =>
+        unfinishedRuns: ({ branch, commit }) =>
           everyPage(
-            HttpClientRequest.get(repo("/actions/runs"), { urlParams: { head_sha: commit } }),
+            HttpClientRequest.get(repo("/actions/runs"), {
+              urlParams: { branch, head_sha: commit },
+            }),
             (request) =>
               json(WorkflowRuns)(request).pipe(Effect.map(({ workflow_runs }) => workflow_runs)),
           ).pipe(
