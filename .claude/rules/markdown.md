@@ -2,10 +2,10 @@
 
 ## Don't hard-wrap lines
 
-Write each paragraph, list item and table row on one line, however long it runs. The editor soft-wraps it to the width of the window it's read in.
+Write each paragraph, list item and table row on one line. The editor soft-wraps it.
 
-Hard-wrapping gains nothing, since the editor wraps anyway, and every later edit reflows the lines after it, so the real change gets buried in the diff.
+That's because each edit to a hard-wrapped paragraph reflows the lines after it, hiding the real change in the diff.
 
 ## Start every list item on its own line
 
-A line opening with a marker — `-`, a number, or a symbol such as ❌ or ✅ — is a list item. Start it on a new line, even where the renderer would run it into the one above.
+A line opening with a marker, such as `-`, a number, ❌ or ✅, is a list item. Start it on a new line, even where the renderer would join it to the line above.

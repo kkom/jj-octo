@@ -1,8 +1,7 @@
 name: Branch cleanup
 
-# Deletes branches with no commit in two weeks, except ones still in use. The step summary
-# lists what it deleted and what it kept. On a pull request, or when run by hand with
-# dry_run, it deletes nothing.
+# Deletes branches with no commit in two weeks, except ones in use. A pull request run or a
+# dry_run deletes nothing.
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -32,8 +31,7 @@ jobs:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
-    # Each dry run has a group of its own, so a pending run never replaces another of a
-    # different kind
+    # A dry run gets its own group, so a pending run never replaces a run of another kind
     concurrency:
       group: branch-cleanup-${{ (github.event_name == 'pull_request' || inputs.dry_run == true) && github.run_id || 'delete' }}
 

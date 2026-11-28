@@ -1,8 +1,8 @@
 {
-  // Type-aware linting is on through `--type-aware` in the lint scripts and `oxc.typeAware` in
-  // the editor, not `options.typeAware` here. oxlint accepts that option only in the root
-  // config, and an editor opened on a parent directory reads this file as a nested one.
-  // GraphQL Code Generator writes this, and `check:codegen` compares it byte for byte.
+  // Type-aware linting is on through `--type-aware` and the editor's `oxc.typeAware`. oxlint
+  // accepts `options.typeAware` only in a root config, and an editor opened on a parent
+  // directory reads this file as nested.
+  // `check:codegen` compares the generated GraphQL types byte for byte.
   "ignorePatterns": ["src/clients/github/graphql/"],
   "categories": {
     "correctness": "error",
@@ -11,23 +11,21 @@
     "perf": "error",
     "style": "error",
     "restriction": "error",
-    // no-unnecessary-condition here needs noUncheckedIndexedAccess, or it
-    // reads every guard against a missing element as dead code.
+    // no-unnecessary-condition needs noUncheckedIndexedAccess, or it reads every guard against
+    // a missing element as dead code.
     "nursery": "error",
   },
   "rules": {
     "capitalized-comments": ["error", "always", { "ignoreConsecutiveComments": true }],
-    // TypeScript's return types already check what a function returns, and the
-    // rule fails on a generator that ends with `return yield*` of a failure on
-    // one path and returns nothing on another, as `missingReturnYieldStar` asks.
+    // Return types check what a function returns. The rule fails a generator that returns
+    // `yield*` of a failure on one path, as `missingReturnYieldStar` asks, and nothing on another.
     "consistent-return": "off",
     "explicit-function-return-type": "off",
     // Effect.gen takes an anonymous generator.
     "func-names": "off",
     "id-length": "off",
-    // unicorn/no-useless-undefined bans `let x: T | undefined = undefined`, and this
-    // rule bans the `let x: T | undefined;` left without it. The compiler still fails
-    // a read before the first assignment.
+    // unicorn/no-useless-undefined bans `let x: T | undefined = undefined`, and this rule bans
+    // `let x: T | undefined;`. The compiler still fails a read before assignment.
     "init-declarations": "off",
     // Tagged errors live beside the program that fails with them.
     "max-classes-per-file": "off",
@@ -36,17 +34,14 @@
     // Effect's factories are capitalized plain calls: Schema.Struct, Data.TaggedError.
     "new-cap": ["error", { "capIsNew": false }],
     "no-async-await": "off",
-    // It catches `&` typed for `&&`, which tsc already rejects wherever a boolean is
-    // expected, and bans the file-mode and bit-flag tests that need the operators.
+    // tsc fails `&` typed for `&&` where a boolean is expected, and bit-flag tests need `&`.
     "no-bitwise": "off",
     "no-magic-numbers": "off",
-    // Its fix is to mutate in place, which the readonly types here forbid, leaving
-    // a hand-rebuilt object that drops whatever it forgets.
+    // Its fix mutates in place, which readonly types forbid, and a hand-rebuilt object drops
+    // whatever it forgets.
     "no-map-spread": "off",
     "no-optional-chaining": "off",
-    // tsc fails on a name declared twice as a value. This rule also fails on a schema
-    // and its type that share one name, as `const User` beside `type User`, which
-    // TypeScript allows.
+    // tsc fails a value declared twice, and this rule also fails `const User` beside `type User`.
     "no-redeclare": "off",
     "no-rest-spread-properties": "off",
     "no-restricted-imports": [
@@ -61,8 +56,7 @@
         ],
       },
     ],
-    // Without an object, a restriction matches the property on any object, so it also
-    // catches a matcher behind `.not`, `.resolves` or `expect.soft`.
+    // A restriction without an object also catches a matcher behind `.not` or `expect.soft`.
     "no-restricted-properties": [
       "error",
       {
@@ -171,22 +165,19 @@
     "no-undef": "off",
     "no-undefined": "off",
     "no-unmodified-loop-condition": ["error", { "checkConditionalExpressions": true }],
-    // With func-style, two functions that call each other are arrows, so one of
-    // them reads the other before its declaration. A use inside a function body
-    // runs later, and a use in the same scope still fails.
+    // With func-style, one of two arrows that call each other reads the other before its
+    // declaration. A use in a function body runs later, and one in the same scope still fails.
     "no-use-before-define": ["error", { "variables": false }],
-    // As a statement, `void` is how no-floating-promises lets a promise go
-    // unawaited on purpose.
+    // A `void` statement is how no-floating-promises leaves a promise unawaited on purpose.
     "no-void": ["error", { "allowAsStatement": true }],
     "no-warning-comments": "off",
     "one-var": ["error", "never"],
-    // With promise-function-async, a method that returns a promise is async,
-    // and return-await bans awaiting it on the return. This one fails that method
-    // for having no await; typescript/require-await knows a returned promise.
+    // promise-function-async makes a promise-returning method async, and return-await bans
+    // awaiting its return. This rule then fails the method for having no await, and
+    // typescript/require-await accepts it.
     "require-await": "off",
     "sort-imports": "off",
-    // Bracket access is what the compiler requires on an index signature, and the type
-    // information tells the rule which reads those are.
+    // noPropertyAccessFromIndexSignature requires brackets on an index signature.
     "typescript/dot-notation": ["error", { "allowIndexSignaturePropertyAccess": true }],
     "typescript/no-empty-interface": ["error", { "allowSingleExtends": true }],
     "typescript/no-empty-object-type": ["error", { "allowInterfaces": "with-single-extends" }],
@@ -221,28 +212,25 @@
           // Readonly fields that hold effects, which the rule allows only at the top level.
           { "from": "file", "name": "SetupStep", "path": "src/cli/gh/setup.ts" },
         ],
+        // The callee types an inferred parameter.
         "ignoreInferredTypes": true,
       },
     ],
     "typescript/promise-function-async": ["error", { "checkArrowFunctions": false }],
     // Effect schema trees and combinator stacks nest four deep routinely.
     "unicorn/max-nested-calls": ["error", { "max": 5 }],
-    // It reads any two-argument call of an array method's name as passing
-    // `thisArg`, so it fails on Effect.flatMap(effect, f) and
-    // Effect.forEach(items, f), which take no `thisArg`. Nothing here passes
-    // one, since no callback uses `this`.
+    // It fails Effect.forEach(items, f) as passing `thisArg`, and no callback here uses `this`.
     "unicorn/no-array-method-this-argument": "off",
-    // A fold and a loop do the same job; which reads better depends on the fold.
+    // Which reads better, a fold or a loop, depends on the fold.
     "unicorn/no-array-reduce": "off",
     "unicorn/no-immediate-mutation": "off",
     "unicorn/no-null": "off",
     // Skipped holes read as well as an index, and prefer-destructuring bans the index.
     "unicorn/no-unreadable-array-destructuring": "off",
-    // no-invalid-void-type bans `void` in a call's type arguments, so a promise
-    // with no value is resolved with `undefined`, which an argument has to name.
+    // no-invalid-void-type bans `void` in type arguments, so a promise with no value resolves
+    // with an explicit `undefined` argument.
     "unicorn/no-useless-undefined": ["error", { "checkArguments": false }],
-    // oxfmt prints hexadecimal digits in lowercase and this rule, which takes
-    // no option, demands uppercase; the formatter owns a literal's spelling.
+    // oxfmt prints lowercase hexadecimal digits, and this rule has no option to allow them.
     "unicorn/number-literal-case": "off",
     // Its fix inserts a `new` that breaks Schema.TaggedError extends clauses.
     "unicorn/throw-new-error": "off",

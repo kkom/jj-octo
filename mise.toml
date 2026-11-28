@@ -1,4 +1,4 @@
-# The version of mise itself. An older mise warns when it reads this file.
+# The oldest mise this file supports. An older one warns.
 min_version = { soft = "2026.11.14" }
 
 [tools]
