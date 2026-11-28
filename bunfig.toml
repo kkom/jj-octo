@@ -1,3 +1,2 @@
 [install]
-# Makes bun skip releases less than 3 days old whenever it resolves a version.
 minimumReleaseAge = 259200

@@ -3,8 +3,7 @@
   enabled: true,
   // config:recommended turns the dashboard on, and this object merges with it.
   dependencyDashboard: {
-    // osvVulnerabilityAlerts raises a PR only where a fixed version exists. This lists the CVEs
-    // that have no fix yet, which nothing else here would report.
+    // Lists the CVEs that osvVulnerabilityAlerts can't raise a PR for, as no fix exists.
     osvVulnerabilitySummary: "unresolved",
   },
   osvVulnerabilityAlerts: true,
@@ -19,31 +18,23 @@
     enabled: true,
     commitMessagePrefix: "[{{manager}}]",
     branchTopic: "lock-file-maintenance-{{manager}}",
-    // Off Renovate's Monday-before-4am default; one day a week, so wide enough not to miss a run.
+    // Renovate's default window, before 4am on Monday, is narrow enough to miss a run.
     schedule: ["after 5:30am and before 5:30pm on wednesday"],
   },
-  // The same age bunfig.toml makes bun wait for. A shorter one here raises PRs whose install
-  // fails, since bun refuses the version the PR asks for.
+  // The same age as bunfig.toml's `minimumReleaseAge`. With a shorter one, bun refuses the version
+  // and the PR's install fails.
   minimumReleaseAge: "3 days",
-  // "strict" is Renovate's default, set here explicitly. Renovate opens a branch only once the
-  // "renovate/stability-days" check passes, i.e. every update on it is at least
-  // minimumReleaseAge old. A group is opened with just the members that are old enough; the
-  // rest come in a later PR, and until then the dashboard lists them as neither pending nor
-  // scheduled.
-  //
-  // That breaks a group whose members list each other in peerDependencies, such as effect and
-  // @effect/platform-*. If a platform release is old enough but the effect release it requires
-  // is not, the branch pairs it with the older effect and fails at install, before any test
-  // runs. Renovate fixes the branch itself once every member is old enough, so wait for that.
-  // Don't pin versions to work around it, or relax minimumReleaseAge for the package involved.
+  // Renovate's default. A group's branch opens with only its members that are minimumReleaseAge
+  // old, and the rest join later. So a new @effect/platform-* paired with an older effect fails
+  // at install until every member is old enough. Wait for that, rather than pin versions or
+  // relax minimumReleaseAge.
   internalChecksFilter: "strict",
   prConcurrentLimit: 0,
   prHourlyLimit: 0,
   schedule: ["after 11:30am and before 5:30pm every weekday"],
   rangeStrategy: "pin",
-  // Renovate otherwise counts any commit subject shaped like "<word>: <text>" as a conventional
-  // commit, and gives PRs semantic titles while those are most of main's last 20 commits. It
-  // finds a closed PR by its title, so each switch reopens every update a closed PR ignored.
+  // Otherwise Renovate switches to semantic titles while "<word>: <text>" subjects are most of
+  // main's last 20 commits. It finds closed PRs by title, so each switch reopens ignored updates.
   semanticCommits: "disabled",
   customManagers: [
     {
@@ -63,8 +54,7 @@
       datasourceTemplate: "github-releases",
     },
     {
-      // Renovate's own mise manager skips the `http` backend, so this reads the
-      // version out of the `# renovate:` comment above it instead.
+      // Renovate's mise manager skips the `http` backend.
       customType: "regex",
       managerFilePatterns: ["/(^|/)mise\\.toml$/"],
       matchStrings: [
@@ -74,7 +64,7 @@
   ],
   packageRules: [
     {
-      // bun resolves to whatever is newest itself, so there's no age to gate here.
+      // bun resolves to the newest itself, so there's no age to gate.
       matchUpdateTypes: ["lockFileMaintenance"],
       minimumReleaseAge: null,
       prBodyNotes: [
@@ -82,8 +72,7 @@
       ],
     },
     {
-      // Off on purpose: we want mise to be portable across environments, so there is no mise.lock
-      // to maintain.
+      // Off: without a mise.lock, mise stays portable across environments.
       matchManagers: ["mise"],
       matchUpdateTypes: ["lockFileMaintenance"],
       enabled: false,
@@ -97,13 +86,13 @@
       ],
     },
     {
-      // Pins fix an existing range to the version already resolved, not a newer one.
+      // A pin fixes a range to the already-resolved version.
       matchUpdateTypes: ["pin"],
       minimumReleaseAge: null,
     },
     {
-      // engines states the oldest runtime a published package supports, which we raise by hand.
-      // rangeStrategy "pin" applies to it too, and would demand exactly the newest release.
+      // engines states the oldest supported runtime, raised by hand, which "pin" would replace
+      // with the newest.
       matchDepTypes: ["engines"],
       enabled: false,
     },
@@ -116,14 +105,11 @@
       groupName: "effect",
     },
     {
-      // oxlint-tsgolint embeds its own TypeScript compiler and its version says which one:
-      // 7.0.2001 is TypeScript 7.0.2, tsgolint patch 1. Bumping one alone leaves the type-aware
-      // lint rules answering about a compiler `tsc` no longer runs.
-      //
-      // `check:types` runs `tsc` through @effect/tsgo, which runs its own build of the installed
-      // TypeScript. Where its release has none, it runs the latest version it has, with no
-      // warning, so it moves with TypeScript. This rule comes after effect's, so @effect/tsgo
-      // joins this group rather than that one.
+      // oxlint-tsgolint embeds the TypeScript compiler its version names: 7.0.2001 is
+      // TypeScript 7.0.2, patch 1. @effect/tsgo runs its own build of the installed TypeScript, or
+      // silently its latest build where it lacks one. Bumping one alone checks against a compiler
+      // the others don't run. This rule comes after effect's, so @effect/tsgo joins this group, not
+      // effect's.
       matchPackageNames: ["@effect/tsgo", "oxlint-tsgolint", "typescript"],
       groupName: "TypeScript",
     },

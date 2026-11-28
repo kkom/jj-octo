@@ -5,12 +5,11 @@ paths:
 
 # Sorted keys
 
-## Fix the order, not the rule
+## Disable `sort-keys` only where the order is the meaning
 
-`sort-keys` keeps object literals alphabetical, and almost everywhere key order has no meaning.
+Elsewhere, fix the order. Where you disable it, say what the order means.
 
-## Disable it where the order is the meaning
+That's because keys renamed to sort in the needed order hide the constraint, and a rename breaks it.
 
-Disable the rule at that site with `// oxlint-disable-next-line sort-keys`, and a comment naming what the order means.
-
-❌ Don't contort key names so alphabetical order happens to agree. The constraint stays invisible, and the next rename breaks it silently.
+- ❌ Keys renamed `aFirst` and `bSecond` so that sorting keeps them in order
+- ✅ `// oxlint-disable-next-line sort-keys -- the steps run in this order`

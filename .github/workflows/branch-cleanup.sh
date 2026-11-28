@@ -2,22 +2,20 @@
 # Run by branch-cleanup.yaml, which sets CUTOFF_DAYS, DRY_RUN and GH_TOKEN.
 set -euo pipefail
 
-# A rebase gives each commit a new committer date. So a stack kept in sync with main
-# stays younger than the cutoff.
+# A rebase resets committer dates, so a stack kept in sync with main stays under the cutoff.
 CUTOFF="$(date --utc --date "${CUTOFF_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)"
 export CUTOFF
 
-# Each open pull request keeps its head and its base. A branch low in a stack is the
-# base of the pull request above it, and GitHub closes that pull request if its base
-# is deleted. A pull request from a fork has its head branch only in the fork.
+# Open pull requests keep their head and base, since GitHub closes one whose base is deleted.
+# A fork's pull request has its head only in the fork.
 gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
   --jq '.[] | (select(.head.repo.full_name == env.GITHUB_REPOSITORY) | .head.ref), .base.ref' \
   > "${RUNNER_TEMP}/skip"
-# GitHub lists a branch as protected by branch protection or by a ruleset
+# Protected by branch protection or a ruleset
 gh api --paginate "repos/${GITHUB_REPOSITORY}/branches?protected=true&per_page=100" \
   --jq '.[].name' \
   >> "${RUNNER_TEMP}/skip"
-# GitHub Pages can publish from a branch that no pull request touches, such as gh-pages
+# GitHub Pages can publish from a branch no pull request touches, such as gh-pages
 has_pages="$(gh api "repos/${GITHUB_REPOSITORY}" --jq .has_pages)"
 if [ "${has_pages}" = true ]; then
   gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.source.branch // empty' \
@@ -28,20 +26,17 @@ while read -r branch; do
   skip["${branch}"]=1
 done < "${RUNNER_TEMP}/skip"
 
-# Reads a list of a branch's pull requests, and prints the time, number and head of
-# the one that closed last, separated by tabs. As above, a pull request from a fork
-# doesn't count.
+# Prints the close time, number and head of a branch's last pull request to close, skipping pull
+# requests from forks.
 latest_closed='map(select(.closedAt != null and .headRepository.nameWithOwner == env.GITHUB_REPOSITORY))
   | max_by(.closedAt) // {} | [.closedAt, .number, .headRefOid]'
 
-# Prints each old branch, its name as a URL path, its head, whether it has more pull
-# requests than the query read, and the latest_closed fields, separated by tabs.
+# Prints each old branch, its name as a URL path, its head, whether it has more pull requests
+# than the query read, and the latest_closed fields.
 #
-# Git allows # and % in a branch name, which the URL path must encode. The refs
-# endpoint reads each / as part of the name, so those stay.
-#
-# GitHub writes committedDate and closedAt in UTC with a Z suffix, as CUTOFF is
-# written. So comparing the strings compares the times.
+# The URL path encodes # and %, which git allows in a name, but keeps /, which the refs endpoint
+# reads as part of the name. committedDate and closedAt are UTC with a Z suffix, like CUTOFF, so
+# string comparison compares times.
 # shellcheck disable=SC2016 # $owner and $repository are GraphQL and jq variables
 gh api graphql --paginate \
   --raw-field owner="${GITHUB_REPOSITORY%/*}" \
@@ -71,8 +66,7 @@ gh api graphql --paginate \
     | @tsv' \
   > "${RUNNER_TEMP}/old"
 
-# Prints the latest_closed fields for a branch with more pull requests than the query
-# above reads. Each page prints its latest, and sort picks the latest of those.
+# Prints latest_closed for a branch with more pull requests than the query above reads.
 read_latest_closed() {
   # shellcheck disable=SC2016 # $owner and the other names are GraphQL variables
   gh api graphql --paginate \
@@ -94,10 +88,9 @@ read_latest_closed() {
     | sort --reverse | sed -n 1p
 }
 
-# GitHub stops updating a pull request's head once it closes. So a branch whose head
-# differs from the head of its latest closed pull request may hold work that pull
-# request lacks. It's kept until CUTOFF_DAYS after that pull request closed.
-# Each stale entry is the branch, its URL path and its head, separated by tabs.
+# GitHub freezes a pull request's head when it closes, so a branch whose head differs from its
+# latest closed pull request's may hold work that pull request lacks. Each stale entry is the
+# branch, its URL path and its head, separated by tabs.
 stale=()
 kept=()
 while IFS=$'\t' read -r branch path head more closed pull pull_head; do
@@ -124,7 +117,7 @@ stale_line="${#stale[@]} branches are stale, with no commit since ${CUTOFF}."
 kept_heading="Kept until ${CUTOFF_DAYS} days after their latest pull request closed, as they may hold work it lacks"
 echo "${stale_line} ${#kept[@]} more are ${kept_heading,}."
 
-# Each deleted branch is listed with its head, which recreates it
+# Lists each deleted branch with its head, which recreates it
 deleted=()
 pushed=()
 failed=()
@@ -151,7 +144,6 @@ for entry in "${stale[@]}"; do
 done
 echo "::endgroup::"
 
-# Writes a heading with the list's length, and the list folded away under it
 list() {
   local heading="$1"
   shift

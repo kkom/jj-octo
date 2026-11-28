@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 
-# Sets this checkout up in a Claude Code cloud session, for an environment whose setup
-# runs each checkout's `.claude/hooks/session-start.sh` with a phase: `trunk` before the
-# session opens, and `tools` in the background. The line below says it takes them.
+# Sets the checkout up in a Claude Code cloud session. The environment runs the `trunk` phase
+# before the session opens and `tools` in the background, as the next line declares.
 # session-start-phases: trunk tools
 #
-# `jj gh` runs this repository's CLI from source, so a change to it takes effect in the
-# next command. `init` sets the alias to the released `jj-octo` where the checkout has none,
-# so it's pointed back here afterwards. The CLI's dependencies are installed first, since
-# `init` runs from source.
+# `init` sets the `jj gh` alias to the released `jj-octo` where the checkout has none, so the
+# `jj config set` line points it at the source.
 
 set -euo pipefail
 
-# stdout is kept for a report the environment reads, so progress goes to stderr.
+# The environment reads a report from stdout, so progress goes to stderr.
 exec 1>&2
 
 case "${1:-}" in

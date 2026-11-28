@@ -8,9 +8,9 @@
     "noUncheckedSideEffectImports": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    // Effect's diagnostics, which `effect-tsgo tsc` reports in the type check. Every rule is
-    // set here, since a rule left out takes the plugin's default. A rule that's off says why.
-    // `scripts/effect-diagnostics.test.ts` holds this to the plugin's rules.
+    // Effect's diagnostics. Every rule is set, since an omitted one takes the plugin's default, and
+    // each that's off says why. `scripts/effect-diagnostics.test.ts` checks this list against the
+    // plugin's.
     "plugins": [
       {
         "name": "@effect/language-service",
@@ -19,8 +19,7 @@
           "acquireReleaseDisposable": "error",
           "allOfMapToForEach": "error",
           "anyUnknownInErrorContext": "error",
-          // jj-octo builds on Effect's unstable modules on purpose, such as `effect/cli`, and
-          // no package imports its modules, so neither exposing nor using one is a problem.
+          // effect.md allows the unstable modules, and no package imports jj-octo's.
           "apiStabilityLeak": "off",
           "asyncFunction": "error",
           "catchAllTagDispatchToCatchTag": "error",
@@ -53,8 +52,8 @@
           "effectSucceedWithVoid": "error",
           "effectTryWithoutCatch": "error",
           "errorPayloadShadowsName": "error",
-          // Its analysis can make the type check report circular instantiations (TS2615, TS5115),
-          // which stock TypeScript doesn't.
+          // It causes circular-instantiation errors (TS2615, TS5115) that stock TypeScript doesn't
+          // report.
           "experimentalApiUsage": "off",
           "extendsNativeError": "error",
           "failCauseToConstructor": "error",
@@ -69,8 +68,7 @@
           "floatingEffectInVitest": "error",
           "forLoopPushToForEach": "error",
           "genericEffectServices": "error",
-          // oxlint's no-console already fails on every console call, and globalConsoleInEffect
-          // points Effect code to Effect.log.
+          // oxlint's no-console fails every console call.
           "globalConsole": "off",
           "globalConsoleInEffect": "error",
           "globalDate": "error",
@@ -105,9 +103,8 @@
           "missingEffectError": "error",
           "missingEffectServiceDependency": "error",
           "missingLayerContext": "error",
-          // Each function already takes the form its callers use: data-last where it goes in
-          // a pipe, and data-first where it's called directly. The rule would add a dual
-          // overload to every data-first function, whether or not a caller wants it.
+          // A function called directly stays data-first, and the rule would give each a dual
+          // overload.
           "missingPipeableSignature": "off",
           "missingReturnYieldStar": "error",
           "missingStarInYieldEffectGen": "error",
@@ -175,13 +172,11 @@
           "unnecessaryPipeChain": "error",
           "unnecessaryTypeofType": "error",
           "unsafeEffectTypeAssertion": "error",
-          // jj-octo builds on Effect's unstable modules on purpose, such as `effect/cli`.
+          // effect.md allows the unstable modules.
           "unstableApiUsage": "off",
           "yieldInCallArgument": "error"
         },
-        // A pipe reads better than nesting only from three steps. At two, the rule also
-        // pipes a call whose argument is a key rather than the value that flows through,
-        // such as `Effect.service(Tag)` as `Tag.pipe(Effect.service)`.
+        // At two, the rule turns `Effect.service(Tag)` into `Tag.pipe(Effect.service)`.
         "pipeableMinArgCount": 3
       }
     ]

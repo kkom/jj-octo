@@ -2,44 +2,44 @@
 
 ## Try every path before concluding GitHub is unreachable
 
-GitHub is reachable several ways — the `gh` CLI, plain `git` over HTTPS, and in a Claude Code cloud session the GitHub MCP server's tools — and each is authorized separately. An access error only tells you about the path that returned it, however broadly it's worded. For example, `gh` can return a 403 saying the session has no GitHub access, while the MCP tools can still read the repository and `git push` still works.
+`gh`, `git` over HTTPS and, in a cloud session, the GitHub MCP tools are each authorized separately. An access error describes only its own path, however it's worded. Try the other paths, and report the error itself.
 
-So try the other paths, and report the error itself rather than concluding GitHub is unavailable. Once you decide something is unavailable you stop trying it, and quietly do less than was asked.
+That's because once you decide something is unavailable, you stop trying it and do less than asked.
+
+- ❌ "GitHub is unavailable", after `gh` returns a 403
+- ✅ The repository read through the MCP tools, and the branch pushed with `git push`
 
 ## Read an empty listing as "not yet"
 
-Checks and runs take minutes to appear, so an empty listing doesn't mean there will be none.
+Checks and runs take minutes to appear.
 
 ## Leave an abandoned branch in place
 
-A cloud session can't delete a remote branch. `branch-cleanup.yaml` deletes it daily once its last commit is two weeks old, unless it's protected, GitHub Pages publishes from it, or an open pull request has it as its head or base. A branch pushed to after its latest pull request closed is kept until two weeks after that pull request closed. So give work that follows a closed pull request a new branch.
+A cloud session can't delete a remote branch. `branch-cleanup.yaml` deletes it once its last commit is two weeks old, unless an open pull request has it as head or base, it's protected, or GitHub Pages publishes from it. It keeps a branch pushed to after its latest pull request closed only until two weeks after that close, so give work that follows a closed pull request a new branch.
 
 ## Follow the PR template
 
-Structure the description as `.github/pull_request_template.md` does, following the guidance in its comments.
+Structure the description as `.github/pull_request_template.md` says.
 
 ## Write the description before publishing
 
-Human and AI reviewers may start as soon as a PR is published. So submit a draft, write its description, then publish it.
+Submit a draft, write its description, then publish. Update the description as the changes evolve.
 
-When a branch's changes evolve, update its description to match.
+That's because reviewers may start once a PR is published.
 
 ## Name only repositories every reader can see
 
-Name a private repository only where every reader of this repository can see it, as another rule here says. Where no rule says so, name none. Name a public repository anywhere. This covers a repository's name, links into it, its pull requests and issues, and what it holds. It applies to everything you write: code, comments, rules, commit messages, pull requests, comments on them, and messages to other sessions.
+Name a private repository only where another rule here says every reader can see it. This covers its name, links, pull requests, issues and contents, in everything you write. Name a public repository anywhere.
 
-That's because a reader may not have access to a private repository, and naming it tells them that it exists and what it holds.
+That's because naming it tells a reader who may lack access that it exists and what it holds.
 
-- ❌ A link to a pull request in a private repository that some readers can't see, as the source of a rule
+- ❌ A link to a private repository's pull request as the source of a rule
 - ✅ The rule itself, with no word on where it came from
-- ✅ A link to an issue in a public library's repository
 
 ## Disclose that you're an AI
 
-When you use a human's access token, say that you're an AI agent, so your actions aren't mistaken for theirs. Name:
+When you use a human's access token, end PR descriptions and comments with the model, the harness and the level of autonomy: prescriptive instruction, vague instruction, or acting autonomously to solve a goal.
 
-- the model (e.g. Claude Opus 5)
-- the harness (e.g. local Claude Code)
-- the level of autonomy (e.g. prescriptive instruction, vague instruction, acting autonomously to solve a goal)
+That's because your actions could otherwise be mistaken for theirs.
 
-This applies to PR descriptions and to comments on them. For example, end with _(sent by Claude Opus 5 from local Claude Code on behalf of @user, acting autonomously)_.
+- ✅ _(sent by Claude Opus 5 from local Claude Code on behalf of @user, acting autonomously)_

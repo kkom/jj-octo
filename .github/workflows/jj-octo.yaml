@@ -8,16 +8,14 @@ on:
       - main
 
 env:
-  # The npm that publishes. Publishing with the workflow's identity needs npm 11.5.1 or later,
-  # newer than the runner's own npm.
+  # Publishing with the workflow's identity needs npm 11.5.1 or later, newer than the runner's.
   # renovate: datasource=npm depName=npm
   NPM_VERSION: 12.2.3
 
 jobs:
   ci:
     name: CI
-    # A draft's result is one nobody reads yet. Publishing it sends `ready_for_review`, which
-    # runs this
+    # Nobody reads a draft's result. Publishing sends `ready_for_review`, which runs this job.
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
 
@@ -41,11 +39,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # `cd` publishes the version from the last commit of a push. So a pull request above a
-      # release in a stack fails here until the release is merged, and the default branch's
-      # required checks stop the two merging in one push. A pull request that changes the version
-      # is a release, so the new version has to be higher than the base branch's, and one npm
-      # doesn't have.
+      # A release raises the version above the base's, to one npm doesn't have. `cd` publishes only
+      # the version in a push's last commit, so every pull request above an unmerged release fails
+      # here. `main` requires `CI`, so they can't merge in one push.
       - name: Check the version
         if: github.event_name == 'pull_request'
         env:
@@ -82,12 +78,12 @@ jobs:
       - name: Run the built file
         run: ./dist/jj-octo.js --version
 
-      # `cd` runs only on main, so this runs the npm it publishes with on every pull request.
+      # `cd` runs only on main, so this tries its npm on every pull request.
       - name: Pack with the publishing npm
         run: npx --yes "npm@${NPM_VERSION}" pack --dry-run --ignore-scripts
 
-      # The archives a release attaches, so a target that fails to compile fails here, and the
-      # release ships the executables the next job ran.
+      # Compiles the archives a release attaches, so a target that fails to compile fails here, and
+      # the release ships what the next job ran.
       - name: Compile for every platform
         run: bun run compile:release
 
@@ -99,8 +95,8 @@ jobs:
           if-no-files-found: error
           # A re-run of every job uploads them again.
           overwrite: true
-          # Only this run's later jobs read them, including a re-run of `cd` within the week, and
-          # the archives are compressed already.
+          # Only this run's later jobs read them, including a `cd` re-run. The archives are
+          # compressed already.
           retention-days: 7
           compression-level: 0
 
@@ -132,8 +128,8 @@ jobs:
           tar -xzf jj-octo-${{ matrix.platform }}.tar.gz
           ./jj-octo --version
 
-  # Publishes the version in package.json to npm, and as a GitHub release with the executables,
-  # where either doesn't have it yet. Each is checked on its own, so a re-run finishes the other.
+  # Publishes package.json's version to npm and as a GitHub release, each where it's missing, so
+  # a re-run finishes a partial release.
   cd:
     name: CD
     needs: [ci, executables]
@@ -142,7 +138,7 @@ jobs:
 
     permissions:
       contents: write # For the tag and the GitHub release.
-      id-token: write # npm takes the workflow's identity as its publish credential, so no token is stored.
+      id-token: write # npm takes the workflow's identity as its credential.
 
     concurrency:
       group: cd
@@ -157,10 +153,9 @@ jobs:
           # The same age renovate.json5 waits for before updating a dependency
           minimum_release_age: 3d
 
-      # `npm view` prints nothing for a version the registry doesn't have, and fails for a
-      # package it doesn't have. Both leave the output empty. `gh release view` prints `false` for a
-      # published release, `true` for a draft, and nothing where there is none. The release is made
-      # only from the commit npm published, here or in an earlier attempt.
+      # `npm view` prints nothing for a missing version or package. `gh release view` prints
+      # `false` for a published release, `true` for a draft, and nothing for none. The release
+      # comes only from the commit npm published, in this attempt or an earlier one.
       - name: Read the version
         id: version
         env:
@@ -199,8 +194,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           DRAFT: ${{ steps.version.outputs.draft }}
-        # Releases are immutable once published, so gh uploads the executables to a draft and
-        # then publishes it. A draft left by an upload that failed is replaced.
+        # A published release is immutable, so gh uploads to a draft, then publishes it. A draft
+        # left by a failed upload is replaced.
         run: |
           set -euo pipefail
           if [ "${DRAFT}" = true ]; then

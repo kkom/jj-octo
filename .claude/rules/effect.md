@@ -5,76 +5,67 @@ paths:
 
 # Effect
 
-`effect` is the standard library here for typed errors, schemas and effectful composition.
+`effect` is the standard library here.
 
 ## Follow Effect's idiom before designing a pattern
 
-Before you design a pattern of your own, find how Effect solves the problem, and use that. Depart from it only where it can't do the job, and say why beside the code.
+Use Effect's own solution. Depart from it only where it can't do the job, and say why beside the code.
 
-That's because Effect's idioms fit its types and its other modules, and a reader who knows Effect already knows them.
+That's because Effect readers already know its idioms.
 
-- ❌ A module swapped at build time, to give tests a different clock
-- ✅ `Clock` provided where the program is run, chosen from the configuration it starts with
-- ❌ The current time passed as a parameter through every function, so a test can set it
+- ❌ The current time passed through every function, so a test can set it
 - ✅ A function that reads `Clock`, and a test that provides its own
-
-## Use the unstable modules too
-
-`effect/*` (http, http-api, cli, …) is in bounds. Unstable means the API may shift between releases, not that it's off limits — a version bump that breaks something shows up as type errors, and that cost is accepted.
 
 ## Look in `effect` before writing a helper
 
-Core modules first, then unstable. Base64, schema decoding, HTTP clients, retry policies, command-line parsing, credential parsing: the library ships them, and a hand-rolled copy re-derives edge cases it already handles.
+Check the core modules, then the unstable `effect/*` ones, which are allowed. We accept the cost of their breaking changes.
 
 ## Prefix a module named after a global
 
-`String`, `Number`, `Array`, `Date`: imported bare, the module shadows the global for the whole file — a type error where the names collide, and a silent bug where they don't.
+That's because `String`, `Number`, `Array` or `Date` imported bare shadows the global for the whole file.
 
-✅ `import { String as EffectString } from "effect"`
+- ❌ `import { String } from "effect"`
+- ✅ `import { String as EffectString } from "effect"`
 
 ## Retry with a `Schedule`, release with `acquireUseRelease`
 
-- Waiting and retrying: a `Schedule` passed to `Effect.retry`, with `while` naming the failures worth waiting out. ❌ Not a recursive helper counting attempts down.
-- Acquire/use/release: `Effect.acquireUseRelease`, which releases once and on interruption. ❌ Not a release repeated across `try` and `catch`.
+- ❌ A recursive helper that counts attempts down
+- ✅ `Effect.retry` with a `Schedule` whose `while` names the failures worth waiting out
+- ❌ A release repeated in `try` and `catch`
+- ✅ `Effect.acquireUseRelease`
 
 ## Ask for dependencies through the R channel
 
-Yield a `Context.Service` rather than threading a first parameter, so adding a dependency doesn't edit everything between it and the entry point. Provide it once, where the program is run.
+Yield a `Context.Service`, and provide it once, where the program runs.
 
-## Send outbound HTTP through `HttpClient`
+That's because a new dependency then doesn't edit every function between it and the entry point.
 
-From `effect/http`, with `FetchHttpClient.layer` provided at the entry point.
+## Use `effect/http` and `effect/cli`
 
-## Build a CLI with `Command`
-
-From `effect/cli`, run with its runtime's platform services. An invocation the CLI can't make sense of is a `CliError.UserError`, so it's rendered like a bad flag rather than as a thrown stack trace.
+Send HTTP through `HttpClient`, with `FetchHttpClient.layer` provided at the entry point. Build the CLI with `Command`, and fail an invocation it can't parse with a `CliError.UserError`, which prints like a bad flag.
 
 ## Parse `unknown` with `Schema`
 
-Decoded types are readonly by construction, so they need no wrapper for the readonly-parameters rule.
-
-Code that still validates with another schema library keeps it until it's migrated. ❌ Don't advertise one schema and validate with another.
+❌ Don't advertise one schema library and validate with another.
 
 ## Write a test's body as an Effect with `itEffect`
 
-`itEffect` from `src/testing/it-effect.ts` runs the test's effect on bun's runner, in a scope that closes when it ends, with Bun's platform services, a `TestClock` that starts at 0, a `TestConsole` and an empty environment. A failure fails the test. Where bun stops waiting, such as at the test's timeout, the effect is interrupted and its finalizers run. A test with no effect stays a plain `it`.
+Use `itEffect` from `src/testing/it-effect.ts`, and `TestClock.adjust` where the code sleeps. A test with no effect stays a plain `it`.
 
-That's because the test then composes the code under test as production does: it provides layers, and reads a failure as a value. bun's `it.each` spreads an array row, so `itEffect.each` takes object rows.
+That's because the test then composes the code as production does.
 
 - ❌ `it("…", async () => { const failure = await Effect.runPromise(Effect.flip(program)); … })`
 - ✅ `itEffect("…", () => Effect.gen(function* () { const failure = yield* Effect.flip(program); … }))`
-- ✅ `TestClock.adjust` in the test, where the code under test sleeps or repeats on a `Schedule`
 
 ## Provide a test's fixtures as layers
 
-`layer(fixture)` from `src/testing/it-effect.ts` defines a `describe` block. Its tests ask for the fixture's services with `yield*`. Each test builds its own fixture, so no two tests share its state. `scratchRepository` and `pushedStack(…)` provide a repository with its git, jj and pull request description clients, and `gitClone()` provides those clients in a plain git clone of its `origin`. A test that needs GitHub merges in `fakeGitHub`. Set up a state that only some tests need inside those tests, such as what `setUpGitHub` gives the fake GitHub. A program that runs in another directory, such as a workspace or a worktree, gets its clients there as a `Context` from `clientsIn`, which `Effect.provide` takes.
+Define the tests in a `layer(fixture)` block, with a fixture from `src/testing/`. For another directory, such as a workspace, provide the `Context` that `clientsIn` returns. Set up state that only some tests need inside those tests.
 
-That's because the test then gets its fixtures as production code gets its services. `strictEffectProvide` fails a layer provided with `Effect.provide` outside an entry point, and allows a `Context`.
+That's because the test then gets fixtures as production gets services, and `strictEffectProvide` fails a layer passed to `Effect.provide` outside an entry point.
 
 - ❌ `program.pipe(Effect.provide(fixtureLayer))` inside a test
 - ✅ `layer(gitHubThroughProxy)("cancelRun", (it) => { it("…", () => Effect.gen(function* () { const outcome = yield* callGitHub(…); … })) })`
-- ✅ `const clients = yield* repository.clientsIn(workspace); yield* program.pipe(Effect.provide(clients))`
 
 ## Use the real type where Effect code meets other code
 
-If you're tempted to wrap a value in `Promise.resolve`, narrow the type instead. A genuinely asynchronous API is different: its real type is a promise. Convert it with `tryPromise` wherever the call can reject with a failure the caller can act on, and with `Effect.promise` only where every rejection is a defect, leaving the failure channel `never`.
+Narrow the type rather than wrap a value in `Promise.resolve`. Convert a promise with `tryPromise` where the caller can act on its rejection, and with `Effect.promise` only where every rejection is a defect.
