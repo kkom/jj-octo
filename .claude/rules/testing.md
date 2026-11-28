@@ -62,6 +62,9 @@ That's because one comparison shows the expected value in one place, and fails o
 - ❌ `expect(user.name).toBe("Ada")`, then `expect(user.role).toBe("admin")`
 - ❌ `expect(user).toMatchObject({ name: "Ada" })`
 - ✅ `expect(user).toStrictEqual({ id: created.id, name: "Ada", role: "admin" })`
+- ❌ `expect(failure.message).toContain("needs a bookmark")`
+- ✅ `expect(failure).toStrictEqual(NotAStack.make({ message: … }))`, which also checks the tag
+- ✅ A partial matcher, such as `toStartWith`, only in an extraordinary case your judgment highly justifies, with the reason in a comment beside it
 
 ## Write dynamic values into the expected value, or match them
 
@@ -80,10 +83,8 @@ That's because a written-in value checks the field exactly. A matcher also keeps
 
 In TypeScript, oxlint's `no-restricted-properties` and `no-restricted-imports` rules fail on these, in any file:
 
-- Partial matchers: `toMatchObject`, `objectContaining`, `arrayContaining`, the `toContain…` matchers, `toInclude`, `toIncludeRepeated`, `toEqualIgnoringWhitespace`, `toHaveProperty`, `toMatch`, `toStartWith`, `toEndWith`, `toHaveLength`, `toBeArrayOfSize` and `toSatisfy`.
+- Partial matchers: `toMatchObject`, `objectContaining` and `arrayContaining`.
 - `toEqual`, which ignores `undefined` fields and class types.
-- `toThrow`, `toThrowError` and the `toThrowErrorMatching…` matchers, which match part of a failure.
-- Matchers that check only one property of a value, such as `toBeInstanceOf`, `toBeDefined`, `toBeTruthy` and `toBeEmpty`.
 - Mock-call matchers: `toHaveBeenCalled`, `toHaveBeenCalledOnce`, `toHaveBeenCalledTimes`, `toHaveBeenCalledWith`, `toHaveBeenLastCalledWith`, `toHaveBeenNthCalledWith`, `toHaveReturned`, `toHaveReturnedTimes`, `toHaveReturnedWith`, `toHaveLastReturnedWith` and `toHaveNthReturnedWith`, and their aliases `toBeCalled`, `toBeCalledTimes`, `toBeCalledWith`, `lastCalledWith` and `nthCalledWith`.
 - Mocking APIs: `vi.mock`, `vi.doMock`, `vi.fn` and `vi.spyOn`, and `jest`, `mock` and `spyOn` imported from `bun:test`.
 
