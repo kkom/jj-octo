@@ -36,8 +36,8 @@
           "catchToOrElseSucceed": "error",
           "catchUnfailableEffect": "error",
           "classSelfMismatch": "error",
-          "cryptoRandomUUID": "off", // undecided
-          "cryptoRandomUUIDInEffect": "off", // undecided
+          "cryptoRandomUUID": "error",
+          "cryptoRandomUUIDInEffect": "error",
           "deterministicKeys": "off", // undecided
           "duplicatePackage": "error",
           "effectDoNotation": "error",
@@ -70,19 +70,21 @@
           "floatingEffectInVitest": "error",
           "forLoopPushToForEach": "error",
           "genericEffectServices": "error",
-          "globalConsole": "off", // undecided
+          // oxlint's no-console already fails on every console call, and globalConsoleInEffect
+          // points Effect code to Effect.log.
+          "globalConsole": "off",
           "globalConsoleInEffect": "error",
-          "globalDate": "off", // undecided
-          "globalDateInEffect": "off", // undecided
+          "globalDate": "error",
+          "globalDateInEffect": "error",
           "globalErrorInEffectCatch": "error",
           "globalErrorInEffectFailure": "error",
-          "globalFetch": "off", // undecided
+          "globalFetch": "error",
           "globalFetchInEffect": "error",
-          "globalJson": "off", // undecided
-          "globalJsonInEffect": "off", // undecided
-          "globalRandom": "off", // undecided
+          "globalJson": "error",
+          "globalJsonInEffect": "error",
+          "globalRandom": "error",
           "globalRandomInEffect": "error",
-          "globalTimers": "off", // undecided
+          "globalTimers": "error",
           "globalTimersInEffect": "error",
           "instanceOfSchema": "error",
           "layerMergeAllWithDependencies": "error",
@@ -133,8 +135,8 @@
           "preferSucceedSomeOrNone": "error",
           "preferTypedSchemaDecoder": "error",
           "preferUnsafeConstructor": "error",
-          "processEnv": "off", // undecided
-          "processEnvInEffect": "off", // undecided
+          "processEnv": "error",
+          "processEnvInEffect": "error",
           "promiseAllInEffect": "error",
           "promiseInEffectSuccess": "error",
           "promiseRaceInEffect": "error",

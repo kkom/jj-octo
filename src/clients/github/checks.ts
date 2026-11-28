@@ -1,6 +1,7 @@
 import { Array as EffectArray, Effect, Equal, Option, Schema } from "effect";
 import { HttpClientRequest } from "effect/http";
 
+import { formatJson } from "../../json";
 import type { GitHubFailed } from "./failure";
 import { everyPage } from "./pages";
 import type { Requests } from "./requests";
@@ -57,7 +58,7 @@ const checkRunState = ({ conclusion, status }: CheckRun): CheckState => {
 const newestRuns = (runs: readonly CheckRun[]): readonly CheckRun[] => {
   const newest = new Map<string, CheckRun>();
   for (const run of runs) {
-    const key = JSON.stringify([run.app?.id ?? null, run.name]);
+    const key = formatJson([run.app?.id ?? null, run.name]);
     const kept = newest.get(key);
     if (kept === undefined || BigInt(run.id) > BigInt(kept.id)) {
       newest.set(key, run);

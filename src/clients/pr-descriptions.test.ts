@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { existsSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { Effect, Option, String as EffectString } from "effect";
+import { DateTime, Effect, Option, String as EffectString } from "effect";
 
 import {
   removeScratchRepositories,
@@ -96,7 +96,7 @@ describe("PrDescriptions", () => {
     const recent = path.join(directory, "8.9f1c2d.partial");
     writeFileSync(stopped, "{");
     writeFileSync(recent, "{");
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const twoHoursAgo = DateTime.toDateUtc(DateTime.subtract(DateTime.nowUnsafe(), { hours: 2 }));
     utimesSync(stopped, twoHoursAgo, twoHoursAgo);
     await repository.records((store) => store.prune(Effect.succeed(["a"])));
     expect([existsSync(stopped), existsSync(recent)]).toStrictEqual([false, true]);

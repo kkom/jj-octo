@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { Array as EffectArray, Option, String as EffectString } from "effect";
 
+import { formatJson } from "../json";
 import { scratchDirectory } from "./scratch-repository";
 
 /**
@@ -128,7 +129,7 @@ export const throughProxy = async <A>(
       const { body, status } = answer instanceof Reply ? answer : new Reply(200, answer);
       response.statusCode = status;
       response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify(body));
+      response.end(formatJson(body));
     });
   });
   const port = await listen(origin);

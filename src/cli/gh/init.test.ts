@@ -7,6 +7,7 @@ import { Array as EffectArray, Effect, type Layer, String as EffectString } from
 import manifest from "../../../package.json" with { type: "json" };
 import type { Git } from "../../clients/git";
 import type { Jj } from "../../clients/jj";
+import { formatJson } from "../../json";
 import { gitClone, runIn } from "../../testing/git-clone";
 import {
   removeScratchRepositories,
@@ -192,7 +193,7 @@ const ALIAS = 'aliases.gh = ["util","exec","--","jj-octo"]\n';
 const setUpBy = async (version: string): Promise<Clone> => {
   const clone = gitClone(scratchRepository());
   await initIn(clone.layer);
-  clone.jj("config", "set", "--repo", SET_UP_VERSION, JSON.stringify(version));
+  clone.jj("config", "set", "--repo", SET_UP_VERSION, formatJson(version));
   clone.jj("config", "unset", "--repo", "aliases.gh");
   return clone;
 };
@@ -230,7 +231,7 @@ describe("the version that set the checkout up", () => {
     const clone = await setUpBy(version);
     await runIn(clone.layer, setUpOnUpgrade);
     expect([alias(clone), recorded(clone)]).toStrictEqual(
-      setsUp ? [ALIAS, THIS_VERSION] : ["", `${SET_UP_VERSION} = ${JSON.stringify(version)}\n`],
+      setsUp ? [ALIAS, THIS_VERSION] : ["", `${SET_UP_VERSION} = ${formatJson(version)}\n`],
     );
   });
 

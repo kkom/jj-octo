@@ -1,6 +1,7 @@
 import { Array as EffectArray, Config, Effect, Option } from "effect";
 
 import { type Jj, JjFailed, readJjConfig } from "./clients/jj";
+import { formatJson } from "./json";
 
 // The options a user sets for jj-octo, outside its flags. The code reads each through the model
 // here, and `jj gh --help` documents each from it.
@@ -140,7 +141,7 @@ export const readSetting = <A extends boolean | string>(
         " or ",
       );
       return yield* new JjFailed({
-        message: `${setting.key} is ${JSON.stringify(value)}; set it to ${values}`,
+        message: `${setting.key} is ${formatJson(value)}; set it to ${values}`,
       });
     }
     return choice.value.value;

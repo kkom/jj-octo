@@ -6,6 +6,7 @@ import { Array as EffectArray, Record as EffectRecord, String as EffectString } 
 
 import manifest from "../package.json" with { type: "json" };
 import { SET_UP_VERSION } from "./cli/gh/setup";
+import { formatJson } from "./json";
 import { ENVIRONMENT_VARIABLES, SETTINGS } from "./settings";
 import { searchPath } from "./testing/github-client";
 import {
@@ -116,7 +117,7 @@ const checkoutOfA = () => {
   const repository = scratchRepository();
   repository.stack("a");
   repository.jj("git", "remote", "set-url", "origin", "https://github.com/owner/name");
-  repository.jj("config", "set", "--repo", SET_UP_VERSION, JSON.stringify(manifest.version));
+  repository.jj("config", "set", "--repo", SET_UP_VERSION, formatJson(manifest.version));
   const cwd = EffectString.trim(repository.jj("root"));
   return { cwd, env: isolatedEnv(path.dirname(cwd)), repository };
 };
